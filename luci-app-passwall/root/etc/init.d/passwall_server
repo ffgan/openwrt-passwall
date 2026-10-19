@@ -18,11 +18,11 @@ boot() {
 }
 
 start() {
-	lua /usr/lib/lua/luci/passwall/server_app.lua start
+	ucode /usr/share/passwall/server_app.uc start
 }
 
 stop() {
-	lua /usr/lib/lua/luci/passwall/server_app.lua stop
+	ucode /usr/share/passwall/server_app.uc stop
 }
 
 restart() {

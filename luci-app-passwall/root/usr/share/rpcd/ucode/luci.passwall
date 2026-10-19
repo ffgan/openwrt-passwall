@@ -1,0 +1,2155 @@
+'use strict';
+
+import * as api from 'passwall.api';
+import * as com from 'passwall.com';
+import { main as subscribe_main } from 'passwall.subscribe';
+import { main } from 'passwall.rule_update';
+import { popen, open, readfile, writefile, access } from 'fs';
+
+let nonce_seq = 0;
+
+const BACKUP_FILES = [
+	'/etc/config/passwall',
+	'/etc/config/passwall_server',
+	'/etc/passwall/rules/block_host',
+	'/etc/passwall/rules/block_ip',
+	'/etc/passwall/rules/direct_host',
+	'/etc/passwall/rules/direct_ip',
+	'/etc/passwall/rules/proxy_host',
+	'/etc/passwall/rules/proxy_ip',
+	'/etc/passwall/rules/lanlist_ipv4',
+	'/etc/passwall/rules/lanlist_ipv6',
+	'/etc/passwall/rules/domains_excluded'
+];
+
+const RESET_RULES = [
+	'direct_host', 'direct_ip', 'proxy_host', 'proxy_ip', 'block_host', 'block_ip',
+	'lanlist_ipv4', 'lanlist_ipv6', 'domains_excluded'
+];
+
+const COM_ORDER_FALLBACK = [
+	'geoview',
+	'chinadns-ng',
+	'xray',
+	'sing-box',
+	'hysteria'
+];
+
+const COM_META = {
+	'geoview': { name: 'Geoview', default_path: '/usr/bin/geoview' },
+	'chinadns-ng': { name: 'ChinaDNS-NG', default_path: '/usr/bin/chinadns-ng' },
+	'xray': { name: 'Xray', default_path: '/usr/bin/xray' },
+	'sing-box': { name: 'Sing-Box', default_path: '/usr/bin/sing-box' },
+	'hysteria': { name: 'Hysteria', default_path: '/usr/bin/hysteria' }
+};
+
+function app_name() {
+	return api.appname || 'passwall';
+}
+
+function cfg_name() {
+	return api.c_config || 'passwall';
+}
+
+function tmp_path() {
+	return api.TMP_PATH || ('/tmp/etc/' + app_name());
+}
+
+function s_tmp_path() {
+	return api.S_TMP_PATH || ('/tmp/etc/' + app_name() + '_server');
+}
+
+function form_raw(req, key) {
+	if (!req || req.args == null)
+		return null;
+	let v = req.args[key];
+	if (v == null)
+		return null;
+	if (type(v) == 'string')
+		return v;
+	return '' + v;
+}
+
+function trim_s(s) {
+	if (s == null)
+		return '';
+	return trim('' + s);
+}
+
+function join(arr, sep) {
+	let s = '';
+	if (arr == null)
+		return s;
+	for (let i = 0; i < length(arr); i++) {
+		if (i > 0)
+			s = s + sep;
+		if (arr[i] != null)
+			s = s + arr[i];
+	}
+	return s;
+}
+
+function split_csv(s) {
+	let out = [];
+	if (s == null || s == '')
+		return out;
+	let parts = split(s, ',');
+	for (let i = 0; i < length(parts); i++) {
+		if (parts[i] != '')
+			push(out, parts[i]);
+	}
+	return out;
+}
+
+function split_lines(s) {
+	let out = [];
+	if (s == null)
+		return out;
+	let text = type(s) == 'array' ? join(s, '\n') : ('' + s);
+	let parts = split(text, '\n');
+	for (let i = 0; i < length(parts); i++) {
+		let line = parts[i];
+		if (length(line) > 0 && substr(line, length(line) - 1, 1) == '\r')
+			line = substr(line, 0, length(line) - 1);
+		push(out, line);
+	}
+	return out;
+}
+
+function q(s) {
+	if (s == null)
+		s = '';
+	s = '' + s;
+	let out = "'";
+	let i = 0;
+	let n = length(s);
+	while (i < n) {
+		let c = substr(s, i, 1);
+		if (c == "'")
+			out = out + "'\"'\"'";
+		else
+			out = out + c;
+		i++;
+	}
+	return out + "'";
+}
+
+function nonce() {
+	nonce_seq++;
+	let rnd = '';
+	if (type(api.gen_random_char) == 'function')
+		rnd = trim_s(api.gen_random_char(6));
+	return '' + time() + '-' + nonce_seq + (rnd == '' ? '' : ('-' + rnd));
+}
+
+function sh_exec(cmd) {
+	if (api.sys && type(api.sys.exec) == 'function') {
+		let out = api.sys.exec(cmd);
+		return out == null ? '' : ('' + out);
+	}
+	let fp = popen(cmd, 'r');
+	if (!fp)
+		return '';
+	let out = fp.read('all');
+	fp.close();
+	return out == null ? '' : out;
+}
+
+function sh_call(cmd) {
+	if (api.sys && type(api.sys.call) == 'function') {
+		let rc = api.sys.call(cmd);
+		if (rc == null)
+			return 1;
+		return int(rc);
+	}
+	let fp = popen('(' + cmd + ') >/dev/null 2>&1; printf "%s" $?', 'r');
+	if (!fp)
+		return 1;
+	let out = fp.read('all') || '1';
+	fp.close();
+	return int(trim_s(out));
+}
+
+function popen_read(cmd) {
+	let fp = popen(cmd, 'r');
+	if (!fp)
+		return '';
+	let out = fp.read('all') || '';
+	fp.close();
+	return out;
+}
+
+function exists(path) {
+	if (api.fs && type(api.fs.access) == 'function')
+		return api.fs.access(path) ? true : false;
+	return access(path) ? true : false;
+}
+
+function read_text(path) {
+	if (api.fs && type(api.fs.readfile) == 'function') {
+		let s = api.fs.readfile(path);
+		if (s != null)
+			return s;
+	}
+	let s = readfile(path);
+	return s == null ? '' : s;
+}
+
+function write_text(path, data) {
+	if (api.fs && type(api.fs.writefile) == 'function') {
+		api.fs.writefile(path, data);
+		return;
+	}
+	writefile(path, data);
+}
+
+function write_bytes(path, data, append) {
+	let fp = open(path, append ? 'a' : 'w');
+	if (!fp)
+		return false;
+	fp.write(data == null ? '' : data);
+	fp.close();
+	return true;
+}
+
+function rm_rf(path) {
+	if (type(api.remove) == 'function') {
+		api.remove(path);
+		return;
+	}
+	sh_call('rm -rf ' + q(path));
+}
+
+function move_file(src, dst) {
+	if (api.fs && type(api.fs.move) == 'function') {
+		api.fs.move(src, dst);
+		return;
+	}
+	sh_call('mv -f ' + q(src) + ' ' + q(dst));
+}
+
+function rm_dir(path) {
+	if (api.fs && type(api.fs.rmdir) == 'function') {
+		api.fs.rmdir(path);
+		return;
+	}
+	sh_call('rmdir ' + q(path) + ' 2>/dev/null');
+}
+
+function b64encode(data) {
+	let in_f = '/tmp/pw-b64-' + nonce() + '.in';
+	writefile(in_f, data == null ? '' : data);
+	let out = sh_exec('base64 -w 0 ' + q(in_f) + ' 2>/dev/null || base64 ' + q(in_f));
+	sh_call('rm -f ' + q(in_f));
+	return join(split(out, '\n'), '');
+}
+
+function b64decode(data) {
+	let idn = nonce();
+	let in_f = '/tmp/pw-b64-' + idn + '.in';
+	let out_f = '/tmp/pw-b64-' + idn + '.out';
+	writefile(in_f, data == null ? '' : data);
+	let rc = sh_call('base64 -d ' + q(in_f) + ' > ' + q(out_f) + ' 2>/dev/null');
+	let out = null;
+	if (rc == 0)
+		out = readfile(out_f);
+	sh_call('rm -f ' + q(in_f) + ' ' + q(out_f));
+	return out;
+}
+
+function log_msg(msg) {
+	if (type(api.log) == 'function')
+		api.log(msg);
+}
+
+function json_ok(data) {
+	if (data == null)
+		return { code: 1 };
+	return { code: 1, data: data };
+}
+
+function json_err(data) {
+	if (data == null)
+		return { code: 0 };
+	return { code: 0, data: data };
+}
+
+function as_json(v) {
+	if (v == null)
+		return { code: 1 };
+	return v;
+}
+
+function text_out(text) {
+	return { output: text == null ? '' : text };
+}
+
+function log_alert(msg) {
+	return { output: msg, alert: msg };
+}
+
+function num(s) {
+	if (s == null)
+		return null;
+	if (type(s) == 'int' || type(s) == 'double')
+		return s;
+	let n = json('' + s);
+	if (type(n) == 'int' || type(n) == 'double')
+		return n;
+	return null;
+}
+
+function as_list(v) {
+	if (v == null || v == '')
+		return [];
+	if (type(v) == 'array')
+		return v;
+	return [ v ];
+}
+
+function uci_value(v) {
+	let t = type(v);
+	if (t == 'bool')
+		return v ? '1' : '0';
+	if (t == 'int' || t == 'double')
+		return '' + v;
+	return v;
+}
+
+function random_id() {
+	let id = '';
+	if (type(api.gen_random_char) == 'function')
+		id = trim_s(api.gen_random_char());
+	if (id == '')
+		id = trim_s(sh_exec('head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8'));
+	return id;
+}
+
+function cache_get(key) {
+	if (type(api.get_cache_var) != 'function')
+		return null;
+	let v = api.get_cache_var(key);
+	if (v == null || v == '')
+		return null;
+	return v;
+}
+
+function cache_set(key, val) {
+	if (type(api.set_cache_var) == 'function')
+		api.set_cache_var(key, val);
+}
+
+function found_com(name) {
+	if (type(api.finded_com) != 'function')
+		return '';
+	let bin = api.finded_com(name);
+	if (bin == null)
+		return '';
+	return '' + bin;
+}
+
+function found_bin(name) {
+	if (type(api.is_finded) != 'function')
+		return false;
+	return api.is_finded(name) ? true : false;
+}
+
+function app_version(name) {
+	if (type(api.get_app_version) != 'function')
+		return '';
+	let v = api.get_app_version(name);
+	if (v == null)
+		return '';
+	return '' + v;
+}
+
+function sh_set(section, option, value, commit) {
+	if (type(api.sh_uci_set) == 'function') {
+		api.sh_uci_set(cfg_name(), section, option, value, commit ? true : false);
+		return;
+	}
+	api.uci_set_c(section, option, value);
+	if (commit)
+		api.uci_save_c(true, false);
+}
+
+function sh_del(section, option, commit) {
+	if (type(api.sh_uci_del) == 'function') {
+		api.sh_uci_del(cfg_name(), section, option, commit ? true : false);
+		return;
+	}
+	if (option == null)
+		api.uci_del_c(section);
+	else
+		api.uci_del_c(section, option);
+	if (commit)
+		api.uci_save_c(true, false);
+}
+
+function sh_get(section, option) {
+	if (type(api.sh_uci_get) == 'function')
+		return api.sh_uci_get(cfg_name(), section, option);
+	return api.uci_get_c(section, option);
+}
+
+function sh_commit() {
+	if (type(api.sh_uci_commit) == 'function') {
+		api.sh_uci_commit(cfg_name());
+		return;
+	}
+	api.uci_save_c(true, false);
+}
+
+function del_c(section, option) {
+	if (option == null)
+		api.uci_del_c(section);
+	else
+		api.uci_del_c(section, option);
+}
+
+function save_c(commit, apply) {
+	if (commit == null)
+		api.uci_save_c();
+	else if (apply == null)
+		api.uci_save_c(commit);
+	else
+		api.uci_save_c(commit, apply);
+}
+
+function revert_config(config, which) {
+	if (which == 'c' && type(api.uci_revert_c) == 'function')
+		return api.uci_revert_c();
+	if (which == 's' && type(api.uci_revert_s) == 'function')
+		return api.uci_revert_s();
+	if (api.uci && type(api.uci.revert) == 'function')
+		return api.uci.revert(config);
+	sh_call('uci revert ' + q(config));
+}
+
+function add_named(server, name, stype) {
+	let config = server ? (api.s_config || 'passwall_server') : cfg_name();
+	if (type(api.uci_section) == 'function') {
+		api.uci_section(config, stype, name);
+		return;
+	}
+	if (api.uci && type(api.uci.section) == 'function') {
+		api.uci.section(config, stype, name);
+		return;
+	}
+	if (api.uci && type(api.uci.set) == 'function') {
+		api.uci.set(config, name, stype);
+		return;
+	}
+	if (server)
+		api.uci_set_s(name, null, stype);
+	else
+		api.uci_set_c(name, null, stype);
+}
+
+function section_obj(a, b) {
+	if (type(a) == 'object')
+		return a;
+	if (type(b) == 'object')
+		return b;
+	return null;
+}
+
+function sections_of(stype) {
+	let rows = [];
+	api.uci_foreach_c(stype, function(a, b) {
+		let t = section_obj(a, b);
+		if (t)
+			push(rows, t);
+	});
+	return rows;
+}
+
+function com_order() {
+	if (com && type(com.order) == 'array' && length(com.order) > 0)
+		return com.order;
+	return COM_ORDER_FALLBACK;
+}
+
+function com_info(key) {
+	let c = null;
+	if (com) {
+		if (com[key])
+			c = com[key];
+		else if (com.index && com.index[key])
+			c = com.index[key];
+	}
+	let fb = COM_META[key] || {};
+	return {
+		key: key,
+		name: (c && c.name) ? c.name : (fb.name || key),
+		default_path: (c && c.default_path) ? c.default_path : (fb.default_path || ('/usr/bin/' + key))
+	};
+}
+
+function safe_task_id(id) {
+	if (id == null || id == '')
+		return false;
+	return match(id, /^[A-Za-z0-9_-]+$/) != null;
+}
+
+function is_ip(s) {
+	if (s == null || s == '')
+		return false;
+	if (api.datatypes) {
+		if (type(api.datatypes.ipaddr) == 'function' && api.datatypes.ipaddr(s))
+			return true;
+		if (type(api.datatypes.ip6addr) == 'function' && api.datatypes.ip6addr(s))
+			return true;
+	}
+	if (type(api.is_ipv6) == 'function' && api.is_ipv6(s))
+		return true;
+	return match('' + s, /^(\d{1,3}\.){3}\d{1,3}$/) != null;
+}
+
+function tail_file(path) {
+	return sh_exec('tail -n 5000 ' + q(path));
+}
+
+function mark_ipv6(o, show) {
+	if (!o || show != '1' || o.address == null || o.address == '')
+		return;
+	if (type(api.get_ipv6_full) != 'function')
+		return;
+	let f = api.get_ipv6_full(o.address);
+	if (f != null && f != '') {
+		o.ipv6 = true;
+		o.full_address = f;
+	}
+}
+
+function list_grouped(stype, mapfn) {
+	let def_rows = [];
+	let other_rows = [];
+	api.uci_foreach_c(stype, function(a, b) {
+		let t = section_obj(a, b);
+		if (!t)
+			return;
+		if (mapfn)
+			mapfn(t);
+		if (!t.group || t.group == '')
+			push(def_rows, t);
+		else
+			push(other_rows, t);
+	});
+	let result = [];
+	for (let i = 0; i < length(def_rows); i++)
+		push(result, def_rows[i]);
+	for (let i = 0; i < length(other_rows); i++)
+		push(result, other_rows[i]);
+	return result;
+}
+
+function apply_data(setter, id, data) {
+	if (id == null || data == null)
+		return false;
+	let data_t = json(data);
+	if (type(data_t) != 'object')
+		return false;
+	let ks = keys(data_t);
+	let applied = 0;
+	for (let i = 0; i < length(ks); i++) {
+		let v = data_t[ks[i]];
+		if (v == null)
+			continue;
+		setter(id, ks[i], uci_value(v));
+		applied++;
+	}
+	return applied > 0;
+}
+
+function set_c(section, option, value) {
+	api.uci_set_c(section, option, value);
+}
+
+function set_s(section, option, value) {
+	api.uci_set_s(section, option, value);
+}
+
+function parse_timing(result) {
+	let m = match(trim_s(result), /^(\d+):([\d.]+):([\d.]+)$/);
+	if (m == null)
+		return null;
+	return {
+		code: num(m[0]),
+		pre: num(m[1]),
+		start: num(m[2])
+	};
+}
+
+function apply_timing(e, result, with_ping_type) {
+	let t = parse_timing(result);
+	if (t == null || t.code == null)
+		return;
+	if (t.code > 0)
+		e.http_code = t.code;
+	if (t.code >= 200 && t.code < 600 && t.pre != null && t.pre >= 0 && t.start != null && t.start > 0 && t.start >= t.pre) {
+		e.use_time = sprintf('%.2f', (t.start - t.pre) * 1000);
+		e.handshake_time = sprintf('%.2f', t.pre * 1000);
+		if (with_ping_type)
+			e.ping_type = 'curl';
+	}
+}
+
+function cmp_ge(left, right) {
+	if (type(api.compare_versions) != 'function')
+		return false;
+	return api.compare_versions(left, '>=', right) ? true : false;
+}
+
+function short_version() {
+	let version = '';
+	if (type(api.get_version) == 'function')
+		version = api.get_version() || '';
+	version = '' + version;
+	let m = match(version, /^([^-]+)/);
+	return m ? m[0] : '';
+}
+
+function page_url(page, id) {
+	if (type(api.url) == 'function')
+		return api.url(page, id);
+	return '/cgi-bin/luci/admin/services/' + app_name() + '/' + page + '/' + id;
+}
+
+function geo_base() {
+	let loc = api.uci_get_c('@global_rules[0]', 'v2ray_location_asset');
+	if (loc == null || loc == '')
+		loc = '/usr/share/v2ray/';
+	let m = match('' + loc, /^(.*)\//);
+	if (m)
+		return m[0];
+	return '' + loc;
+}
+
+function get_rules(str, geo_kind) {
+	let rules = [];
+	api.uci_foreach_c('shunt_rules', function(a, b) {
+		let s = section_obj(a, b);
+		if (!s)
+			return;
+		let list = (geo_kind == 'geoip') ? s.ip_list : s.domain_list;
+		let lines = split_lines(list);
+		for (let i = 0; i < length(lines); i++) {
+			let line = lines[i];
+			if (line == '' || index(line, '#') >= 0)
+				continue;
+			let colon = index(line, ':');
+			let mainpart = colon >= 0 ? substr(line, colon + 1, length(line)) : line;
+			let hit = false;
+			if (geo_kind == 'geoip' && is_ip(str))
+				hit = index(mainpart, '' + str) >= 0;
+			else
+				hit = mainpart == str;
+			if (hit) {
+				let grp = s.group;
+				if (grp == null || grp == '')
+					grp = 'default';
+				push(rules, { id: s['.name'], group: grp });
+			}
+		}
+	});
+	return rules;
+}
+
+function show_menu() {
+	sh_del('@global[0]', 'hide_from_luci', true);
+	return { ok: true };
+}
+
+function hide_menu() {
+	sh_set('@global[0]', 'hide_from_luci', '1', true);
+	return { ok: true };
+}
+
+function capabilities() {
+	let e = {};
+	let singbox = found_com('sing-box');
+	let xray = found_com('xray');
+	e.singbox = singbox;
+	e.xray = xray;
+	e.hysteria = found_com('hysteria');
+	e.geoview = found_com('geoview');
+	e.sslocal = found_bin('sslocal');
+	e.ssr = found_bin('ssr-local');
+	e.naive = found_bin('naive');
+	e.ipt2socks = found_bin('ipt2socks');
+	e.haproxy = found_bin('haproxy');
+	e.dns2socks = found_bin('dns2socks');
+	e.smartdns = found_bin('smartdns');
+	e.has_gfwlist = exists('/usr/share/passwall/rules/gfwlist');
+	e.has_chnlist = exists('/usr/share/passwall/rules/chnlist');
+	e.has_chnroute = exists('/usr/share/passwall/rules/chnroute');
+	e.has_smartdns_ui = (exists('/usr/lib/smartdns_ui.so') || exists('/usr/lib/smartdns/smartdns_ui.so')) ? true : false;
+	e.singbox_version = '';
+	e.xray_version = '';
+	if (singbox != '')
+		e.singbox_version = app_version('sing-box');
+	if (xray != '')
+		e.xray_version = app_version('xray');
+	e.singbox_tags = '';
+	if (singbox != '')
+		e.singbox_tags = trim_s(sh_exec(q(singbox) + " version | grep 'Tags:' | awk '{print $2}'"));
+	e.xray_ge = {};
+	if (xray != '' && e.xray_version != '')
+		e.xray_ge['26.1.13'] = cmp_ge(e.xray_version, '26.1.13');
+	e.singbox_ge = {};
+	if (singbox != '' && e.singbox_version != '') {
+		let ver = e.singbox_version;
+		let mv = match(ver, /[^v]+/);
+		if (mv)
+			ver = mv[0];
+		e.singbox_ge['1.14.0'] = cmp_ge(ver, '1.14.0');
+		e.singbox_ge['1.15.0'] = cmp_ge(ver, '1.15.0');
+	}
+	e.lsmod = popen_read('lsmod');
+	e.prefer_nft = api.uci_get_c('@global_forwarding[0]', 'prefer_nft') == '1';
+	e.nodes = [];
+	if (type(api.get_valid_nodes) == 'function')
+		e.nodes = api.get_valid_nodes() || [];
+	e.node_list = {};
+	if (type(api.get_node_list) == 'function')
+		e.node_list = api.get_node_list() || {};
+	e.devices = [];
+	if (type(api.get_network_devices) == 'function')
+		e.devices = api.get_network_devices() || [];
+	e.components = [];
+	let order = com_order();
+	for (let i = 0; i < length(order); i++)
+		push(e.components, com_info(order[i]));
+	return e;
+}
+
+function link_add_node(req) {
+	let chunk = form_raw(req, 'chunk');
+	let chunk_index_s = form_raw(req, 'chunk_index');
+	let total_s = form_raw(req, 'total_chunks');
+	let group = form_raw(req, 'group');
+	if (group == null)
+		group = 'default';
+	if (chunk != null && chunk_index_s != null && total_s != null) {
+		let chunk_index = int(chunk_index_s);
+		let total_chunks = int(total_s);
+		write_bytes('/tmp/links.conf', chunk, chunk_index != 0);
+		if (chunk_index + 1 == total_chunks)
+			subscribe_main([ 'add', group ]);
+	}
+	return { ok: true };
+}
+
+function socks_change(req, add) {
+	let id = form_raw(req, 'id');
+	let key = form_raw(req, 'key');
+	if (id != null && id != '' && key != null && key != '') {
+		api.uci_set_c(id, 'enable_autoswitch', '1');
+		let new_list = as_list(api.uci_get_c(id, 'autoswitch_backup_node'));
+		let kept = [];
+		for (let i = 0; i < length(new_list); i++) {
+			let remarks = api.uci_get_c(new_list[i], 'remarks') || '';
+			if (index('' + remarks, key) < 0)
+				push(kept, new_list[i]);
+		}
+		if (add && type(api.get_valid_nodes) == 'function') {
+			let nodes = api.get_valid_nodes() || [];
+			for (let i = 0; i < length(nodes); i++) {
+				let e = nodes[i];
+				if (e.node_type == 'normal' && e.remark != null && index('' + e.remark, key) >= 0)
+					push(kept, e.id);
+			}
+		}
+		api.uci_set_c(id, 'autoswitch_backup_node', kept);
+		save_c();
+	}
+	return { ok: true };
+}
+
+function gen_client_config(req) {
+	let id = form_raw(req, 'id');
+	if (id == null)
+		id = '';
+	let config_file = tmp_path() + '/config_' + id;
+	sh_call('/usr/share/passwall/app.sh run_socks ' +
+		q('flag=config_' + id) + ' ' +
+		q('node=' + id) + ' ' +
+		q('bind=127.0.0.1') + ' ' +
+		q('socks_port=1080') + ' ' +
+		q('config_file=' + config_file) + ' ' +
+		q('no_run=1'));
+	if (exists(config_file)) {
+		let text = read_text(config_file);
+		rm_rf(config_file);
+		let parsed = json(trim_s(text));
+		if (parsed != null && (type(parsed) == 'object' || type(parsed) == 'array'))
+			return parsed;
+		return text_out(text);
+	}
+	return { ok: false };
+}
+
+function get_now_use_node() {
+	let e = {};
+	let node = cache_get('ACL_GLOBAL_node');
+	if (node != null)
+		e.global = node;
+	return e;
+}
+
+function get_redir_log(req) {
+	let id = form_raw(req, 'id');
+	let path = tmp_path() + '/acl/' + (id == null ? '' : id);
+	let name = 'global';
+	if (id != null && id != 'default') {
+		let global_node = api.uci_get_c('@global[0]', 'node') || 'nil';
+		let acl_node = api.uci_get_c(id, 'node') || 'nil';
+		let global_enabled = api.uci_get_c('@global[0]', 'enabled') == '1';
+		if (acl_node == global_node && global_enabled) {
+			path = tmp_path() + '/acl/default';
+			if (api.uci_get_c('@global[0]', 'log_node') != '1')
+				return log_alert('The access control node is the same as the global node. Please enable global logging.');
+		}
+		else {
+			name = 'node';
+		}
+	}
+	let file = path + '/' + name + '.log';
+	if (exists(file))
+		return text_out(tail_file(file));
+	return log_alert('Not enabled log');
+}
+
+function get_socks_log(req) {
+	let name = form_raw(req, 'name');
+	if (name == null)
+		name = '';
+	let path = tmp_path() + '/' + name + '.log';
+	if (exists(path))
+		return text_out(tail_file(path));
+	return log_alert('Not enabled log');
+}
+
+function get_chinadns_log(req) {
+	let flag = form_raw(req, 'flag');
+	if (flag == null)
+		flag = '';
+	let path = tmp_path() + '/acl/' + flag + '/chinadns_ng.log';
+	if (flag != 'default') {
+		let global_node = api.uci_get_c('@global[0]', 'node') || 'nil';
+		let acl_node = api.uci_get_c(flag, 'node') || 'nil';
+		if (acl_node == global_node && api.uci_get_c('@global[0]', 'enabled') == '1') {
+			path = tmp_path() + '/acl/default/chinadns_ng.log';
+			if (api.uci_get_c('@global[0]', 'log_chinadns_ng') != '1')
+				return log_alert('The access control node is the same as the global node. Please enable global logging.');
+		}
+	}
+	if (exists(path))
+		return text_out(tail_file(path));
+	return log_alert('Not enabled log');
+}
+
+function get_smartdns_log() {
+	let path = tmp_path() + '/acl/default/smartdns.log';
+	if (exists(path))
+		return text_out(tail_file(path));
+	return log_alert('Not enabled log');
+}
+
+function get_log() {
+	return text_out(sh_exec("[ -f '/tmp/log/passwall.log' ] && cat /tmp/log/passwall.log"));
+}
+
+function clear_log() {
+	sh_call("echo '' > /tmp/log/passwall.log");
+	return { ok: true };
+}
+
+function index_status() {
+	let e = {};
+	let dns_shunt = api.uci_get_c('@global[0]', 'dns_shunt') || 'dnsmasq';
+	let tmp = tmp_path();
+	if (dns_shunt == 'smartdns') {
+		let config_file = tmp + '/acl/default/smartdns.conf';
+		e.dns_mode_status = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep -F " + q(config_file) + " | grep 'smartdns' >/dev/null") == 0;
+	}
+	else if (dns_shunt == 'chinadns-ng') {
+		e.dns_mode_status = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep " + q(tmp + '/bin/') + " | grep 'default' | grep 'chinadns_ng' >/dev/null") == 0;
+	}
+	else {
+		e.dns_mode_status = sh_call("netstat -apn | grep ':15353 ' >/dev/null") == 0;
+	}
+	e.haproxy_status = '-1';
+	if (found_bin('haproxy')) {
+		let rc = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep " + q(app_name() + '/bin/') + " | grep haproxy >/dev/null");
+		e.haproxy_status = rc == 0 ? '0' : '1';
+	}
+	if (cache_get('ENABLED_DEFAULT_ACL') == '1') {
+		let has_tproxy = cache_get('HAS_TPROXY');
+		if (has_tproxy == null) {
+			let mods = popen_read('lsmod');
+			has_tproxy = (index(mods, 'TPROXY') >= 0 || index(mods, 'nft_tproxy') >= 0) ? '1' : '0';
+			cache_set('HAS_TPROXY', has_tproxy);
+		}
+		e.tcp_status = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep " + q(tmp + '/bin/') + " | grep 'default' | grep 'global' >/dev/null") == 0;
+		if (has_tproxy == '1')
+			e.udp_status = sh_call("/bin/busybox top -bn1 | grep -v -E 'grep|naive' | grep " + q(tmp + '/bin/') + " | grep 'default' | grep 'global' >/dev/null") == 0;
+	}
+	return e;
+}
+
+function haproxy_status() {
+	let rc = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep " + q(app_name() + '/bin/') + " | grep haproxy >/dev/null");
+	return { status: rc == 0 };
+}
+
+function socks_status(req) {
+	let e = {};
+	let idx = form_raw(req, 'index');
+	if (idx != null)
+		e.index = idx;
+	let id = form_raw(req, 'id');
+	if (id == null)
+		id = '';
+	e.socks_status = sh_call("/bin/busybox top -bn1 | grep -v -E 'grep|acl/|acl_' | grep " + q(app_name() + '/bin/') + " | grep " + q('/' + id) + " > /dev/null") == 0;
+	let use_http = api.uci_get_c(id, 'http_port');
+	if (use_http == null || use_http == '')
+		use_http = 0;
+	e.use_http = 0;
+	if (int(use_http) > 0) {
+		e.use_http = 1;
+		e.http_status = sh_call("/bin/busybox top -bn1 | grep -v -E 'grep|acl/|acl_' | grep " + q(app_name() + '/bin/') + " | grep " + q('/' + id) + " | grep -E '\\+http|_http' > /dev/null") == 0;
+	}
+	return e;
+}
+
+function connect_status(req) {
+	let e = { use_time: '' };
+	let url = form_raw(req, 'url');
+	if (url == null || url == '')
+		return e;
+	let aliyun = index(url, 'aliyun') >= 0;
+	let chn_list = api.uci_get_c('@global[0]', 'chn_list') || 'direct';
+	let gfw_list = api.uci_get_c('@global[0]', 'use_gfw_list') || '1';
+	let proxy_mode = api.uci_get_c('@global[0]', 'tcp_proxy_mode') || 'proxy';
+	let localhost_proxy = api.uci_get_c('@global[0]', 'localhost_proxy') || '1';
+	let socks_server = '';
+	if (localhost_proxy == '0') {
+		let cached = cache_get('GLOBAL_SOCKS_server');
+		if (cached != null)
+			socks_server = cached;
+	}
+	let curl_args = "-w '%{http_code}:%{time_pretransfer}:%{time_starttransfer}' " + q(url);
+	if (socks_server != '') {
+		let chn_aliyun = (chn_list == 'proxy' && gfw_list == '0' && proxy_mode != 'proxy' && aliyun);
+		let global_mode = (chn_list == '0' && gfw_list == '0' && proxy_mode == 'proxy');
+		if (chn_aliyun || global_mode || !aliyun)
+			curl_args = '-x ' + q('socks5h://' + socks_server) + ' ' + curl_args;
+	}
+	let cmd = 'curl_result=$(/usr/bin/curl --connect-timeout 3 --max-time 5 -o /dev/null -I -sk ' + curl_args + '); [ $? -eq 0 ] && printf "%s" "$curl_result"';
+	apply_timing(e, sh_exec(cmd), true);
+	return e;
+}
+
+function ping_node(req) {
+	let e = {};
+	let idx = form_raw(req, 'index');
+	if (idx != null)
+		e.index = idx;
+	let address = form_raw(req, 'address');
+	if (address == null)
+		address = '';
+	let port = form_raw(req, 'port');
+	if (port == null)
+		port = '';
+	let ping_type = form_raw(req, 'type');
+	if (ping_type == null || ping_type == '')
+		ping_type = 'icmp';
+	if (ping_type == 'tcping' && trim_s(sh_exec('command -v tcping')) != '') {
+		if (type(api.is_ipv6) == 'function' && api.is_ipv6(address) && type(api.get_ipv6_only) == 'function')
+			address = api.get_ipv6_only(address);
+		e.ping = trim_s(sh_exec('echo -n $(tcping -q -c 1 -i 1 -t 2 -p ' + q(port) + ' ' + q(address) + " 2>&1 | grep -o 'time=[0-9]*' | awk -F '=' '{print $2}') 2>/dev/null"));
+	}
+	else {
+		e.ping = trim_s(sh_exec('echo -n $(ping -c 1 -W 1 ' + q(address) + " 2>&1 | grep -o 'time=[0-9]*' | awk -F '=' '{print $2}') 2>/dev/null"));
+	}
+	return e;
+}
+
+function urltest_node(req) {
+	let e = {};
+	let idx = form_raw(req, 'index');
+	if (idx != null)
+		e.index = idx;
+	let id = form_raw(req, 'id');
+	if (id == null)
+		id = '';
+	let result = sh_exec('/usr/share/passwall/test.sh url_test_node ' + q(id));
+	apply_timing(e, result, false);
+	return e;
+}
+
+function update_config(req) {
+	if (!apply_data(set_c, form_raw(req, 'id'), form_raw(req, 'data')))
+		return json_err();
+	save_c();
+	return json_ok();
+}
+
+function add_node(req) {
+	let uid = random_id();
+	add_named(false, uid, 'nodes');
+	let group = form_raw(req, 'group');
+	if (group != null && group != 'default')
+		api.uci_set_c(uid, 'group', group);
+	if (found_bin('ipt2socks'))
+		api.uci_set_c(uid, 'type', 'Socks');
+	else if (found_com('sing-box') != '')
+		api.uci_set_c(uid, 'type', 'sing-box');
+	else if (found_com('xray') != '')
+		api.uci_set_c(uid, 'type', 'Xray');
+	else if (found_bin('sslocal'))
+		api.uci_set_c(uid, 'type', 'SS-Rust');
+	else if (found_bin('ssr-local'))
+		api.uci_set_c(uid, 'type', 'SSR');
+	else if (found_com('hysteria') != '')
+		api.uci_set_c(uid, 'type', 'Hysteria2');
+	else if (found_bin('naive'))
+		api.uci_set_c(uid, 'type', 'Naiveproxy');
+	if (form_raw(req, 'redirect') == '1')
+		save_c();
+	else
+		save_c(true, true);
+	return { result: uid };
+}
+
+function set_node(req) {
+	let target = form_raw(req, 'type');
+	let option = form_raw(req, 'config');
+	let value = form_raw(req, 'section');
+	if (target == null || option == null)
+		return { ok: false };
+	if (target == '@global[0]') {
+		let node_protocol = api.uci_get_c(value, 'protocol');
+		if (node_protocol == '_shunt') {
+			let node_type = api.uci_get_c(value, 'type');
+			let dns_shunt = api.uci_get_c(target, 'dns_shunt');
+			let dns_key = (dns_shunt == 'smartdns') ? 'smartdns_dns_mode' : 'dns_mode';
+			let dns_mode = api.uci_get_c(target, dns_key);
+			let new_dns_mode = (node_type == 'Xray') ? 'xray' : 'sing-box';
+			if (dns_mode != new_dns_mode) {
+				api.uci_set_c(target, dns_key, new_dns_mode);
+				api.uci_set_c(target, 'v2ray_dns_mode', 'tcp');
+			}
+		}
+	}
+	api.uci_set_c(target, option, value);
+	save_c(true, true);
+	return { ok: true };
+}
+
+function copy_node(req) {
+	let section = form_raw(req, 'section');
+	let src = section == null ? null : api.uci_get_c(section);
+	if (src == null || type(src) != 'object')
+		return { ok: false };
+	let uid = random_id();
+	add_named(false, uid, 'nodes');
+	let ks = keys(src);
+	for (let i = 0; i < length(ks); i++) {
+		let k = ks[i];
+		if (length(k) > 0 && substr(k, 0, 1) == '.')
+			continue;
+		if (k == 'group')
+			continue;
+		let v = src[k];
+		if (k == 'remarks')
+			v = (v == null ? '' : ('' + v)) + '(1)';
+		api.uci_set_c(uid, k, v);
+	}
+	api.uci_set_c(uid, 'add_mode', '1');
+	save_c();
+	return { ok: true, section: uid };
+}
+
+function clear_all_nodes() {
+	api.uci_set_c('@global[0]', 'enabled', '0');
+	api.uci_set_c('@global[0]', 'socks_enabled', '0');
+	api.uci_set_c('@global_haproxy[0]', 'balancing_enable', '0');
+	del_c('@global[0]', 'node');
+	let socks = sections_of('socks');
+	for (let i = 0; i < length(socks); i++) {
+		let name = socks[i]['.name'];
+		del_c(name);
+		api.uci_set_c(name, 'autoswitch_backup_node', []);
+	}
+	let haproxy = sections_of('haproxy_config');
+	for (let i = 0; i < length(haproxy); i++)
+		del_c(haproxy[i]['.name']);
+	let acls = sections_of('acl_rule');
+	for (let i = 0; i < length(acls); i++)
+		del_c(acls[i]['.name'], 'node');
+	let nodes = sections_of('nodes');
+	for (let i = 0; i < length(nodes); i++)
+		del_c(nodes[i]['.name']);
+	let subs = sections_of('subscribe_list');
+	for (let i = 0; i < length(subs); i++) {
+		let name = subs[i]['.name'];
+		del_c(name, 'md5');
+		del_c(name, 'chain_proxy');
+		del_c(name, 'preproxy_node');
+		del_c(name, 'to_node');
+	}
+	save_c(true, true);
+	return { ok: true };
+}
+
+function delete_select_nodes(req) {
+	let ids = form_raw(req, 'ids');
+	if (ids == null)
+		ids = '';
+	let ids_t = [];
+	let parts = split_csv(ids);
+	for (let n = 0; n < length(parts); n++) {
+		let w = parts[n];
+		push(ids_t, w);
+		if ((api.uci_get_c('@global[0]', 'node') || '') == w)
+			del_c('@global[0]', 'node');
+		let socks = sections_of('socks');
+		for (let i = 0; i < length(socks); i++) {
+			let t = socks[i];
+			let name = t['.name'];
+			let auto_list = as_list(api.uci_get_c(name, 'autoswitch_backup_node'));
+			let changed = false;
+			let kept = [];
+			for (let j = 0; j < length(auto_list); j++) {
+				if (w == auto_list[j])
+					changed = true;
+				else
+					push(kept, auto_list[j]);
+			}
+			if (changed)
+				api.uci_set_c(name, 'autoswitch_backup_node', kept);
+			if (t.node == w) {
+				let new_node = null;
+				if (type(api.get_random_normal_node) == 'function')
+					new_node = api.get_random_normal_node(ids_t);
+				if (new_node)
+					api.uci_set_c(name, 'node', new_node['.name']);
+				else
+					api.uci_set_c(name, 'enabled', '0');
+			}
+		}
+		let haproxy = sections_of('haproxy_config');
+		for (let i = 0; i < length(haproxy); i++) {
+			if (haproxy[i].lbss == w)
+				del_c(haproxy[i]['.name']);
+		}
+		let acls = sections_of('acl_rule');
+		for (let i = 0; i < length(acls); i++) {
+			if (acls[i].node == w)
+				del_c(acls[i]['.name'], 'node');
+		}
+		let nodes = sections_of('nodes');
+		for (let i = 0; i < length(nodes); i++) {
+			let t = nodes[i];
+			let name = t['.name'];
+			if (t.preproxy_node == w) {
+				del_c(name, 'preproxy_node');
+				del_c(name, 'chain_proxy');
+			}
+			if (t.to_node == w) {
+				del_c(name, 'to_node');
+				del_c(name, 'chain_proxy');
+			}
+			let list_name = null;
+			if (t.urltest_node)
+				list_name = 'urltest_node';
+			else if (t.balancing_node)
+				list_name = 'balancing_node';
+			if (list_name != null) {
+				let node_list = as_list(api.uci_get_c(name, list_name));
+				let changed = false;
+				let new_nodes = [];
+				for (let j = 0; j < length(node_list); j++) {
+					if (node_list[j] != w)
+						push(new_nodes, node_list[j]);
+					else
+						changed = true;
+				}
+				if (changed)
+					api.uci_set_c(name, list_name, new_nodes);
+			}
+			if (t.fallback_node == w)
+				del_c(name, 'fallback_node');
+		}
+		let subs = sections_of('subscribe_list');
+		for (let i = 0; i < length(subs); i++) {
+			let t = subs[i];
+			let name = t['.name'];
+			if (t.preproxy_node == w) {
+				del_c(name, 'preproxy_node');
+				del_c(name, 'chain_proxy');
+			}
+			if (t.to_node == w) {
+				del_c(name, 'to_node');
+				del_c(name, 'chain_proxy');
+			}
+		}
+		if ((api.uci_get_c(w, 'add_mode') || '0') == '2') {
+			let group = api.uci_get_c(w, 'group') || '';
+			if (group != '') {
+				let subs2 = sections_of('subscribe_list');
+				for (let i = 0; i < length(subs2); i++) {
+					if (subs2[i].remark == group)
+						del_c(subs2[i]['.name'], 'md5');
+				}
+			}
+		}
+		del_c(w);
+	}
+	if (form_raw(req, 'redirect') == '1')
+		save_c();
+	else
+		save_c(true, true);
+	return { ok: true };
+}
+
+function get_node(req) {
+	let show = api.uci_get_c('@global_other[0]', 'show_node_info') || '0';
+	let id = form_raw(req, 'id');
+	if (id != null) {
+		let result = api.uci_get_c(id);
+		if (result == null)
+			return { code: 1 };
+		mark_ipv6(result, show);
+		return result;
+	}
+	return list_grouped('nodes', function(t) {
+		mark_ipv6(t, show);
+	});
+}
+
+function reassign_group(req) {
+	let ids = form_raw(req, 'ids');
+	if (ids == null)
+		ids = '';
+	let group = form_raw(req, 'group');
+	if (group == null)
+		group = 'default';
+	let parts = split_csv(ids);
+	for (let i = 0; i < length(parts); i++) {
+		let id = parts[i];
+		if (group != '' && group != 'default')
+			sh_set(id, 'group', group, false);
+		else
+			sh_del(id, 'group', false);
+	}
+	sh_commit();
+	return { status: 'ok' };
+}
+
+function save_node_list_opt(req) {
+	let option = form_raw(req, 'option');
+	if (option == null)
+		option = '';
+	let value = form_raw(req, 'value');
+	if (value == null)
+		value = '';
+	if (option != '')
+		sh_set('@global_other[0]', option, value, true);
+	return { status: 'ok' };
+}
+
+function update_rules(req) {
+	let update = form_raw(req, 'update');
+	if (update == null)
+		update = '';
+	if (update == '')
+		return json_err({ message: 'missing update target' });
+	main([ 'log', update ]);
+	return { code: 1 };
+}
+
+function rollback_rules(req) {
+	let arg_type = form_raw(req, 'type');
+	let rules = form_raw(req, 'rules');
+	if (rules == null)
+		rules = '';
+	if (arg_type != 'geoip' && arg_type != 'geosite')
+		return json_err();
+	let bak_dir = '/tmp/bak_v2ray/';
+	let geo_dir = api.uci_get_c('@global_rules[0]', 'v2ray_location_asset') || '/usr/share/v2ray/';
+	let geo2rule = api.uci_get_c('@global_rules[0]', 'geo2rule') || '0';
+	move_file(bak_dir + arg_type + '.dat', geo_dir + arg_type + '.dat');
+	rm_dir(bak_dir);
+	if (geo2rule == '1' && rules != '')
+		main([ 'log', rules, 'rollback' ]);
+	api.uci_set_c('@global[0]', 'flush_set', '1');
+	save_c(true);
+	return json_ok();
+}
+
+function server_update_config(req) {
+	if (!apply_data(set_s, form_raw(req, 'id'), form_raw(req, 'data')))
+		return json_err();
+	api.uci_save_s();
+	return json_ok();
+}
+
+function server_status(req) {
+	let e = {};
+	let idx = form_raw(req, 'index');
+	if (idx != null)
+		e.index = idx;
+	let id = form_raw(req, 'id');
+	if (id == null)
+		id = '';
+	let rc = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep " + q(app_name() + '_server/bin/') + ' | grep -i ' + q(id) + ' >/dev/null');
+	e.status = rc == 0;
+	return e;
+}
+
+function server_log(req) {
+	let id = form_raw(req, 'id');
+	if (id == null)
+		id = '';
+	let file = s_tmp_path() + '/' + id + '.log';
+	if (exists(file))
+		return text_out(join(split(read_text(file), '\n'), '<br />'));
+	return log_alert('Not enabled log');
+}
+
+function server_get_log() {
+	return text_out(sh_exec("[ -f '/tmp/log/passwall_server.log' ] && cat /tmp/log/passwall_server.log"));
+}
+
+function server_clear_log() {
+	sh_call("echo '' > /tmp/log/passwall_server.log");
+	return { ok: true };
+}
+
+function do_app_check() {
+	if (type(api.to_check_self) != 'function')
+		return { code: 1 };
+	return as_json(api.to_check_self());
+}
+
+function do_app_update(req) {
+	let id = form_raw(req, 'id');
+	if (!safe_task_id(id))
+		return { code: 1 };
+	let task = form_raw(req, 'task');
+	let result = null;
+	if (task == 'progress')
+		result = api.to_download_progress(app_name(), id, form_raw(req, 'total_size'));
+	else if (task == 'install')
+		result = api.to_install_self(id, form_raw(req, 'force'));
+	else {
+		let part = form_raw(req, 'part') == '2' ? '2' : '1';
+		result = api.to_download(app_name(), form_raw(req, 'url'), form_raw(req, 'size'), id + part, part == '2');
+	}
+	return as_json(result);
+}
+
+function do_com_check(comname) {
+	if (type(api.to_check) != 'function')
+		return { code: 1 };
+	return as_json(api.to_check('', comname));
+}
+
+function do_com_update(comname, req) {
+	let task = form_raw(req, 'task');
+	let result = null;
+	if (task == 'progress')
+		result = api.to_download_progress(comname, form_raw(req, 'id'), form_raw(req, 'total_size'));
+	else if (task == 'extract')
+		result = api.to_extract(comname, form_raw(req, 'file'), form_raw(req, 'subfix'));
+	else if (task == 'move')
+		result = api.to_move(comname, form_raw(req, 'file'));
+	else
+		result = api.to_download(comname, form_raw(req, 'url'), form_raw(req, 'size'), form_raw(req, 'id'));
+	return as_json(result);
+}
+
+function do_com_version(comname) {
+	let version = null;
+	if (type(api.get_app_version) == 'function')
+		version = api.get_app_version(comname);
+	return json_ok(version);
+}
+
+function read_rulelist(req) {
+	let rule_type = form_raw(req, 'type');
+	let rule_path = null;
+	if (rule_type == 'gfw')
+		rule_path = '/usr/share/passwall/rules/gfwlist';
+	else if (rule_type == 'chn')
+		rule_path = '/usr/share/passwall/rules/chnlist';
+	else if (rule_type == 'chnroute')
+		rule_path = '/usr/share/passwall/rules/chnroute';
+	else
+		return { code: 0, message: 'Invalid rule type', output: '' };
+	if (exists(rule_path))
+		return text_out(read_text(rule_path));
+	return text_out('');
+}
+
+function create_backup() {
+	let date = trim_s(sh_exec('date +%y%m%d%H%M'));
+	let filename = 'passwall-' + date + '-backup.tar.gz';
+	let tar_file = '/tmp/' + filename;
+	let version_file = '/tmp/passwall-version';
+	let version = short_version();
+	rm_rf(tar_file);
+	write_text(version_file, version + '\n');
+	let rc = sh_call('tar -czf ' + q(tar_file) + ' ' + join(BACKUP_FILES, ' ') + ' -C /tmp passwall-version');
+	rm_rf(version_file);
+	if (rc != 0 || !exists(tar_file))
+		return { code: 0, filename: filename, output: '' };
+	let raw = readfile(tar_file);
+	rm_rf(tar_file);
+	if (raw == null)
+		return { code: 0, filename: filename, output: '' };
+	return { filename: filename, output: b64encode(raw) };
+}
+
+function restore_backup(req) {
+	let kind = form_raw(req, 'type');
+	let filename = form_raw(req, 'filename');
+	let chunk = form_raw(req, 'chunk');
+	let chunk_index_s = form_raw(req, 'chunk_index');
+	let total_s = form_raw(req, 'total_chunks');
+	if (filename == null)
+		return { status: 'error', message: 'Missing filename' };
+	if (chunk == null)
+		return { status: 'error', message: 'Missing chunk data' };
+	let chunk_index = int(chunk_index_s == null ? '-1' : chunk_index_s);
+	let total_chunks = int(total_s == null ? '-1' : total_s);
+	let file_path = '/tmp/' + filename;
+	let decoded = b64decode(chunk);
+	if (decoded == null)
+		return { status: 'error', message: 'Base64 decode failed' };
+	if (!write_bytes(file_path, decoded, true))
+		return { status: 'error', message: 'Failed to open file: ' + file_path };
+	if (chunk_index + 1 != total_chunks)
+		return { status: 'success', message: 'Chunk received' };
+	revert_config(cfg_name(), 'c');
+	revert_config(api.s_config || 'passwall_server', 's');
+	sh_call("echo '' > /tmp/log/passwall.log");
+	log_msg(' * PassWall 备份文件上传成功…');
+	let version = trim_s(sh_exec('tar -xOf ' + q(file_path) + ' passwall-version 2>/dev/null'));
+	if (version != '')
+		log_msg(' * 备份文件由 PassWall ' + version + ' 生成。');
+	let temp_dir = '/tmp/passwall_bak';
+	sh_call('mkdir -p ' + q(temp_dir));
+	let result = { status: 'error', message: 'unknown error' };
+	if (sh_call('tar -xzf ' + q(file_path) + ' -C ' + q(temp_dir)) == 0) {
+		for (let i = 0; i < length(BACKUP_FILES); i++) {
+			let backup_file = BACKUP_FILES[i];
+			let is_server_config = backup_file == '/etc/config/passwall_server';
+			if (kind == 'all' || (kind == 'client' && !is_server_config) || (kind == 'server' && is_server_config)) {
+				let temp_file = temp_dir + backup_file;
+				if (exists(temp_file))
+					sh_call('cp -f ' + q(temp_file) + ' ' + q(backup_file));
+			}
+		}
+		if (kind == 'all' || kind == 'client') {
+			log_msg(' * PassWall 备份还原成功…');
+			log_msg(' * 重启 PassWall 服务中…\n');
+			sh_set('@global[0]', 'flush_set', '1', true);
+			sh_call('/etc/init.d/passwall restart > /dev/null 2>&1 &');
+		}
+		if (kind == 'all' || kind == 'server')
+			sh_call('/etc/init.d/passwall_server restart > /dev/null 2>&1 &');
+		result = { status: 'success', message: 'Upload completed', path: file_path };
+	}
+	else {
+		log_msg(' * PassWall 备份文件解压失败，请重试！');
+		result = { status: 'error', message: 'Decompression failed' };
+	}
+	rm_rf(temp_dir);
+	rm_rf(file_path);
+	return result;
+}
+
+function reset_config(req) {
+	let kind = form_raw(req, 'type');
+	if (kind == 'client') {
+		revert_config(cfg_name(), 'c');
+		sh_call("echo '' > /tmp/log/passwall.log");
+		sh_call('/etc/init.d/passwall stop');
+		if (sh_call('[ -s "/usr/share/passwall/0_default_config" ]') == 0) {
+			sh_call('cp -f /usr/share/passwall/0_default_config /etc/config/passwall');
+			for (let i = 0; i < length(RESET_RULES); i++) {
+				let f = RESET_RULES[i];
+				sh_call('cp -f /usr/share/passwall/rules/' + f + ' /etc/passwall/rules/' + f);
+			}
+			log_msg(' * 恢复默认配置成功。');
+		}
+		else {
+			log_msg(' * 找不到默认配置文件，重置失败！');
+		}
+	}
+	else if (kind == 'server') {
+		revert_config(api.s_config || 'passwall_server', 's');
+		sh_call("echo '' > /tmp/log/passwall_server.log");
+		sh_call('/etc/init.d/passwall_server stop');
+		sh_call("echo \"config global 'global'\" > /etc/config/passwall_server");
+	}
+	return { ok: true };
+}
+
+function geo_view(req) {
+	let action = form_raw(req, 'action');
+	let value = form_raw(req, 'value');
+	if (value == null || value == '')
+		return text_out('Please enter query content!');
+	let base = geo_base();
+	let geosite_path = base + '/geosite.dat';
+	let geoip_path = base + '/geoip.dat';
+	let geo_string = '';
+	let bin = found_com('geoview');
+	if (action == 'lookup' && bin != '') {
+		let geo_type = 'geosite';
+		let file_path = geosite_path;
+		if (is_ip(value)) {
+			geo_type = 'geoip';
+			file_path = geoip_path;
+		}
+		let cmd = q(bin) + ' -type ' + q(geo_type) + ' -action lookup -input ' + q(file_path) + ' -value ' + q(value) + ' -lowmem=true';
+		geo_string = lc(sh_exec(cmd));
+		if (geo_string != '') {
+			let lines = [];
+			let rules = [];
+			let seen = {};
+			let raw_lines = split(geo_string, '\n');
+			for (let i = 0; i < length(raw_lines); i++) {
+				let line = raw_lines[i];
+				if (line == '')
+					continue;
+				push(lines, geo_type + ':' + line);
+				let found = get_rules(line, geo_type);
+				for (let r = 0; r < length(found); r++) {
+					if (!seen[found[r].id]) {
+						seen[found[r].id] = true;
+						push(rules, '[' + found[r].group + ']' + found[r].id);
+					}
+				}
+			}
+			let found_value = get_rules(value, geo_type);
+			for (let r = 0; r < length(found_value); r++) {
+				if (!seen[found_value[r].id]) {
+					seen[found_value[r].id] = true;
+					push(rules, '[' + found_value[r].group + ']' + found_value[r].id);
+				}
+			}
+			geo_string = join(lines, '\n');
+			if (length(rules) > 0) {
+				geo_string = geo_string + '\n--------------------\n';
+				geo_string = geo_string + 'Rules containing this value:\n';
+				geo_string = geo_string + join(rules, '\n');
+			}
+		}
+	}
+	else if (action == 'extract' && bin != '') {
+		let m = match(value, /^(geoip:)(.*)$/);
+		if (m == null)
+			m = match(value, /^(geosite:)(.*)$/);
+		if (m != null) {
+			let prefix = m[0];
+			let list = m[1];
+			if (prefix != null && list != null && list != '') {
+				let geo_type = substr(prefix, 0, length(prefix) - 1);
+				let file_path = (geo_type == 'geoip') ? geoip_path : geosite_path;
+				let cmd = q(bin) + ' -type ' + q(geo_type) + ' -action extract -input ' + q(file_path) + ' -list ' + q(list) + ' -lowmem=true';
+				geo_string = sh_exec(cmd);
+			}
+		}
+	}
+	if (geo_string != null && geo_string != '')
+		return text_out(geo_string);
+	return text_out('No results were found!');
+}
+
+function subscribe_del_node(req) {
+	let remark = form_raw(req, 'remark');
+	if (remark != null && remark != '')
+		subscribe_main([ 'truncate', remark ]);
+	return { ok: true };
+}
+
+function subscribe_del_all() {
+	subscribe_main([ 'truncate' ]);
+	return { ok: true };
+}
+
+function subscribe_manual(req) {
+	let section = form_raw(req, 'section');
+	if (section == null)
+		section = '';
+	let current_url = form_raw(req, 'url');
+	if (current_url == null)
+		current_url = '';
+	if (section == '' || current_url == '')
+		return { success: false, msg: 'Missing section or URL, skip.' };
+	let uci_url = sh_get(section, 'url');
+	if (uci_url == null || uci_url == '')
+		return { success: false, msg: 'Please save and apply before manually subscribing.' };
+	if (uci_url != current_url)
+		sh_set(section, 'url', current_url, true);
+	subscribe_main([ 'start', section, 'manual' ]);
+	return { success: true, msg: 'Subscribe triggered.' };
+}
+
+function subscribe_manual_all(req) {
+	let sections = form_raw(req, 'sections');
+	let urls = form_raw(req, 'urls');
+	if (sections == null)
+		sections = '';
+	if (urls == null)
+		urls = '';
+	if (sections == '' || urls == '')
+		return { success: false, msg: 'Missing section or URL, skip.' };
+	let section_list = split(sections, ',');
+	let url_list = split(urls, ',');
+	for (let i = 0; i < length(section_list); i++) {
+		let uci_url = sh_get(section_list[i], 'url');
+		if (uci_url == null || uci_url == '')
+			return { success: false, msg: 'Please save and apply before manually subscribing.' };
+	}
+	for (let i = 0; i < length(section_list); i++) {
+		let current_url = i < length(url_list) ? url_list[i] : '';
+		let uci_url = sh_get(section_list[i], 'url');
+		if (current_url != '' && uci_url != current_url)
+			sh_set(section_list[i], 'url', current_url, true);
+	}
+	subscribe_main([ 'start', 'all', 'manual' ]);
+	return { success: true, msg: 'Subscribe triggered.' };
+}
+
+function flush_set(req) {
+	let reload = form_raw(req, 'reload');
+	if (reload == null)
+		reload = '0';
+	if (reload == '1') {
+		api.uci_set_c('@global[0]', 'flush_set', '1');
+		save_c(true, true);
+	}
+	else {
+		sh_set('@global[0]', 'flush_set', '1', true);
+	}
+	return { ok: true };
+}
+
+function fetch_certsha256(req) {
+	let id = form_raw(req, 'id');
+	if (id == null)
+		id = '';
+	let address = '';
+	let port = 0;
+	if (id != '') {
+		address = api.uci_get_c(id, 'address') || '';
+		let port_v = api.uci_get_c(id, 'port');
+		if (port_v != null && port_v != '')
+			port = port_v;
+	}
+	let sni = '';
+	if (id != '')
+		sni = api.uci_get_c(id, 'tls_serverName') || '';
+	if (sni == '')
+		sni = address;
+	let protocol = api.uci_get_c(id, 'protocol');
+	let h3 = false;
+	let timeout = 10;
+	if (protocol == 'hysteria2') {
+		h3 = true;
+		timeout = 60;
+		if (int(port) == 0) {
+			let hop = api.uci_get_c(id, 'hysteria2_hop') || '0';
+			let m = match('' + hop, /^\s*(\d+)/);
+			port = m ? int(m[0]) : 0;
+		}
+	}
+	if (address == '' || int(port) == 0)
+		return json_err();
+	if (type(api.fetch_cert_sha256) != 'function')
+		return json_err();
+	let data = api.fetch_cert_sha256(address, port, sni, timeout, h3);
+	if (data != null && data != '')
+		return { code: 1, data: data };
+	return { code: 0 };
+}
+
+function get_shunt_rules(req) {
+	let id = form_raw(req, 'id');
+	if (id != null) {
+		let result = api.uci_get_c(id);
+		if (result == null)
+			return { code: 1 };
+		return result;
+	}
+	return list_grouped('shunt_rules', null);
+}
+
+function add_shunt_rule(req) {
+	let add_name = form_raw(req, 'add_name');
+	let uid = add_name;
+	if (add_name != null) {
+		let has = api.uci_get_c(uid);
+		if (has)
+			return json_err({ message: 'This ID already exists.' });
+	}
+	else {
+		uid = random_id();
+	}
+	add_named(false, uid, 'shunt_rules');
+	let group = form_raw(req, 'group');
+	if (group != null && group != 'default')
+		api.uci_set_c(uid, 'group', group);
+	save_c();
+	return json_ok({ uid: uid, redirect_url: page_url('shunt_rules', uid) });
+}
+
+function delete_select_shunt_rules(req) {
+	let ids = form_raw(req, 'ids');
+	if (ids == null)
+		ids = '';
+	let parts = split_csv(ids);
+	for (let i = 0; i < length(parts); i++) {
+		let w = parts[i];
+		let nodes = sections_of('nodes');
+		for (let j = 0; j < length(nodes); j++) {
+			let s = nodes[j];
+			if (s.protocol && s.protocol == '_shunt')
+				del_c(s['.name'], w);
+		}
+		del_c(w);
+	}
+	if (form_raw(req, 'redirect') == '1')
+		save_c();
+	else
+		save_c(true, true);
+	return { ok: true };
+}
+
+function gen_wireguard_keypair() {
+	if (type(api.gen_wireguard_key) != 'function')
+		return json_err();
+	let key = api.gen_wireguard_key();
+	if (key)
+		return json_ok(key);
+	return json_err();
+}
+
+function make_check(name) {
+	return function() {
+		return do_com_check(name);
+	};
+}
+
+function make_update(name) {
+	return function(req) {
+		return do_com_update(name, req);
+	};
+}
+
+function make_version(name) {
+	return function() {
+		return do_com_version(name);
+	};
+}
+
+function com_update_args() {
+	return {
+		task: 'string',
+		id: 'string',
+		total_size: 'string',
+		file: 'string',
+		subfix: 'string',
+		url: 'string',
+		size: 'string'
+	};
+}
+
+function app_update_args() {
+	return {
+		id: 'string',
+		task: 'string',
+		total_size: 'string',
+		force: 'string',
+		part: 'string',
+		url: 'string',
+		size: 'string'
+	};
+}
+
+let methods = {
+	show_menu: {
+		call: function() {
+			return show_menu();
+		}
+	},
+	hide_menu: {
+		call: function() {
+			return hide_menu();
+		}
+	},
+	capabilities: {
+		call: function() {
+			return capabilities();
+		}
+	},
+	link_add_node: {
+		args: { chunk: 'string', chunk_index: 'string', total_chunks: 'string', group: 'string' },
+		call: function(req) {
+			return link_add_node(req);
+		}
+	},
+	socks_autoswitch_add_node: {
+		args: { id: 'string', key: 'string' },
+		call: function(req) {
+			return socks_change(req, true);
+		}
+	},
+	socks_autoswitch_remove_node: {
+		args: { id: 'string', key: 'string' },
+		call: function(req) {
+			return socks_change(req, false);
+		}
+	},
+	gen_client_config: {
+		args: { id: 'string' },
+		call: function(req) {
+			return gen_client_config(req);
+		}
+	},
+	get_now_use_node: {
+		call: function() {
+			return get_now_use_node();
+		}
+	},
+	get_redir_log: {
+		args: { id: 'string' },
+		call: function(req) {
+			return get_redir_log(req);
+		}
+	},
+	get_socks_log: {
+		args: { name: 'string' },
+		call: function(req) {
+			return get_socks_log(req);
+		}
+	},
+	get_chinadns_log: {
+		args: { flag: 'string' },
+		call: function(req) {
+			return get_chinadns_log(req);
+		}
+	},
+	get_smartdns_log: {
+		call: function() {
+			return get_smartdns_log();
+		}
+	},
+	get_log: {
+		call: function() {
+			return get_log();
+		}
+	},
+	clear_log: {
+		call: function() {
+			return clear_log();
+		}
+	},
+	index_status: {
+		call: function() {
+			return index_status();
+		}
+	},
+	haproxy_status: {
+		call: function() {
+			return haproxy_status();
+		}
+	},
+	socks_status: {
+		args: { index: 'string', id: 'string' },
+		call: function(req) {
+			return socks_status(req);
+		}
+	},
+	connect_status: {
+		args: { url: 'string' },
+		call: function(req) {
+			return connect_status(req);
+		}
+	},
+	ping_node: {
+		args: { index: 'string', address: 'string', port: 'string', type: 'string' },
+		call: function(req) {
+			return ping_node(req);
+		}
+	},
+	urltest_node: {
+		args: { index: 'string', id: 'string' },
+		call: function(req) {
+			return urltest_node(req);
+		}
+	},
+	update_config: {
+		args: { id: 'string', data: 'string' },
+		call: function(req) {
+			return update_config(req);
+		}
+	},
+	add_node: {
+		args: { redirect: 'string', group: 'string' },
+		call: function(req) {
+			return add_node(req);
+		}
+	},
+	set_node: {
+		args: { type: 'string', config: 'string', section: 'string' },
+		call: function(req) {
+			return set_node(req);
+		}
+	},
+	copy_node: {
+		args: { section: 'string' },
+		call: function(req) {
+			return copy_node(req);
+		}
+	},
+	clear_all_nodes: {
+		call: function() {
+			return clear_all_nodes();
+		}
+	},
+	delete_select_nodes: {
+		args: { ids: 'string', redirect: 'string' },
+		call: function(req) {
+			return delete_select_nodes(req);
+		}
+	},
+	reassign_group: {
+		args: { ids: 'string', group: 'string' },
+		call: function(req) {
+			return reassign_group(req);
+		}
+	},
+	get_node: {
+		args: { id: 'string' },
+		call: function(req) {
+			return get_node(req);
+		}
+	},
+	save_node_list_opt: {
+		args: { option: 'string', value: 'string' },
+		call: function(req) {
+			return save_node_list_opt(req);
+		}
+	},
+	update_rules: {
+		args: { update: 'string' },
+		call: function(req) {
+			return update_rules(req);
+		}
+	},
+	rollback_rules: {
+		args: { type: 'string', rules: 'string' },
+		call: function(req) {
+			return rollback_rules(req);
+		}
+	},
+	subscribe_del_node: {
+		args: { remark: 'string' },
+		call: function(req) {
+			return subscribe_del_node(req);
+		}
+	},
+	subscribe_del_all: {
+		call: function() {
+			return subscribe_del_all();
+		}
+	},
+	subscribe_manual: {
+		args: { section: 'string', url: 'string' },
+		call: function(req) {
+			return subscribe_manual(req);
+		}
+	},
+	subscribe_manual_all: {
+		args: { sections: 'string', urls: 'string' },
+		call: function(req) {
+			return subscribe_manual_all(req);
+		}
+	},
+	flush_set: {
+		args: { redirect: 'string', reload: 'string' },
+		call: function(req) {
+			return flush_set(req);
+		}
+	},
+	get_shunt_rules: {
+		args: { id: 'string' },
+		call: function(req) {
+			return get_shunt_rules(req);
+		}
+	},
+	add_shunt_rule: {
+		args: { add_name: 'string', redirect: 'string', group: 'string' },
+		call: function(req) {
+			return add_shunt_rule(req);
+		}
+	},
+	delete_select_shunt_rules: {
+		args: { ids: 'string', redirect: 'string' },
+		call: function(req) {
+			return delete_select_shunt_rules(req);
+		}
+	},
+	read_rulelist: {
+		args: { type: 'string' },
+		call: function(req) {
+			return read_rulelist(req);
+		}
+	},
+	app_check: {
+		call: function() {
+			return do_app_check();
+		}
+	},
+	app_update: {
+		args: app_update_args(),
+		call: function(req) {
+			return do_app_update(req);
+		}
+	},
+	com_check: {
+		args: { com: 'string' },
+		call: function(req) {
+			let name = form_raw(req, 'com');
+			if (name == null)
+				name = '';
+			return do_com_check(name);
+		}
+	},
+	com_update: {
+		args: {
+			com: 'string',
+			task: 'string',
+			id: 'string',
+			total_size: 'string',
+			file: 'string',
+			subfix: 'string',
+			url: 'string',
+			size: 'string'
+		},
+		call: function(req) {
+			let name = form_raw(req, 'com');
+			if (name == null)
+				name = '';
+			return do_com_update(name, req);
+		}
+	},
+	com_version: {
+		args: { com: 'string' },
+		call: function(req) {
+			let name = form_raw(req, 'com');
+			if (name == null)
+				name = '';
+			return do_com_version(name);
+		}
+	},
+	create_backup: {
+		call: function() {
+			return create_backup();
+		}
+	},
+	restore_backup: {
+		args: {
+			type: 'string',
+			filename: 'string',
+			chunk: 'string',
+			chunk_index: 'string',
+			total_chunks: 'string'
+		},
+		call: function(req) {
+			return restore_backup(req);
+		}
+	},
+	reset_config: {
+		args: { type: 'string' },
+		call: function(req) {
+			return reset_config(req);
+		}
+	},
+	geo_view: {
+		args: { action: 'string', value: 'string' },
+		call: function(req) {
+			return geo_view(req);
+		}
+	},
+	fetch_certsha256: {
+		args: { id: 'string' },
+		call: function(req) {
+			return fetch_certsha256(req);
+		}
+	},
+	gen_wireguard_key: {
+		call: function() {
+			return gen_wireguard_keypair();
+		}
+	},
+	server_update_config: {
+		args: { id: 'string', data: 'string' },
+		call: function(req) {
+			return server_update_config(req);
+		}
+	},
+	server_status: {
+		args: { index: 'string', id: 'string' },
+		call: function(req) {
+			return server_status(req);
+		}
+	},
+	server_log: {
+		args: { id: 'string' },
+		call: function(req) {
+			return server_log(req);
+		}
+	},
+	server_get_log: {
+		call: function() {
+			return server_get_log();
+		}
+	},
+	server_clear_log: {
+		call: function() {
+			return server_clear_log();
+		}
+	}
+};
+
+methods.show = methods.show_menu;
+methods.hide = methods.hide_menu;
+methods['check_' + app_name()] = methods.app_check;
+methods['update_' + app_name()] = methods.app_update;
+
+let order = com_order();
+for (let i = 0; i < length(order); i++) {
+	let name = order[i];
+	methods['check_' + name] = {
+		call: make_check(name)
+	};
+	methods['update_' + name] = {
+		args: com_update_args(),
+		call: make_update(name)
+	};
+	methods['version_' + name] = {
+		call: make_version(name)
+	};
+}
+
+return methods;

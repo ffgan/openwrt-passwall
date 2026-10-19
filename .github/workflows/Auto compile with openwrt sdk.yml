@@ -5,6 +5,7 @@
 #
 name: "Auto compile with openwrt sdk"
 on:
+  pull_request:
   repository_dispatch:
   workflow_dispatch:
     inputs:
@@ -31,10 +32,10 @@ jobs:
       prerelease: ${{ steps.check_version.outputs.prerelease }}
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Check version
         id: check_version
@@ -64,7 +65,7 @@ jobs:
           fi
 
       - name: Prepare release
-        if: steps.check_version.outputs.has_update == 'true'
+        if: github.event_name != 'pull_request' && steps.check_version.outputs.has_update == 'true'
         run: |
           echo "![](https://img.shields.io/github/downloads/${{ env.passwall }}/${{steps.check_version.outputs.latest_version}}/total?style=flat-square)" >> release.txt
           echo "## :mega: 获取其他软件包 / How to Get Other Packages" >>release.txt
@@ -95,7 +96,7 @@ jobs:
           touch release.txt
 
       - name: Generate new tag & release
-        if: steps.check_version.outputs.has_update == 'true'
+        if: github.event_name != 'pull_request' && steps.check_version.outputs.has_update == 'true'
         uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -115,17 +116,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - container_tag: x86_64-21.02.7
-            ver: "22.03-"
+          # gh-action-sdk pulls ghcr.io/openwrt/sdk:$ARCH.
+          # x86_64-21.02.7 is gone and used to fail the release build.
+          # These tags exist on that registry as of 2026-10-19.
+          - container_tag: x86_64-24.10.8
+            ver: "24.10"
 
-          - container_tag: x86_64-24.10.5
-            ver: "23.05-24.10"
+          - container_tag: x86_64-25.12.6
+            ver: "25.12"
 
-          - container_tag: x86-64-SNAPSHOT
-            ver: "25.12+"
+          - container_tag: x86_64-SNAPSHOT
+            ver: "snapshot"
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v5
 
       - name: Generate .config for Language Packs
         run: |
@@ -141,25 +145,32 @@ jobs:
         env:
           ARCH: ${{ matrix.container_tag }}
           PACKAGES: luci-app-passwall
-          # V: s
+          FEEDNAME: passwall
+          # Init scripts are maintained for the device shell, not shfmt --posix.
+          NO_SHFMT_CHECK: 1
+          NO_REFRESH_CHECK: 1
 
       - name: Process and Rename Artifacts
         id: compile
         run: |
-          mkdir -p ${{ github.workspace }}/upload
-          
-          # 使用 find 安全提取生成的 ipk/apk 及语言包
-          find bin/packages/ -type f -name "luci-app-passwall*" -exec cp {} ${{ github.workspace }}/upload/ \;
-          find bin/packages/ -type f -name "luci-i18n-passwall*" -exec cp {} ${{ github.workspace }}/upload/ \;
-          
-          cd ${{ github.workspace }}/upload
-          
-          for i in $(ls); do mv $i ${{ matrix.ver }}_$i; done
-          
-          echo "status=success" >> $GITHUB_OUTPUT
+          mkdir -p "${{ github.workspace }}/upload"
+          find bin/packages -type f \( -name 'luci-app-passwall*' -o -name 'luci-i18n-passwall*' \) -exec cp -f {} "${{ github.workspace }}/upload/" \;
+          cd "${{ github.workspace }}/upload"
+          count=0
+          for i in *; do
+            [ -f "$i" ] || continue
+            mv "$i" "${{ matrix.ver }}_$i"
+            count=$((count + 1))
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "SDK build produced no luci-app-passwall package" >&2
+            find bin/packages -type f | head -n 50 >&2 || true
+            exit 1
+          fi
+          echo "status=success" >> "$GITHUB_OUTPUT"
       - name: Upload to release
         uses: softprops/action-gh-release@v3
-        if: steps.compile.outputs.status == 'success'
+        if: github.event_name != 'pull_request' && steps.compile.outputs.status == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

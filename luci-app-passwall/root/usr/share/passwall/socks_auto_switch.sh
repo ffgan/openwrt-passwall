@@ -4,7 +4,7 @@
 APP_FILE=${APP_PATH}/app.sh
 
 check_process() {
-	while busybox pgrep -af "${CONFIG}/" | grep -E 'app\.sh.*(start|stop)|nftables\.sh|iptables\.sh|subscribe\.lua' >/dev/null; do
+	while busybox pgrep -af "${CONFIG}/" | grep -E 'app\.sh.*(start|stop)|nftables\.sh|iptables\.sh|subscribe\.(lua|uc)' >/dev/null; do
 		sleep 6s 8>&- 9>&-
 	done
 }
@@ -200,7 +200,7 @@ start() {
 	retry_num=$(config_n_get $id autoswitch_retry_num 1)
 	restore_switch=$(config_n_get $id autoswitch_restore_switch 0)
 	probe_url=$(config_n_get $id autoswitch_probe_url "https://www.google.com/generate_204")
-	backup_node=$(lua_api "get_socks_backup_nodes(\"${id}\")")
+	backup_node=$(pw_api "get_socks_backup_nodes(\"${id}\")")
 	if [ -n "$backup_node" ]; then
 		backup_node_num=$(printf "%s\n" "$backup_node" | wc -w)
 		echolog "  - Socks切换检测：端口[${socks_port}] 后备节点数量：${backup_node_num}"
