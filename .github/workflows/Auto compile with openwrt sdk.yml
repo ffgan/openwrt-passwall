@@ -117,16 +117,9 @@ jobs:
       matrix:
         include:
           # gh-action-sdk pulls ghcr.io/openwrt/sdk:$ARCH.
-          # x86_64-21.02.7 is gone and used to fail the release build.
-          # These tags exist on that registry as of 2026-10-19.
-          - container_tag: x86_64-24.10.8
-            ver: "24.10"
-
+          # Release and pull-request builds target OpenWrt 25.12 only.
           - container_tag: x86_64-25.12.6
             ver: "25.12"
-
-          - container_tag: x86_64-SNAPSHOT
-            ver: "snapshot"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
