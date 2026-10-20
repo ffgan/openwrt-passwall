@@ -572,13 +572,14 @@ set_s = function(section, option, value) {
 };
 
 parse_timing = function(result) {
-	let m = match(trim_s(result), /^(\d+):([\d.]+):([\d.]+)$/);
+	/* ucode match() is [0]=full text, [1..]=captures, and \d is not a digit class. */
+	let m = match(trim_s(result), /^([0-9]+):([0-9.]+):([0-9.]+)$/);
 	if (m == null)
 		return null;
 	return {
-		code: num(m[0]),
-		pre: num(m[1]),
-		start: num(m[2])
+		code: num(m[1]),
+		pre: num(m[2]),
+		start: num(m[3])
 	};
 };
 

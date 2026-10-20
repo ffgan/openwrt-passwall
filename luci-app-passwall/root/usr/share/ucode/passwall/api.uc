@@ -1455,6 +1455,9 @@ node_base_type = function(n) {
 };
 
 get_valid_nodes = function() {
+	/* rpcd keeps one uci cursor. LuCI writes the same config through another
+	   cursor, so drop the cached package before reading it back. */
+	uci.unload(c_config);
 	let show_node_info = uci_get_c("@global_other[0]", "show_node_info");
 	if (!isset(show_node_info))
 		show_node_info = "0";
