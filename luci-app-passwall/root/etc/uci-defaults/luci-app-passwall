@@ -1,14 +1,5 @@
 #!/bin/sh
 
-if [ -e "/etc/config/ucitrack" ]; then
-	uci -q batch <<-EOF
- 		delete ucitrack.@passwall[-1]
-		add ucitrack passwall
-		set ucitrack.@passwall[-1].init=passwall
-		commit ucitrack
-EOF
-fi
-
 uci -q batch <<-EOF
 	delete firewall.passwall
 	set firewall.passwall=include

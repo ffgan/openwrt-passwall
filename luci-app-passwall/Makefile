@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall
 PKG_VERSION:=26.10.16
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_PO_VERSION:=$(PKG_VERSION)
 PKG_LICENSE:=GPL-3.0-only
 
@@ -52,9 +52,7 @@ config PACKAGE_$(PKG_NAME)_Iptables_Transparent_Proxy
 	bool "Iptables Transparent Proxy"
 	select PACKAGE_ipset
 	select PACKAGE_ipt2socks
-	select PACKAGE_iptables
 	select PACKAGE_iptables-zz-legacy
-	select PACKAGE_ip6tables if IPV6
 	select PACKAGE_ip6tables-zz-legacy if IPV6
 	select PACKAGE_dnsmasq_full_ipset
 	select PACKAGE_iptables-mod-conntrack-extra
