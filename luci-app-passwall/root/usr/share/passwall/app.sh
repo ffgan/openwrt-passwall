@@ -350,6 +350,10 @@ run_chinadns_ng() {
 run_socks() {
 	local flag node bind socks_port config_file http_port http_config_file relay_port log_file no_run loglevel
 	eval_set_val "$@"
+	# URL test and other on-demand socks start before (or after) the main
+	# service. stop() removes TMP_PATH, so recreate the dirs the config and
+	# the /usr/bin/xray symlink are written into.
+	mkdir -p "$TMP_PATH" "$TMP_BIN_PATH" "$TMP_SCRIPT_FUNC_PATH" "$TMP_ACL_PATH"
 	[ -n "$config_file" ] && [ -z "$(echo ${config_file} | grep $TMP_PATH)" ] && config_file=$TMP_PATH/$config_file
 	[ -n "$http_port" ] || http_port=0
 	[ -n "$http_config_file" ] && [ -z "$(echo ${http_config_file} | grep $TMP_PATH)" ] && http_config_file=$TMP_PATH/$http_config_file
