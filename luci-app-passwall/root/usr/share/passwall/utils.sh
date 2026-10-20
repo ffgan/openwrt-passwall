@@ -5,6 +5,7 @@
 CONFIG=passwall
 DIRECT_GID=9911
 APP_PATH=/usr/share/${CONFIG}
+UCODE_BIN=/usr/libexec/${CONFIG}
 TMP_PATH=/tmp/etc/${CONFIG}
 TMP_PATH2=${TMP_PATH}_tmp
 LOCK_PATH=/var/lock
@@ -96,7 +97,7 @@ pw_api() {
 		echo "nil"
 		return
 	}
-	ucode "$APP_PATH/api_call.uc" "$func"
+	ucode "$UCODE_BIN/api_call.uc" "$func"
 }
 
 eval_cache_var() {

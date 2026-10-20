@@ -9,12 +9,11 @@
 
 . /usr/share/passwall/utils.sh
 GLOBAL_ACL_PATH=${TMP_ACL_PATH}/default
-UCODE_LIB=/usr/share/passwall
-UTIL_SINGBOX=$UCODE_LIB/util_singbox.uc
-UTIL_SS=$UCODE_LIB/util_shadowsocks.uc
-UTIL_XRAY=$UCODE_LIB/util_xray.uc
-UTIL_NAIVE=$UCODE_LIB/util_naiveproxy.uc
-UTIL_HYSTERIA2=$UCODE_LIB/util_hysteria2.uc
+UTIL_SINGBOX=$UCODE_BIN/util_singbox.uc
+UTIL_SS=$UCODE_BIN/util_shadowsocks.uc
+UTIL_XRAY=$UCODE_BIN/util_xray.uc
+UTIL_NAIVE=$UCODE_BIN/util_naiveproxy.uc
+UTIL_HYSTERIA2=$UCODE_BIN/util_hysteria2.uc
 SINGBOX_BIN=$(first_type $(config_n_get @global_app[0] sing_box_file) sing-box)
 XRAY_BIN=$(first_type $(config_n_get @global_app[0] xray_file) xray)
 
@@ -338,7 +337,7 @@ run_chinadns_ng() {
 	_extra_param="${_extra_param} -DEFAULT_TAG ${_default_tag} -NFTFLAG ${nftflag} -NO_LOGIC_LOG ${_no_logic_log}"
 	_extra_param="${_extra_param} -FILTER_HTTPS ${_filter_https} -LOG_FILE ${_LOG_FILE}"
 
-	ucode $APP_PATH/helper_chinadns_add.uc ${_extra_param} > ${_CONF_FILE}
+	ucode $UCODE_BIN/helper_chinadns_add.uc ${_extra_param} > ${_CONF_FILE}
 	ln_run "$(first_type chinadns-ng)" chinadns-ng "${_LOG_FILE}" -C ${_CONF_FILE}
 }
 
@@ -934,8 +933,10 @@ clean_crontab() {
 	touch /etc/crontabs/root
 	#sed -i "/${CONFIG}/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "/etc/init.d/${CONFIG}" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
+	sed -i "/$(echo "ucode ${UCODE_BIN}/rule_update.uc log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "ucode ${APP_PATH}/rule_update.uc log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "lua ${APP_PATH}/rule_update.lua log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
+	sed -i "/$(echo "ucode ${UCODE_BIN}/subscribe.uc start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "ucode ${APP_PATH}/subscribe.uc start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "lua ${APP_PATH}/subscribe.lua start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 
@@ -1015,7 +1016,7 @@ start_crontab() {
 		if [ "$rules_update_week_mode" = "8" ]; then
 			update_loop=1
 		else
-			echo "$rule_t ${setsid_cmd}ucode $APP_PATH/rule_update.uc log all cron > /dev/null 2>&1 &" >>/etc/crontabs/root
+			echo "$rule_t ${setsid_cmd}ucode $UCODE_BIN/rule_update.uc log all cron > /dev/null 2>&1 &" >>/etc/crontabs/root
 		fi
 		echolog "配置定时任务：自动更新规则。"
 	fi
@@ -1043,7 +1044,7 @@ start_crontab() {
 			if [ "$sub_update_week_mode" = "8" ]; then
 				update_loop=1
 			else
-				echo "$sub_t ${setsid_cmd}ucode $APP_PATH/subscribe.uc start $cfgids cron > /dev/null 2>&1 &" >>/etc/crontabs/root
+				echo "$sub_t ${setsid_cmd}ucode $UCODE_BIN/subscribe.uc start $cfgids cron > /dev/null 2>&1 &" >>/etc/crontabs/root
 			fi
 		done
 		rm -rf "$TMP_SUB_PATH"
@@ -1282,7 +1283,7 @@ start_dns() {
 			echolog "  - SmartDNS(127.0.0.1#${smartdns_listen_port})，直连 DNS：${SMARTDNS_DIRECT_DNS} -> 分组(direct)"
 			[ "${SMARTDNS_LOCAL_PORT:-0}" != "0" ] && echolog "  - SmartDNS 直连入口：${LOCAL_DNS} -> 分组(direct)"
 
-			ucode "$APP_PATH/helper_smartdns_add.uc" -FLAG "default" \
+			ucode "$UCODE_BIN/helper_smartdns_add.uc" -FLAG "default" \
 				-LISTEN_PORT "$smartdns_listen_port" -DIRECT_DNS "$SMARTDNS_DIRECT_DNS" -LOCAL_PORT "${SMARTDNS_LOCAL_PORT:-0}" -DNS_REDIRECT "${DNS_REDIRECT}" \
 				-REMOTE_PROXY_SERVER "${GLOBAL_SOCKS_server}" -USE_DEFAULT_DNS "${smartdns_default_dns}" \
 				-REMOTE_DNS "${smartdns_remote_dns}" -DNS_MODE "${DNS_MODE:-socks}" -TUN_DNS "${TUN_DNS}" \
@@ -1361,15 +1362,15 @@ start_dns() {
 			DIRECT_DNSMASQ_CONF=${GLOBAL_ACL_PATH}/direct_dnsmasq.conf
 			DIRECT_DNSMASQ_CONF_PATH=${GLOBAL_ACL_PATH}/direct_dnsmasq.d
 			mkdir -p ${DIRECT_DNSMASQ_CONF_PATH}
-			ucode $APP_PATH/helper_dnsmasq.uc copy_instance -LISTEN_PORT ${DIRECT_DNSMASQ_PORT} -DNSMASQ_CONF ${DIRECT_DNSMASQ_CONF} -TMP_DNSMASQ_PATH ${DIRECT_DNSMASQ_CONF_PATH}
+			ucode $UCODE_BIN/helper_dnsmasq.uc copy_instance -LISTEN_PORT ${DIRECT_DNSMASQ_PORT} -DNSMASQ_CONF ${DIRECT_DNSMASQ_CONF} -TMP_DNSMASQ_PATH ${DIRECT_DNSMASQ_CONF_PATH}
 			ln_run "$(first_type dnsmasq)" "dnsmasq_direct" "/dev/null" -C ${DIRECT_DNSMASQ_CONF} -x ${GLOBAL_ACL_PATH}/direct_dnsmasq.pid
 			echo "${DIRECT_DNSMASQ_PORT}" > ${GLOBAL_ACL_PATH}/direct_dnsmasq_port
 		}
 
 		#Rewrite the default DNS service configuration
 		#Modify the default dnsmasq service
-		ucode $APP_PATH/helper_dnsmasq.uc stretch
-		ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
+		ucode $UCODE_BIN/helper_dnsmasq.uc stretch
+		ucode $UCODE_BIN/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
 			-DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS ${LOCAL_DNS} -TUN_DNS ${DNSMASQ_TUN_DNS} \
 			-USE_DEFAULT_DNS "${USE_DEFAULT_DNS:-direct}" -CHINADNS_DNS ${china_ng_listen:-0} \
 			-USE_DIRECT_LIST "${USE_DIRECT_LIST}" -USE_PROXY_LIST "${USE_PROXY_LIST}" -USE_BLOCK_LIST "${USE_BLOCK_LIST}" -USE_GFW_LIST "${USE_GFW_LIST}" -CHN_LIST "${CHN_LIST}" \
@@ -1378,7 +1379,7 @@ start_dns() {
 		uci -q delete dhcp.@dnsmasq[0].min_cache_ttl
 		uci -q add_list dhcp.@dnsmasq[0].addnmount=${GLOBAL_DNSMASQ_CONF_PATH}
 		uci -q commit dhcp
-		ucode $APP_PATH/helper_dnsmasq.uc logic_restart -LOG 1
+		ucode $UCODE_BIN/helper_dnsmasq.uc logic_restart -LOG 1
 	elif [ "${DNS_SHUNT}" = "smartdns" ]; then
 		# SmartDNS reads DHCP leases itself; no forwarding dnsmasq instance is needed.
 		DNS_REDIRECT_PORT=${smartdns_listen_port}
@@ -1388,7 +1389,7 @@ start_dns() {
 		GLOBAL_DNSMASQ_PORT=$(get_new_port 11400)
 		GLOBAL_DNSMASQ_CONF=${GLOBAL_ACL_PATH}/dnsmasq.conf
 		GLOBAL_DNSMASQ_CONF_PATH=${GLOBAL_ACL_PATH}/dnsmasq.d
-		ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
+		ucode $UCODE_BIN/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
 			-LISTEN_PORT ${GLOBAL_DNSMASQ_PORT} -DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS ${LOCAL_DNS} -TUN_DNS ${DNSMASQ_TUN_DNS} \
 			-USE_DEFAULT_DNS "${USE_DEFAULT_DNS:-direct}" -CHINADNS_DNS ${china_ng_listen:-0} \
 			-USE_DIRECT_LIST "${USE_DIRECT_LIST}" -USE_PROXY_LIST "${USE_PROXY_LIST}" -USE_BLOCK_LIST "${USE_BLOCK_LIST}" -USE_GFW_LIST "${USE_GFW_LIST}" -CHN_LIST "${CHN_LIST}" \
@@ -1411,7 +1412,7 @@ start_haproxy() {
 	fi
 	local haproxy_path=$TMP_PATH/haproxy
 	local haproxy_conf="config.cfg"
-	ucode $APP_PATH/haproxy.uc -path ${haproxy_path} -conf ${haproxy_conf}
+	ucode $UCODE_BIN/haproxy.uc -path ${haproxy_path} -conf ${haproxy_conf}
 	ln_run "$(first_type haproxy)" haproxy "/dev/null" -f "${haproxy_path}/${haproxy_conf}"
 }
 
@@ -1619,7 +1620,7 @@ acl_app() {
 							dnsmasq_port=$(get_new_port $(expr $dnsmasq_port + 1))
 							local dnsmasq_conf=${acl_path}/dnsmasq.conf
 							local dnsmasq_conf_path=${acl_path}/dnsmasq.d
-							ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG ${sid} -TMP_DNSMASQ_PATH ${dnsmasq_conf_path} -DNSMASQ_CONF_FILE ${dnsmasq_conf} \
+							ucode $UCODE_BIN/helper_dnsmasq.uc add_rule -FLAG ${sid} -TMP_DNSMASQ_PATH ${dnsmasq_conf_path} -DNSMASQ_CONF_FILE ${dnsmasq_conf} \
 								-LISTEN_PORT ${dnsmasq_port} -DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS $LOCAL_DNS \
 								-USE_DIRECT_LIST "${use_direct_list}" -USE_PROXY_LIST "${use_proxy_list}" -USE_BLOCK_LIST "${use_block_list}" -USE_GFW_LIST "${use_gfw_list}" -CHN_LIST "${chn_list}" \
 								-TUN_DNS "127.0.0.1#${dns_fwd_port}" -USE_DEFAULT_DNS "${use_default_dns:-direct}" -CHINADNS_DNS ${_china_ng_listen:-0} \
@@ -1728,7 +1729,7 @@ start() {
 			uci -q commit ${CONFIG}
 			uci -q set dhcp.@dnsmasq[0].dns_redirect='0'
 			uci -q commit dhcp
-			ucode $APP_PATH/helper_dnsmasq.uc restart -LOG 0
+			ucode $UCODE_BIN/helper_dnsmasq.uc restart -LOG 0
 		}
 	fi
 	[ "$ENABLED_DEFAULT_ACL" = 1 ] && {
@@ -1769,7 +1770,7 @@ start() {
 		done
 		[ -n "$cfgids" ] && {
 			sleep 5
-			ucode $APP_PATH/subscribe.uc start $cfgids cron > /dev/null 2>&1 &
+			ucode $UCODE_BIN/subscribe.uc start $cfgids cron > /dev/null 2>&1 &
 		}
 	}
 }
@@ -1809,7 +1810,7 @@ stop() {
 		if [ -z "${ACL_default_dns_port}" ] || [ -n "${bak_dnsmasq_dns_redirect}" ]; then
 			uci -q del_list dhcp.@dnsmasq[0].addnmount="${GLOBAL_DNSMASQ_CONF_PATH}"
 			uci -q commit dhcp
-			ucode $APP_PATH/helper_dnsmasq.uc restart -LOG 0
+			ucode $UCODE_BIN/helper_dnsmasq.uc restart -LOG 0
 		fi
 		[ -n "${bak_bridge_nf_ipt}" ] && sysctl -w net.bridge.bridge-nf-call-iptables=${bak_bridge_nf_ipt} >/dev/null 2>&1
 		[ -n "${bak_bridge_nf_ip6t}" ] && sysctl -w net.bridge.bridge-nf-call-ip6tables=${bak_bridge_nf_ip6t} >/dev/null 2>&1
