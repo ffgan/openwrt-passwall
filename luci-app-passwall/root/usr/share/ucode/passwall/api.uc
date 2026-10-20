@@ -529,6 +529,9 @@ uci_save = function(cur, config, commit_flag, apply) {
 	} else if (apply) {
 		cur.commit(config);
 	} else {
+		/* 25.12 ucode uci keeps set() in the cursor until save(). A shell
+		   `uci commit` only sees that delta, so write it first. */
+		cur.save(config);
 		sh_uci_commit(config);
 	}
 };

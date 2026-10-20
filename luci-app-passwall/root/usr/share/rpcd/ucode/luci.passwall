@@ -2153,4 +2153,4 @@ for (let i = 0; i < length(order); i++) {
 	};
 }
 
-return methods;
+return { 'luci.passwall': methods };
