@@ -58,13 +58,12 @@ restart() {
 	set_lock || { echolog "脚本已经在运行，不重复运行，退出."; return 0; }
 	local update_status=1
 	for i in $(seq 1 300); do
-		PASSWALL_UPDATE_LOCK="${LOCK_PATH}/${CONFIG}_sub_rule.lock" lua -e '
-			local nixio = require "nixio"
-			local file = nixio.open(os.getenv("PASSWALL_UPDATE_LOCK"), "a")
-			if not file then os.exit(2) end
-			os.exit(file:lock("tlock") and 0 or 1)
-		'
-		update_status=$?
+		if : >> "${LOCK_PATH}/${CONFIG}_sub_rule.lock"; then
+			flock -n "${LOCK_PATH}/${CONFIG}_sub_rule.lock" true
+			update_status=$?
+		else
+			update_status=2
+		fi
 		[ "$update_status" -ne 1 ] && break
 		sleep 2
 	done

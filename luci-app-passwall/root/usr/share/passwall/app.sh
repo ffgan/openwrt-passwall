@@ -9,12 +9,12 @@
 
 . /usr/share/passwall/utils.sh
 GLOBAL_ACL_PATH=${TMP_ACL_PATH}/default
-LUA_UTIL_PATH=/usr/lib/lua/luci/passwall
-UTIL_SINGBOX=$LUA_UTIL_PATH/util_sing-box.lua
-UTIL_SS=$LUA_UTIL_PATH/util_shadowsocks.lua
-UTIL_XRAY=$LUA_UTIL_PATH/util_xray.lua
-UTIL_NAIVE=$LUA_UTIL_PATH/util_naiveproxy.lua
-UTIL_HYSTERIA2=$LUA_UTIL_PATH/util_hysteria2.lua
+UCODE_LIB=/usr/share/passwall
+UTIL_SINGBOX=$UCODE_LIB/util_singbox.uc
+UTIL_SS=$UCODE_LIB/util_shadowsocks.uc
+UTIL_XRAY=$UCODE_LIB/util_xray.uc
+UTIL_NAIVE=$UCODE_LIB/util_naiveproxy.uc
+UTIL_HYSTERIA2=$UCODE_LIB/util_hysteria2.uc
 SINGBOX_BIN=$(first_type $(config_n_get @global_app[0] sing_box_file) sing-box)
 XRAY_BIN=$(first_type $(config_n_get @global_app[0] xray_file) xray)
 
@@ -193,7 +193,7 @@ run_singbox() {
 	[ -n "$no_run" ] && json_add_string "no_run" "1"
 	[ -n "$run_in_global" ] && json_add_string "run_in_global" "1"
 	local _json_arg="$(json_dump)"
-	lua $UTIL_SINGBOX gen_config "${_json_arg}" > $config_file
+	ucode $UTIL_SINGBOX gen_config "${_json_arg}" > $config_file
 	[ -n "$no_run" ] && return
 
 	local test_log_file=$log_file
@@ -292,7 +292,7 @@ run_xray() {
 	[ -n "$no_run" ] && json_add_string "no_run" "1"
 	[ -n "$run_in_global" ] && json_add_string "run_in_global" "1"
 	local _json_arg="$(json_dump)"
-	lua $UTIL_XRAY gen_config "${_json_arg}" > $config_file
+	ucode $UTIL_XRAY gen_config "${_json_arg}" > $config_file
 	[ -n "$no_run" ] && return
 
 	local test_log_file=$log_file
@@ -343,13 +343,17 @@ run_chinadns_ng() {
 	_extra_param="${_extra_param} -DEFAULT_TAG ${_default_tag} -NFTFLAG ${nftflag} -NO_LOGIC_LOG ${_no_logic_log}"
 	_extra_param="${_extra_param} -FILTER_HTTPS ${_filter_https} -LOG_FILE ${_LOG_FILE}"
 
-	lua $APP_PATH/helper_chinadns_add.lua ${_extra_param} > ${_CONF_FILE}
+	ucode $APP_PATH/helper_chinadns_add.uc ${_extra_param} > ${_CONF_FILE}
 	ln_run "$(first_type chinadns-ng)" chinadns-ng "${_LOG_FILE}" -C ${_CONF_FILE}
 }
 
 run_socks() {
 	local flag node bind socks_port config_file http_port http_config_file relay_port log_file no_run loglevel
 	eval_set_val "$@"
+	# URL test and other on-demand socks start before (or after) the main
+	# service. stop() removes TMP_PATH, so recreate the dirs the config and
+	# the /usr/bin/xray symlink are written into.
+	mkdir -p "$TMP_PATH" "$TMP_BIN_PATH" "$TMP_SCRIPT_FUNC_PATH" "$TMP_ACL_PATH"
 	[ -n "$config_file" ] && [ -z "$(echo ${config_file} | grep $TMP_PATH)" ] && config_file=$TMP_PATH/$config_file
 	[ -n "$http_port" ] || http_port=0
 	[ -n "$http_config_file" ] && [ -z "$(echo ${http_config_file} | grep $TMP_PATH)" ] && http_config_file=$TMP_PATH/$http_config_file
@@ -438,7 +442,7 @@ run_socks() {
 			local util="${UTIL_XRAY}"
 		fi
 		[ -n "${bin}" ] && [ -n "${util}" ] && {
-			lua ${util} gen_proto_config "$(json_dump)" > $config_file
+			ucode ${util} gen_proto_config "$(json_dump)" > $config_file
 			[ -n "$no_run" ] || ln_run "$bin" $type $log_file run -c "$config_file"
 		}
 		unset bin util
@@ -467,13 +471,13 @@ run_socks() {
 		json_add_string "run_type" "socks"
 		json_add_string "local_addr" "$bind"
 		json_add_string "local_port" "$socks_port"
-		lua $UTIL_NAIVE gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_NAIVE gen_config "$(json_dump)" > $config_file
 		[ -n "$no_run" ] || ln_run "$(first_type naive)" naive $log_file "$config_file"
 	;;
 	ssr)
 		json_add_string "local_addr" "$bind"
 		json_add_string "local_port" "$socks_port"
-		lua $UTIL_SS gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_SS gen_config "$(json_dump)" > $config_file
 		[ -n "$no_run" ] || ln_run "$(first_type ssr-local)" "ssr-local" $log_file -c "$config_file" -v -u
 	;;
 	ss-rust)
@@ -490,7 +494,7 @@ run_socks() {
 		json_add_string "local_socks_address" "$bind"
 		json_add_string "local_socks_port" "$socks_port"
 		json_add_string "loglevel" "$loglevel"
-		lua $UTIL_SS gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_SS gen_config "$(json_dump)" > $config_file
 		[ -n "$no_run" ] || ln_run "$(first_type sslocal)" "sslocal" $log_file -c "$config_file" -v
 	;;
 	hysteria2)
@@ -502,7 +506,7 @@ run_socks() {
 		}
 		json_add_string "local_socks_address" "$bind"
 		json_add_string "local_socks_port" "$socks_port"
-		lua $UTIL_HYSTERIA2 gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_HYSTERIA2 gen_config "$(json_dump)" > $config_file
 		[ -n "$no_run" ] || {
 			HYSTERIA_LOG_LEVEL="$loglevel" \
 			ln_run "$(first_type "$(config_n_get @global_app[0] hysteria_file)")" "hysteria" $log_file -c "$config_file" client
@@ -531,7 +535,7 @@ run_socks() {
 			local util="${UTIL_XRAY}"
 		fi
 		[ -n "${bin}" ] && [ -n "${util}" ] && {
-			lua ${util} gen_proto_config "$(json_dump)" > $http_config_file
+			ucode ${util} gen_proto_config "$(json_dump)" > $http_config_file
 			[ -n "$no_run" ] || ln_run "$bin" "$http_type" /dev/null run -c "$http_config_file"
 		}
 		unset bin util
@@ -784,7 +788,7 @@ start_global() {
 		json_add_string "run_type" "redir"
 		json_add_string "local_addr" "0.0.0.0"
 		json_add_string "local_port" "$REDIR_PORT"
-		lua $UTIL_NAIVE gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_NAIVE gen_config "$(json_dump)" > $config_file
 		ln_run "$(first_type naive)" naive $log_file "$config_file"
 		echolog "注意：Naiveproxy 不支持 UDP 转发！"
 	;;
@@ -793,7 +797,7 @@ start_global() {
 		local _extra_param="-u"
 		json_add_string "local_addr" "0.0.0.0"
 		json_add_string "local_port" "$REDIR_PORT"
-		lua $UTIL_SS gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_SS gen_config "$(json_dump)" > $config_file
 		ln_run "$(first_type ssr-redir)" "ssr-redir" $log_file -c "$config_file" -v ${_extra_param}
 	;;
 	ss-rust)
@@ -811,7 +815,7 @@ start_global() {
 		local plugin_sh="${config_file%.json}_plugin.sh"
 		json_add_string "plugin_sh" "$plugin_sh"
 		json_add_string "loglevel" "$(config_n_get @global[0] loglevel "warn")"
-		lua $UTIL_SS gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_SS gen_config "$(json_dump)" > $config_file
 		ln_run "$(first_type sslocal)" "sslocal" $log_file -c "$config_file" -v
 	;;
 	hysteria2)
@@ -826,7 +830,7 @@ start_global() {
 			json_add_string "local_http_port" "${GLOBAL_HTTP_port}"
 		}
 		json_add_string "tcp_proxy_way" "${TCP_PROXY_WAY}"
-		lua $UTIL_HYSTERIA2 gen_config "$(json_dump)" > $config_file
+		ucode $UTIL_HYSTERIA2 gen_config "$(json_dump)" > $config_file
 		local loglevel=$(config_n_get @global[0] loglevel "warn")
 		HYSTERIA_LOG_LEVEL="$loglevel" \
 		ln_run "$(first_type "$(config_n_get @global_app[0] hysteria_file)")" "hysteria" $log_file -c "$config_file" client
@@ -935,7 +939,9 @@ clean_crontab() {
 	touch /etc/crontabs/root
 	#sed -i "/${CONFIG}/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "/etc/init.d/${CONFIG}" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
+	sed -i "/$(echo "ucode ${APP_PATH}/rule_update.uc log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "lua ${APP_PATH}/rule_update.lua log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
+	sed -i "/$(echo "ucode ${APP_PATH}/subscribe.uc start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "lua ${APP_PATH}/subscribe.lua start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 
 	busybox pgrep -af "${CONFIG}/" | awk '/tasks\.sh/{print $1}' | xargs kill -9 >/dev/null 2>&1
@@ -1014,7 +1020,7 @@ start_crontab() {
 		if [ "$rules_update_week_mode" = "8" ]; then
 			update_loop=1
 		else
-			echo "$rule_t ${setsid_cmd}lua $APP_PATH/rule_update.lua log all cron > /dev/null 2>&1 &" >>/etc/crontabs/root
+			echo "$rule_t ${setsid_cmd}ucode $APP_PATH/rule_update.uc log all cron > /dev/null 2>&1 &" >>/etc/crontabs/root
 		fi
 		echolog "配置定时任务：自动更新规则。"
 	fi
@@ -1042,7 +1048,7 @@ start_crontab() {
 			if [ "$sub_update_week_mode" = "8" ]; then
 				update_loop=1
 			else
-				echo "$sub_t ${setsid_cmd}lua $APP_PATH/subscribe.lua start $cfgids cron > /dev/null 2>&1 &" >>/etc/crontabs/root
+				echo "$sub_t ${setsid_cmd}ucode $APP_PATH/subscribe.uc start $cfgids cron > /dev/null 2>&1 &" >>/etc/crontabs/root
 			fi
 		done
 		rm -rf "$TMP_SUB_PATH"
@@ -1281,7 +1287,7 @@ start_dns() {
 			echolog "  - SmartDNS(127.0.0.1#${smartdns_listen_port})，直连 DNS：${SMARTDNS_DIRECT_DNS} -> 分组(direct)"
 			[ "${SMARTDNS_LOCAL_PORT:-0}" != "0" ] && echolog "  - SmartDNS 直连入口：${LOCAL_DNS} -> 分组(direct)"
 
-			lua "$APP_PATH/helper_smartdns_add.lua" -FLAG "default" \
+			ucode "$APP_PATH/helper_smartdns_add.uc" -FLAG "default" \
 				-LISTEN_PORT "$smartdns_listen_port" -DIRECT_DNS "$SMARTDNS_DIRECT_DNS" -LOCAL_PORT "${SMARTDNS_LOCAL_PORT:-0}" -DNS_REDIRECT "${DNS_REDIRECT}" \
 				-REMOTE_PROXY_SERVER "${GLOBAL_SOCKS_server}" -USE_DEFAULT_DNS "${smartdns_default_dns}" \
 				-REMOTE_DNS "${smartdns_remote_dns}" -DNS_MODE "${DNS_MODE:-socks}" -TUN_DNS "${TUN_DNS}" \
@@ -1360,15 +1366,15 @@ start_dns() {
 			DIRECT_DNSMASQ_CONF=${GLOBAL_ACL_PATH}/direct_dnsmasq.conf
 			DIRECT_DNSMASQ_CONF_PATH=${GLOBAL_ACL_PATH}/direct_dnsmasq.d
 			mkdir -p ${DIRECT_DNSMASQ_CONF_PATH}
-			lua $APP_PATH/helper_dnsmasq.lua copy_instance -LISTEN_PORT ${DIRECT_DNSMASQ_PORT} -DNSMASQ_CONF ${DIRECT_DNSMASQ_CONF} -TMP_DNSMASQ_PATH ${DIRECT_DNSMASQ_CONF_PATH}
+			ucode $APP_PATH/helper_dnsmasq.uc copy_instance -LISTEN_PORT ${DIRECT_DNSMASQ_PORT} -DNSMASQ_CONF ${DIRECT_DNSMASQ_CONF} -TMP_DNSMASQ_PATH ${DIRECT_DNSMASQ_CONF_PATH}
 			ln_run "$(first_type dnsmasq)" "dnsmasq_direct" "/dev/null" -C ${DIRECT_DNSMASQ_CONF} -x ${GLOBAL_ACL_PATH}/direct_dnsmasq.pid
 			echo "${DIRECT_DNSMASQ_PORT}" > ${GLOBAL_ACL_PATH}/direct_dnsmasq_port
 		}
 
 		#Rewrite the default DNS service configuration
 		#Modify the default dnsmasq service
-		lua $APP_PATH/helper_dnsmasq.lua stretch
-		lua $APP_PATH/helper_dnsmasq.lua add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
+		ucode $APP_PATH/helper_dnsmasq.uc stretch
+		ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
 			-DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS ${LOCAL_DNS} -TUN_DNS ${DNSMASQ_TUN_DNS} \
 			-USE_DEFAULT_DNS "${USE_DEFAULT_DNS:-direct}" -CHINADNS_DNS ${china_ng_listen:-0} \
 			-USE_DIRECT_LIST "${USE_DIRECT_LIST}" -USE_PROXY_LIST "${USE_PROXY_LIST}" -USE_BLOCK_LIST "${USE_BLOCK_LIST}" -USE_GFW_LIST "${USE_GFW_LIST}" -CHN_LIST "${CHN_LIST}" \
@@ -1377,7 +1383,7 @@ start_dns() {
 		uci -q delete dhcp.@dnsmasq[0].min_cache_ttl
 		uci -q add_list dhcp.@dnsmasq[0].addnmount=${GLOBAL_DNSMASQ_CONF_PATH}
 		uci -q commit dhcp
-		lua $APP_PATH/helper_dnsmasq.lua logic_restart -LOG 1
+		ucode $APP_PATH/helper_dnsmasq.uc logic_restart -LOG 1
 	elif [ "${DNS_SHUNT}" = "smartdns" ]; then
 		# SmartDNS reads DHCP leases itself; no forwarding dnsmasq instance is needed.
 		DNS_REDIRECT_PORT=${smartdns_listen_port}
@@ -1387,7 +1393,7 @@ start_dns() {
 		GLOBAL_DNSMASQ_PORT=$(get_new_port 11400)
 		GLOBAL_DNSMASQ_CONF=${GLOBAL_ACL_PATH}/dnsmasq.conf
 		GLOBAL_DNSMASQ_CONF_PATH=${GLOBAL_ACL_PATH}/dnsmasq.d
-		lua $APP_PATH/helper_dnsmasq.lua add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
+		ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
 			-LISTEN_PORT ${GLOBAL_DNSMASQ_PORT} -DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS ${LOCAL_DNS} -TUN_DNS ${DNSMASQ_TUN_DNS} \
 			-USE_DEFAULT_DNS "${USE_DEFAULT_DNS:-direct}" -CHINADNS_DNS ${china_ng_listen:-0} \
 			-USE_DIRECT_LIST "${USE_DIRECT_LIST}" -USE_PROXY_LIST "${USE_PROXY_LIST}" -USE_BLOCK_LIST "${USE_BLOCK_LIST}" -USE_GFW_LIST "${USE_GFW_LIST}" -CHN_LIST "${CHN_LIST}" \
@@ -1410,7 +1416,7 @@ start_haproxy() {
 	fi
 	local haproxy_path=$TMP_PATH/haproxy
 	local haproxy_conf="config.cfg"
-	lua $APP_PATH/haproxy.lua -path ${haproxy_path} -conf ${haproxy_conf}
+	ucode $APP_PATH/haproxy.uc -path ${haproxy_path} -conf ${haproxy_conf}
 	ln_run "$(first_type haproxy)" haproxy "/dev/null" -f "${haproxy_path}/${haproxy_conf}"
 }
 
@@ -1442,13 +1448,13 @@ acl_app() {
 			if [ -n "${sources}" ]; then
 				for s in $sources; do
 					local s2
-					is_iprange=$(lua_api "iprange(\"${s}\")")
+					is_iprange=$(pw_api "iprange(\"${s}\")")
 					if [ "${is_iprange}" = "true" ]; then
 						s2="iprange:${s}"
 					elif [ -n "$(echo ${s} | grep '^ipset:')" ]; then
 						s2="ipset:${s}"
 					else
-						_ip_or_mac=$(lua_api "ip_or_mac(\"${s}\")")
+						_ip_or_mac=$(pw_api "ip_or_mac(\"${s}\")")
 						if [ "${_ip_or_mac}" = "ip" ]; then
 							s2="ip:${s}"
 						elif [ "${_ip_or_mac}" = "mac" ]; then
@@ -1618,7 +1624,7 @@ acl_app() {
 							dnsmasq_port=$(get_new_port $(expr $dnsmasq_port + 1))
 							local dnsmasq_conf=${acl_path}/dnsmasq.conf
 							local dnsmasq_conf_path=${acl_path}/dnsmasq.d
-							lua $APP_PATH/helper_dnsmasq.lua add_rule -FLAG ${sid} -TMP_DNSMASQ_PATH ${dnsmasq_conf_path} -DNSMASQ_CONF_FILE ${dnsmasq_conf} \
+							ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG ${sid} -TMP_DNSMASQ_PATH ${dnsmasq_conf_path} -DNSMASQ_CONF_FILE ${dnsmasq_conf} \
 								-LISTEN_PORT ${dnsmasq_port} -DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS $LOCAL_DNS \
 								-USE_DIRECT_LIST "${use_direct_list}" -USE_PROXY_LIST "${use_proxy_list}" -USE_BLOCK_LIST "${use_block_list}" -USE_GFW_LIST "${use_gfw_list}" -CHN_LIST "${chn_list}" \
 								-TUN_DNS "127.0.0.1#${dns_fwd_port}" -USE_DEFAULT_DNS "${use_default_dns:-direct}" -CHINADNS_DNS ${_china_ng_listen:-0} \
@@ -1727,7 +1733,7 @@ start() {
 			uci -q commit ${CONFIG}
 			uci -q set dhcp.@dnsmasq[0].dns_redirect='0'
 			uci -q commit dhcp
-			lua $APP_PATH/helper_dnsmasq.lua restart -LOG 0
+			ucode $APP_PATH/helper_dnsmasq.uc restart -LOG 0
 		}
 	fi
 	[ "$ENABLED_DEFAULT_ACL" = 1 ] && {
@@ -1768,7 +1774,7 @@ start() {
 		done
 		[ -n "$cfgids" ] && {
 			sleep 5
-			lua $APP_PATH/subscribe.lua start $cfgids cron > /dev/null 2>&1 &
+			ucode $APP_PATH/subscribe.uc start $cfgids cron > /dev/null 2>&1 &
 		}
 	}
 }
@@ -1789,7 +1795,7 @@ stop() {
 	done
 	busybox pgrep -af "${CONFIG}/monitor\.sh" | xargs -r kill -9 >/dev/null 2>&1
 	busybox pgrep -f "sleep.*(6s|9s|58s)" | xargs -r kill -9 >/dev/null 2>&1
-	busybox pgrep -af "${CONFIG}/" | awk '! /app\.sh|subscribe\.lua|rule_update\.lua|tasks\.sh|server_app\.lua|ujail/{print $1}' | xargs -r kill -9 >/dev/null 2>&1
+	busybox pgrep -af "${CONFIG}/" | awk '! /app\.sh|subscribe\.(lua|uc)|rule_update\.(lua|uc)|tasks\.sh|server_app\.(lua|uc)|ujail/{print $1}' | xargs -r kill -9 >/dev/null 2>&1
 	unset V2RAY_LOCATION_ASSET
 	unset XRAY_LOCATION_ASSET
 	unset SS_SYSTEM_DNS_RESOLVER_FORCE_BUILTIN
@@ -1808,7 +1814,7 @@ stop() {
 		if [ -z "${ACL_default_dns_port}" ] || [ -n "${bak_dnsmasq_dns_redirect}" ]; then
 			uci -q del_list dhcp.@dnsmasq[0].addnmount="${GLOBAL_DNSMASQ_CONF_PATH}"
 			uci -q commit dhcp
-			lua $APP_PATH/helper_dnsmasq.lua restart -LOG 0
+			ucode $APP_PATH/helper_dnsmasq.uc restart -LOG 0
 		fi
 		[ -n "${bak_bridge_nf_ipt}" ] && sysctl -w net.bridge.bridge-nf-call-iptables=${bak_bridge_nf_ipt} >/dev/null 2>&1
 		[ -n "${bak_bridge_nf_ip6t}" ] && sysctl -w net.bridge.bridge-nf-call-ip6tables=${bak_bridge_nf_ip6t} >/dev/null 2>&1

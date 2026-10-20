@@ -29,7 +29,7 @@ do
 		rules_update_interval_mode=$(expr "$rules_update_interval_mode" \* 60)
 		if [ -n "$rules_update_week_mode" ]; then
 			[ "$rules_update_week_mode" = "8" ] && {
-				[ "$(expr "$CFG_UPDATE_INT" % "$rules_update_interval_mode")" -eq 0 ] && { lua "$APP_PATH/rule_update.lua" log all cron > /dev/null 2>&1 99>&- & }
+				[ "$(expr "$CFG_UPDATE_INT" % "$rules_update_interval_mode")" -eq 0 ] && { ucode "$APP_PATH/rule_update.uc" log all cron > /dev/null 2>&1 99>&- & }
 			}
 		fi
 
@@ -52,7 +52,7 @@ do
 				sub_update_interval_mode=$(expr "$sub_update_interval_mode" \* 60)
 				cfgids=$(tr '\n' ',' < "${TMP_SUB_PATH}/${name}" | sed 's/,$//')
 				[ "$sub_update_week_mode" = "8" ] && {
-					[ "$(expr "$CFG_UPDATE_INT" % "$sub_update_interval_mode")" -eq 0 ] && { lua "$APP_PATH/subscribe.lua" start "$cfgids" cron > /dev/null 2>&1 99>&- & }
+					[ "$(expr "$CFG_UPDATE_INT" % "$sub_update_interval_mode")" -eq 0 ] && { ucode "$APP_PATH/subscribe.uc" start "$cfgids" cron > /dev/null 2>&1 99>&- & }
 				}
 			done
 			rm -rf $TMP_SUB_PATH

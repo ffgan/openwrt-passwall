@@ -1,0 +1,215 @@
+{
+	"admin/services/passwall": {
+		"title": "Pass Wall",
+		"order": -1,
+		"action": {
+			"type": "alias",
+			"path": "admin/services/passwall/settings"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ],
+			"uci": { "passwall": true }
+		}
+	},
+	"admin/services/passwall/settings": {
+		"title": "Basic Settings",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "passwall/settings"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/node_list": {
+		"title": "Node List",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "passwall/node_list"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/node_subscribe": {
+		"title": "Node Subscribe",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "passwall/node_subscribe"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/other": {
+		"title": "Other Settings",
+		"order": 92,
+		"action": {
+			"type": "view",
+			"path": "passwall/other"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/haproxy": {
+		"title": "Load Balancing",
+		"order": 93,
+		"action": {
+			"type": "view",
+			"path": "passwall/haproxy"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ],
+			"fs": {
+				"/usr/sbin/haproxy": "executable"
+			}
+		}
+	},
+	"admin/services/passwall/app_update": {
+		"title": "App Update",
+		"order": 95,
+		"action": {
+			"type": "view",
+			"path": "passwall/app_update"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/rule": {
+		"title": "Rule Manage",
+		"order": 96,
+		"action": {
+			"type": "view",
+			"path": "passwall/rule"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/rule_list": {
+		"title": "Rule List",
+		"order": 97,
+		"action": {
+			"type": "view",
+			"path": "passwall/rule_list"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/acl": {
+		"title": "Access control",
+		"order": 98,
+		"action": {
+			"type": "view",
+			"path": "passwall/acl"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/server": {
+		"title": "Server-Side",
+		"order": 99,
+		"action": {
+			"type": "view",
+			"path": "passwall/server"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/log": {
+		"title": "Runtime Logs",
+		"order": 999,
+		"action": {
+			"type": "view",
+			"path": "passwall/log"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/node_config/*": {
+		"order": 10,
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "passwall/node_config"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/node_subscribe_config/*": {
+		"order": 11,
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "passwall/node_subscribe_config"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/shunt_rules/*": {
+		"order": 12,
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "passwall/shunt_rules"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/socks_config/*": {
+		"order": 13,
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "passwall/socks_config"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/acl_config/*": {
+		"order": 14,
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "passwall/acl_config"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/server_config/*": {
+		"order": 15,
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "passwall/server_config"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	},
+	"admin/services/passwall/server_user_config/*": {
+		"order": 16,
+		"firstchild_ineligible": true,
+		"action": {
+			"type": "view",
+			"path": "passwall/server_user"
+		},
+		"depends": {
+			"acl": [ "luci-app-passwall" ]
+		}
+	}
+}

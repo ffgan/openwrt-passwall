@@ -27,7 +27,7 @@ NFTSET_WHITE6="psw_white6"
 NFTSET_BLOCK6="psw_block6"
 
 # IPv4 static sets
-#Keep the variable names consistent with those in `nft_rule_dual`\rule_update.lua
+#Keep the variable names consistent with those in `nft_rule_dual`\rule_update.uc
 NFTSET_CHN_STATIC="${NFTSET_CHN}_static"
 NFTSET_BLACK_STATIC="${NFTSET_BLACK}_static"
 NFTSET_WHITE_STATIC="${NFTSET_WHITE}_static"
@@ -35,7 +35,7 @@ NFTSET_BLOCK_STATIC="${NFTSET_BLOCK}_static"
 NFTSET_SHUNT_STATIC="${NFTSET_SHUNT}_static"
 
 # IPv6 static sets
-#Keep the variable names consistent with those in `nft_rule_dual`\rule_update.lua
+#Keep the variable names consistent with those in `nft_rule_dual`\rule_update.uc
 NFTSET_CHN6_STATIC="${NFTSET_CHN6}_static"
 NFTSET_BLACK6_STATIC="${NFTSET_BLACK6}_static"
 NFTSET_WHITE6_STATIC="${NFTSET_WHITE6}_static"

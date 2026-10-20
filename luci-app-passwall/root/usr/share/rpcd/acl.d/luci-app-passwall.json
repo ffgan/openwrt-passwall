@@ -1,11 +1,47 @@
 {
 	"luci-app-passwall": {
-		"description": "Grant UCI access for luci-app-passwall",
+		"description": "Grant UCI, file and ubus access for luci-app-passwall",
 		"read": {
-			"uci": [ "passwall", "passwall_server" ]
+			"ubus": {
+				"file": [ "list", "read", "stat", "exec" ],
+				"luci": [ "getFeatures" ],
+				"luci-rpc": [ "getNetworkDevices", "getHostHints", "getDHCPLeases" ],
+				"luci.passwall": [ "*" ],
+				"network.interface": [ "dump" ]
+			},
+			"uci": [ "passwall", "passwall_server", "network", "dhcp", "firewall" ],
+			"file": {
+				"/etc/passwall/": [ "list", "read" ],
+				"/etc/passwall/rules/": [ "list", "read" ],
+				"/usr/share/passwall/": [ "list", "read" ],
+				"/usr/share/passwall/rules/": [ "list", "read" ],
+				"/usr/share/v2ray/": [ "list", "read" ],
+				"/tmp/log/passwall.log": [ "read" ],
+				"/tmp/log/passwall_server.log": [ "read" ],
+				"/tmp/etc/passwall/": [ "list", "read" ],
+				"/tmp/etc/passwall_server/": [ "list", "read" ],
+				"/usr/lib/smartdns_ui.so": [ "stat" ],
+				"/usr/lib/smartdns/smartdns_ui.so": [ "stat" ],
+				"/bin/sh": [ "exec" ],
+				"/usr/bin/ucode": [ "exec" ],
+				"/usr/bin/curl": [ "exec" ],
+				"/bin/ping": [ "exec" ],
+				"/usr/bin/tcping": [ "exec" ],
+				"/usr/sbin/haproxy": [ "stat" ]
+			}
 		},
 		"write": {
-			"uci": [ "passwall", "passwall_server" ]
+			"ubus": {
+				"luci.passwall": [ "*" ]
+			},
+			"uci": [ "passwall", "passwall_server" ],
+			"file": {
+				"/etc/passwall/": [ "write" ],
+				"/etc/passwall/rules/": [ "write" ],
+				"/tmp/log/passwall.log": [ "write" ],
+				"/tmp/log/passwall_server.log": [ "write" ],
+				"/tmp/links.conf": [ "write" ]
+			}
 		}
 	}
 }
