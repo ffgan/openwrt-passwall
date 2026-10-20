@@ -46,9 +46,6 @@ check_run_environment() {
 
 	if [ -n "$USE_TABLES" ]; then
 		local dep_list
-		local file_path="/usr/lib/opkg/info"
-		local file_ext=".control"
-		[ -d "/lib/apk/packages" ] && { file_path="/lib/apk/packages"; file_ext=".list"; }
 
 		if [ "$USE_TABLES" = "iptables" ]; then
 			dep_list="iptables-mod-tproxy iptables-mod-socket iptables-mod-iprange iptables-mod-conntrack-extra iptables-mod-extra kmod-ipt-nat"
@@ -62,9 +59,7 @@ check_run_environment() {
 		fi
 		local pkg
 		for pkg in $dep_list; do
-			if [ ! -s "${file_path}/${pkg}${file_ext}" ]; then
-				echolog "警告：${USE_TABLES} 透明代理缺失基础依赖 ${pkg}！"
-			fi
+			pkg_installed "$pkg" || echolog "警告：${USE_TABLES} 透明代理缺失基础依赖 ${pkg}！"
 		done
 	else
 		echolog "警告：不满足任何透明代理系统环境。(has_fw4:$has_fw4/has_ipt:$has_ipt/has_ipset:$has_ipset/dnsmasq_nftset:$dnsmasq_nftset/dnsmasq_ipset:$dnsmasq_ipset)"

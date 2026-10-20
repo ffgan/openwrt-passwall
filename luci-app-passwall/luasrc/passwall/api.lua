@@ -165,7 +165,7 @@ function sh_uci_commit(config)
 end
 
 function del_cache_var(key)
-	sys.call(string.format('. /usr/share/passwall2/utils.sh ; del_cache_var "%s"', key))
+	sys.call(string.format('. /usr/share/passwall/utils.sh ; del_cache_var "%s"', key))
 end
 
 function set_cache_var(key, val)
@@ -445,17 +445,21 @@ function remove(...)
 end
 
 function is_install(package)
-	if package and #package > 0 then
-		local file_path = "/usr/lib/opkg/info"
-		local file_ext = ".control"
-		local has = sys.call("[ -d " .. file_path .. " ]")
-		if has ~= 0 then
-			file_path = "/lib/apk/packages"
-			file_ext = ".list"
-		end
-		return sys.call(string.format('[ -s "%s/%s%s" ]', file_path, package, file_ext)) == 0
+	if not package or #package == 0 or package:match("[^%w%+%-%._]") then
+		return false
 	end
-	return false
+	-- apk is the package manager from OpenWrt 25.12 onward. Prefer its
+	-- database whenever it is present so a leftover opkg directory cannot
+	-- hide an apk-installed dependency.
+	local apk_db = "/lib/apk/db/installed"
+	local apk_size = fs.stat(apk_db, "size")
+	local path
+	if apk_size and apk_size > 0 then
+		path = "/lib/apk/packages/" .. package .. ".list"
+	else
+		path = "/usr/lib/opkg/info/" .. package .. ".control"
+	end
+	return sys.call(string.format("[ -s %s ]", util.shellquote(path))) == 0
 end
 
 function get_args(arg)
@@ -1483,6 +1487,10 @@ function to_move(app_name,file)
 	return {code = 0}
 end
 
+local function command_output(cmd)
+	return (sys.exec(cmd) or ""):match("^%s*(.-)%s*$") or ""
+end
+
 function get_version()
 	local version
 	local version_file = CACHE_PATH .. "/passwall_version"
@@ -1490,16 +1498,21 @@ function get_version()
 	if fs.access(version_file) then
 		version = fs.readfile(version_file)
 	else
-		version = sys.exec("opkg list-installed luci-app-passwall 2>/dev/null | awk '{print $3}'")
-		if not version or version == "" then
-			version = sys.exec("apk list luci-app-passwall 2>/dev/null | awk '/installed/ {print $1}' | cut -d'-' -f4-")
+		-- opkg list-installed on 24.10 and older. OpenWrt 25.12 replaced it
+		-- with apk; `apk info` lists names only, so read the version from
+		-- `apk query` and fall back to the installed database.
+		version = command_output("opkg list-installed luci-app-passwall 2>/dev/null | awk '{print $3; exit}'")
+		if version == "" then
+			version = command_output("apk query --installed --format json --fields name,version luci-app-passwall 2>/dev/null | jsonfilter -e '$[0].version' 2>/dev/null")
 		end
-		version = (version or ""):match("^%s*(.-)%s*$")
+		if version == "" then
+			version = command_output([[awk '$0=="P:luci-app-passwall"{f=1;next} f&&/^V:/{sub(/^V:/,""); print; exit} f&&NF==0{exit}' /lib/apk/db/installed 2>/dev/null]])
+		end
 		if version ~= "" then
 			fs.writefile(version_file, version)
 		end
 	end
-	version = (version or ""):match("^%s*(.-)%s*$")
+	version = (version or ""):match("^%s*(.-)%s*$") or ""
 	-- Normalize APK's -rN release notation while retaining the release number.
 	return version:gsub("%-r(%d+)$", "-%1")
 end

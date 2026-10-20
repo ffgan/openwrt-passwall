@@ -38,6 +38,18 @@ echolog() {
 	echo -e "$d: $*" >>$LOG_FILE
 }
 
+# OpenWrt 25.12+ records installed packages in the apk database.
+# Older releases still use opkg control files.
+pkg_installed() {
+	local pkg="$1"
+	[ -n "$pkg" ] || return 1
+	if [ -s /lib/apk/db/installed ]; then
+		[ -s "/lib/apk/packages/${pkg}.list" ]
+	else
+		[ -s "/usr/lib/opkg/info/${pkg}.control" ]
+	fi
+}
+
 clean_log() {
 	logsnum=$(cat $LOG_FILE 2>/dev/null | wc -l)
 	[ "$logsnum" -gt 1000 ] && {
