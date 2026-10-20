@@ -1,19 +1,20 @@
 'use strict';
+let gh_release_url, gh_pre_release_url;
 
 // Component metadata for passwall.
 // Hyphenated names are not valid export identifiers; use index["sing-box"].
 
-function gh_release_url(self) {
+gh_release_url = function(self) {
 	if (self == null || type(self) != "object" || self.name == null)
 		self = this;
 	return "https://github.com/Openwrt-Passwall/openwrt-passwall-packages/releases/download/api-cache/" + lc(self.name) + "-release-api.json";
-}
+};
 
-function gh_pre_release_url(self) {
+gh_pre_release_url = function(self) {
 	if (self == null || type(self) != "object" || self.name == null)
 		self = this;
 	return "https://github.com/Openwrt-Passwall/openwrt-passwall-packages/releases/download/api-cache/" + lc(self.name) + "-pre-release-api.json";
-}
+};
 
 export let order = [
 	"geoview",

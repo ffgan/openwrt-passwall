@@ -2,18 +2,19 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+let ltruth, lor, tonumber, parse_uint, read_lines, file_size, gmatch, each_global_match, replace_all_literal, stack_string, url_list, is_ws, main;
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function lor(a, b) {
+lor = function(a, b) {
 	if (a == null || a === false)
 		return b;
 	return a;
-}
+};
 
-function tonumber(v) {
+tonumber = function(v) {
 	if (type(v) == "int")
 		return v;
 	if (type(v) == "double")
@@ -26,9 +27,9 @@ function tonumber(v) {
 	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
 		return s * 1;
 	return int(s);
-}
+};
 
-function parse_uint(s) {
+parse_uint = function(s) {
 	if (type(s) == "int")
 		return s;
 	if (type(s) == "double")
@@ -36,9 +37,9 @@ function parse_uint(s) {
 	if (type(s) != "string" || match(s, /^[0-9]+$/) == null)
 		return null;
 	return int(s);
-}
+};
 
-function read_lines(path) {
+read_lines = function(path) {
 	let data = api.fs.readfile(path);
 	if (data == null)
 		return null;
@@ -49,18 +50,18 @@ function read_lines(path) {
 	if (data == "")
 		return [""];
 	return split(data, "\n");
-}
+};
 
-function file_size(path) {
+file_size = function(path) {
 	let st = api.fs.stat(path, "size");
 	if (st == null)
 		return null;
 	if (type(st) == "object")
 		return st.size ?? null;
 	return st;
-}
+};
 
-function gmatch(s, pattern) {
+gmatch = function(s, pattern) {
 	if (s == null || s === false)
 		return [];
 	let found = match("" + s, pattern);
@@ -74,9 +75,9 @@ function gmatch(s, pattern) {
 			push(out, m);
 	}
 	return out;
-}
+};
 
-function each_global_match(found, fn) {
+each_global_match = function(found, fn) {
 	if (found == null)
 		return;
 	if (type(found) != "array")
@@ -87,9 +88,9 @@ function each_global_match(found, fn) {
 	}
 	for (let m in found)
 		fn(m);
-}
+};
 
-function replace_all_literal(hay, needle, repl) {
+replace_all_literal = function(hay, needle, repl) {
 	if (type(hay) != "string")
 		hay = "" + (hay ?? "");
 	if (type(needle) != "string")
@@ -108,9 +109,9 @@ function replace_all_literal(hay, needle, repl) {
 		rest = substr(rest, p + length(needle));
 	}
 	return out;
-}
+};
 
-function stack_string(e) {
+stack_string = function(e) {
 	if (e == null)
 		return "";
 	if (type(e) == "string")
@@ -130,9 +131,9 @@ function stack_string(e) {
 			push(lines, "" + frame);
 	}
 	return join("\n", lines);
-}
+};
 
-function url_list(v, fallback) {
+url_list = function(v, fallback) {
 	if (v == null || v === false)
 		return fallback;
 	if (type(v) == "array")
@@ -140,18 +141,18 @@ function url_list(v, fallback) {
 	if (type(v) == "string")
 		return [v];
 	return fallback;
-}
+};
 
-function is_ws(b) {
+is_ws = function(b) {
 	return b == 32 || b == 9 || b == 10 || b == 11 || b == 12 || b == 13;
-}
+};
 
 // argv[0] = log | print (or anything else, which stays silent)
 // argv[1] = comma-separated target list; omitted/null reads UCI flags
 // argv[2] = cron | rollback | omitted
 // cron clears the target list so UCI flags are used.
 // rollback marks geo files current, parses the target list, then clears it.
-export function main(argv) {
+main = function(argv) {
 	if (argv == null)
 		argv = [];
 	let arg1 = argv[0];
@@ -1017,4 +1018,5 @@ export function main(argv) {
 		let action = (arg3 == "cron") ? " cron" : "";
 		api.sys.call("/etc/init.d/passwall restart" + action + " > /dev/null 2>&1 &");
 	}
-}
+};
+export { main };

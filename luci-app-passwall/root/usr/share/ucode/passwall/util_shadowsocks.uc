@@ -2,21 +2,22 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+let ltruth, lor, tonumber, set_if, gen_config_server, gen_config, print_result, dispatch, main;
 
 let plugin_sh = null;
 let plugin_bin = null;
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function lor(a, b) {
+lor = function(a, b) {
 	if (a == null || a === false)
 		return b;
 	return a;
-}
+};
 
-function tonumber(v) {
+tonumber = function(v) {
 	if (type(v) == "int")
 		return v;
 	if (type(v) == "double")
@@ -29,14 +30,14 @@ function tonumber(v) {
 	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
 		return s * 1;
 	return int(s);
-}
+};
 
-function set_if(obj, key, val) {
+set_if = function(obj, key, val) {
 	if (val != null)
 		obj[key] = val;
-}
+};
 
-export function gen_config_server(node) {
+gen_config_server = function(node) {
 	let user = null;
 	if (ltruth(node.user))
 		user = api.uci_get_s(node.user);
@@ -65,9 +66,9 @@ export function gen_config_server(node) {
 	}
 
 	return config;
-}
+};
 
-export function gen_config(var) {
+gen_config = function(var) {
 	let node_id = var["node"];
 	if (node_id == null || node_id === false) {
 		print("node 不能为空\n");
@@ -167,27 +168,27 @@ export function gen_config(var) {
 	}
 
 	return api.jsonc.stringify(config, 1);
-}
+};
 
-function print_result(result) {
+print_result = function(result) {
 	if (result == null)
 		print("nil\n");
 	else if (type(result) == "string")
 		print(result, "\n");
 	else
 		print(api.jsonc.stringify(result, 1), "\n");
-}
+};
 
-function dispatch(name) {
+dispatch = function(name) {
 	if (name == "gen_config")
 		return gen_config;
 	if (name == "gen_config_server")
 		return gen_config_server;
 	return null;
-}
+};
 
 // argv[0] = gen_config | gen_config_server; argv[1] = JSON object string.
-export function main(argv) {
+main = function(argv) {
 	if (argv == null || length(argv) < 1 || argv[0] == null || argv[0] === false)
 		return;
 	let func = dispatch(argv[0]);
@@ -209,4 +210,5 @@ export function main(argv) {
 		fh.close();
 		api.sys.call("chmod +x " + plugin_sh);
 	}
-}
+};
+export { gen_config_server, gen_config, main };

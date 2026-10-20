@@ -1,6 +1,7 @@
 'use strict';
 
 import * as api from 'passwall.api';
+let ltruth, lor, or_nil, tonumber, set_if, leading_int, gmatch, nonempty, has_keys, is_table, lua_quote, exec_pair, lua_tostring, finalize, drop_underscore, pem_lines, both_set, ensure_version, get_log_level, asset_dir, check_geoview, geo_convert_srs, convert_geofile, get_ech_domain, build_ech, alpn_list, hysteria2_obfs, hysteria2_idle, hysteria2_keepalive, opt_num, mb_window, collect_hop_ports, hysteria_hop_interval, hysteria2_hop_times, client_realm, server_realm, decode_reserved, masque_header_map, ws_early_data, ua_headers, http_host_path, build_client_transport, build_server_transport, build_client_mux, build_server_mux, build_client_tls, uot_obj, apply_node_dns, fill_client_protocol, gen_outbound, server_users, build_server_tls, gen_config_server, get_node_by_id, parse_rule_set, geo_rule_set, strip_at, split_ports, read_proxy_list, gen_config, gen_proto_config, print_result, dispatch, main;
 
 let ech_domain = {};
 let local_version = null;
@@ -33,21 +34,21 @@ let hosts_predefined = null;
 let remote_server_domain_resolver = null;
 let direct_strategy = null;
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function lor(a, b) {
+lor = function(a, b) {
 	if (a == null || a === false)
 		return b;
 	return a;
-}
+};
 
-function or_nil(v) {
+or_nil = function(v) {
 	return ltruth(v) ? v : null;
-}
+};
 
-function tonumber(v) {
+tonumber = function(v) {
 	if (type(v) == "int")
 		return v;
 	if (type(v) == "double")
@@ -60,21 +61,21 @@ function tonumber(v) {
 	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
 		return s * 1;
 	return int(s);
-}
+};
 
-function set_if(obj, key, val) {
+set_if = function(obj, key, val) {
 	if (val != null)
 		obj[key] = val;
-}
+};
 
-function leading_int(v) {
+leading_int = function(v) {
 	let m = match("" + v, /^[0-9]+/);
 	if (m == null)
 		return null;
 	return tonumber(m[0]);
-}
+};
 
-function gmatch(s, pattern) {
+gmatch = function(s, pattern) {
 	if (s == null || s === false)
 		return [];
 	let found = match("" + s, pattern);
@@ -84,24 +85,24 @@ function gmatch(s, pattern) {
 	for (let m in found)
 		push(out, m[0]);
 	return out;
-}
+};
 
-function nonempty(arr) {
+nonempty = function(arr) {
 	if (type(arr) == "array" && length(arr) > 0)
 		return arr;
 	return null;
-}
+};
 
-function has_keys(o) {
+has_keys = function(o) {
 	return (type(o) == "object" || type(o) == "array") && length(o) > 0;
-}
+};
 
-function is_table(v) {
+is_table = function(v) {
 	let t = type(v);
 	return t == "object" || t == "array";
-}
+};
 
-function lua_quote(s) {
+lua_quote = function(s) {
 	if (s == null || s === false)
 		s = "";
 	else
@@ -122,26 +123,26 @@ function lua_quote(s) {
 			out += c;
 	}
 	return out + "\"";
-}
+};
 
-function exec_pair(cmd) {
+exec_pair = function(cmd) {
 	let ret = api.exec_call(cmd);
 	if (type(ret) == "array")
 		return [ret[0], ret[1]];
 	if (type(ret) == "object" && ret != null)
 		return [ret.code ?? ret[0], ret.out ?? ret.stdout ?? ret[1]];
 	return [ret, ""];
-}
+};
 
-function lua_tostring(v) {
+lua_tostring = function(v) {
 	if (v == null)
 		return "nil";
 	if (type(v) == "bool")
 		return v ? "true" : "false";
 	return "" + v;
-}
+};
 
-function finalize(v) {
+finalize = function(v) {
 	let t = type(v);
 	if (t == "array") {
 		for (let i = 0; i < length(v); i++)
@@ -163,9 +164,9 @@ function finalize(v) {
 		return v;
 	}
 	return v;
-}
+};
 
-function drop_underscore(obj) {
+drop_underscore = function(obj) {
 	if (type(obj) != "object")
 		return;
 	let drop = [];
@@ -175,17 +176,17 @@ function drop_underscore(obj) {
 	}
 	for (let k in drop)
 		delete obj[k];
-}
+};
 
-function pem_lines(s) {
+pem_lines = function(s) {
 	return api.split(replace(s, "\\n", "\n"), "\n");
-}
+};
 
-function both_set(a, b) {
+both_set = function(a, b) {
 	return ltruth(a) && ltruth(b);
-}
+};
 
-function ensure_version() {
+ensure_version = function() {
 	if (version_inited)
 		return;
 	version_inited = true;
@@ -196,20 +197,20 @@ function ensure_version() {
 	}
 	version_ge_1_14_0 = api.compare_versions(local_version, ">=", "1.14.0");
 	version_ge_1_15_0 = api.compare_versions(local_version, ">=", "1.15.0");
-}
+};
 
-function get_log_level(s) {
+get_log_level = function(s) {
 	if (s == "warning")
 		return "warn";
 	return s;
-}
+};
 
-function asset_dir(path) {
+asset_dir = function(path) {
 	let m = match("" + path, /^(.*)\//);
 	return m ? m[1] : null;
-}
+};
 
-export function check_geoview() {
+check_geoview = function() {
 	if (GEO_VAR.OK == null) {
 		let bin = api.finded_com("geoview");
 		let ge_ok = false;
@@ -229,9 +230,9 @@ export function check_geoview() {
 			api.fs.mkdir(GEO_VAR.TO_SRS_PATH);
 	}
 	return GEO_VAR.OK;
-}
+};
 
-export function geo_convert_srs(var) {
+geo_convert_srs = function(var) {
 	if (check_geoview() != 1)
 		return null;
 	let geo_path = var["geo_path"];
@@ -248,9 +249,9 @@ export function geo_convert_srs(var) {
 			api.log(sprintf("  - %s:%s 转换为srs格式：%s [%s]", prefix, rule_name, "failed!", lua_tostring(out)));
 	}
 	return null;
-}
+};
 
-function convert_geofile() {
+convert_geofile = function() {
 	if (check_geoview() != 1)
 		return;
 	function convert(file_path, prefix, tags) {
@@ -261,9 +262,9 @@ function convert_geofile() {
 	}
 	convert(GEO_VAR.SITE_PATH, "geosite", GEO_VAR.SITE_TAGS);
 	convert(GEO_VAR.IP_PATH, "geoip", GEO_VAR.IP_TAGS);
-}
+};
 
-function get_ech_domain(s) {
+get_ech_domain = function(s) {
 	let m = match(s, /^([^+]+)\+(.+)$/);
 	if (m == null)
 		return null;
@@ -274,9 +275,9 @@ function get_ech_domain(s) {
 	if (match(domain, /^[A-Za-z0-9_.-]+\.[A-Za-z]+$/) == null)
 		return null;
 	return domain;
-}
+};
 
-function build_ech(node) {
+build_ech = function(node) {
 	let ech = { enabled: true };
 	let config = node.ech_config;
 	let qname = node.ech_query_server_name;
@@ -294,16 +295,16 @@ function build_ech(node) {
 		ech_domain[node.tls_serverName] = true;
 	}
 	return ech;
-}
+};
 
-function alpn_list(s) {
+alpn_list = function(s) {
 	if (!(ltruth(s) && s != "default"))
 		return null;
 	let list = gmatch(s, /[^,]+/g);
 	return nonempty(list);
-}
+};
 
-function hysteria2_obfs(node, t) {
+hysteria2_obfs = function(node, t) {
 	if (t == null || t === false || t == "")
 		return null;
 	let o = {
@@ -321,37 +322,37 @@ function hysteria2_obfs(node, t) {
 		o.max_packet_size = max;
 	}
 	return o;
-}
+};
 
-function hysteria2_idle(t) {
+hysteria2_idle = function(t) {
 	if (!version_ge_1_14_0)
 		return null;
 	let n = leading_int(lor(t, "30"));
 	return (n != null && n >= 4 && n <= 120) ? (n + "s") : "30s";
-}
+};
 
-function hysteria2_keepalive(t) {
+hysteria2_keepalive = function(t) {
 	if (!version_ge_1_14_0)
 		return null;
 	let n = leading_int(lor(t, "0"));
 	return (n != null && n >= 2 && n <= 60) ? (n + "s") : null;
-}
+};
 
-function opt_num(v) {
+opt_num = function(v) {
 	let n = tonumber(v);
 	if (ltruth(v) && n != null)
 		return n;
 	return null;
-}
+};
 
-function mb_window(v) {
+mb_window = function(v) {
 	let n = tonumber(v);
 	if (n == null)
 		return null;
 	return n + " MB";
-}
+};
 
-function collect_hop_ports(hop) {
+collect_hop_ports = function(hop) {
 	let ports = [];
 	hop = replace(hop, "-", ":");
 	for (let range in gmatch(hop, /[^,]+/g)) {
@@ -359,16 +360,16 @@ function collect_hop_ports(hop) {
 			push(ports, range);
 	}
 	return [hop, ports];
-}
+};
 
-function hysteria_hop_interval(ports, node) {
+hysteria_hop_interval = function(ports, node) {
 	if (!has_keys(ports))
 		return null;
 	let n = leading_int(lor(node.hysteria_hop_interval, "30"));
 	return (n != null && n >= 5) ? (n + "s") : "30s";
-}
+};
 
-function hysteria2_hop_times(ports, node) {
+hysteria2_hop_times = function(ports, node) {
 	if (!has_keys(ports))
 		return [null, null];
 	let interval = "30s";
@@ -392,9 +393,9 @@ function hysteria2_hop_times(ports, node) {
 		interval = n + "s";
 	}
 	return [interval, interval_max];
-}
+};
 
-function client_realm(node, result) {
+client_realm = function(node, result) {
 	result.server = null;
 	result.server_port = null;
 	let realm = api.parse_realm_uri(node.hysteria2_realm_url);
@@ -408,9 +409,9 @@ function client_realm(node, result) {
 	realm.port_mapping = (node.hysteria2_realm_upnp == "1") ? { enabled: true } : null;
 	realm.http_client = "direct_http_client";
 	return realm;
-}
+};
 
-function server_realm(node) {
+server_realm = function(node) {
 	let realm = api.parse_realm_uri(node.hysteria2_realm_url);
 	if (realm == null)
 		return null;
@@ -423,9 +424,9 @@ function server_realm(node) {
 	realm.port_mapping = (node.hysteria2_realm_upnp == "1") ? { enabled: true } : null;
 	realm.http_client = { detour: "direct" };
 	return realm;
-}
+};
 
-function decode_reserved(text) {
+decode_reserved = function(text) {
 	let bytes = [];
 	if (match(text, /[^0-9,]+/) == null) {
 		for (let b in gmatch(text, /[0-9]+/g))
@@ -438,9 +439,9 @@ function decode_reserved(text) {
 		}
 	}
 	return nonempty(bytes);
-}
+};
 
-function masque_header_map(node) {
+masque_header_map = function(node) {
 	let headers = {};
 	if (ltruth(node.user_agent) && node.user_agent != "")
 		headers["user-agent"] = [node.user_agent];
@@ -453,9 +454,9 @@ function masque_header_map(node) {
 		}
 	}
 	return headers;
-}
+};
 
-function ws_early_data(transport, ws_path) {
+ws_early_data = function(transport, ws_path) {
 	let path = api.UrlDecode(ws_path);
 	let path_dat = api.split(path, "?");
 	if (path_dat == null)
@@ -477,15 +478,15 @@ function ws_early_data(transport, ws_path) {
 		transport.max_early_data = ed;
 	}
 	transport.early_data_header_name = lor(params.eh, "Sec-WebSocket-Protocol");
-}
+};
 
-function ua_headers(ua) {
+ua_headers = function(ua) {
 	if (!ltruth(ua))
 		return null;
 	return { "User-Agent": ua };
-}
+};
 
-function http_host_path(node) {
+http_host_path = function(node) {
 	let host = lor(node.http_host, {});
 	let path = lor(node.http_path, "/");
 	let headers = ua_headers(node.user_agent);
@@ -496,9 +497,9 @@ function http_host_path(node) {
 	};
 	set_if(transport, "headers", headers);
 	return transport;
-}
+};
 
-function build_client_transport(node) {
+build_client_transport = function(node) {
 	let transport = null;
 	if (node.transport == "tcp" && node.tcp_guise == "http" && lor(node.tcp_guise_http_host, "") != "") {
 		let path = "/";
@@ -556,9 +557,9 @@ function build_client_transport(node) {
 			transport.permit_without_stream = true;
 	}
 	return transport;
-}
+};
 
-function build_server_transport(node) {
+build_server_transport = function(node) {
 	let transport = null;
 	if (node.transport == "http")
 		transport = {
@@ -589,9 +590,9 @@ function build_server_transport(node) {
 			service_name: node.grpc_serviceName
 		};
 	return transport;
-}
+};
 
-function build_client_mux(node) {
+build_client_mux = function(node) {
 	if (node.mux != "1")
 		return null;
 	return {
@@ -605,9 +606,9 @@ function build_client_mux(node) {
 			down_mbps: lor(tonumber(node.tcpbrutal_down_mbps), 50)
 		}
 	};
-}
+};
 
-function build_server_mux(node) {
+build_server_mux = function(node) {
 	if (node.mux != "1")
 		return null;
 	return {
@@ -619,9 +620,9 @@ function build_server_mux(node) {
 			down_mbps: lor(tonumber(node.tcpbrutal_down_mbps), 50)
 		}
 	};
-}
+};
 
-function build_client_tls(node, fragment, record_fragment) {
+build_client_tls = function(node, fragment, record_fragment) {
 	if (node.tls != "1")
 		return null;
 	let tls = {
@@ -657,13 +658,13 @@ function build_client_tls(node, fragment, record_fragment) {
 		tls.insecure = node.tls_allowInsecure == "1" || (ltruth(node.tls_pinSHA256) && node.tls_pinSHA256 != "");
 	}
 	return tls;
-}
+};
 
-function uot_obj() {
+uot_obj = function() {
 	return { enabled: true, version: 2 };
-}
+};
 
-function apply_node_dns(node, result) {
+apply_node_dns = function(node, result) {
 	if (!(api.datatypes.hostname(node.address) && ltruth(node.domain_resolver) && (ltruth(node.domain_resolver_dns) || ltruth(node.domain_resolver_dns_https))))
 		return;
 	let dns_proto = node.domain_resolver;
@@ -714,9 +715,9 @@ function apply_node_dns(node, result) {
 		push(GLOBAL.DNS_SERVER[dns_key].domain, node.address);
 	result.domain_resolver.server = GLOBAL.DNS_SERVER[dns_key].server.tag;
 	GLOBAL.VPS_EXCLUDE[node.address] = true;
-}
+};
 
-function fill_client_protocol(node, result, tls, mux, transport) {
+fill_client_protocol = function(node, result, tls, mux, transport) {
 	if (node.protocol == "socks") {
 		result.version = "5";
 		if (both_set(node.username, node.password)) {
@@ -906,9 +907,9 @@ function fill_client_protocol(node, result, tls, mux, transport) {
 		if (node.snell_version == "6")
 			set_if(result, "mode", node.snell_mode);
 	}
-}
+};
 
-export function gen_outbound(flag, node, tag, proxy_table) {
+gen_outbound = function(flag, node, tag, proxy_table) {
 	ensure_version();
 	if (!ltruth(node))
 		return null;
@@ -1004,9 +1005,9 @@ export function gen_outbound(flag, node, tag, proxy_table) {
 		transport = build_client_transport(node);
 	fill_client_protocol(node, result, tls, mux, transport);
 	return result;
-}
+};
 
-function server_users(node) {
+server_users = function(node) {
 	if (!(ltruth(node.users) && length(node.users) > 0))
 		return null;
 	let users = [];
@@ -1059,9 +1060,9 @@ function server_users(node) {
 	if (length(users) == 0)
 		return null;
 	return users;
-}
+};
 
-function build_server_tls(node) {
+build_server_tls = function(node) {
 	let tls = { enabled: true };
 	if (node.tls_use_pem != "1") {
 		set_if(tls, "certificate_path", node.tls_certificateFile);
@@ -1094,9 +1095,9 @@ function build_server_tls(node) {
 			tls.ech.key = pem_lines(node.ech_key);
 	}
 	return tls;
-}
+};
 
-export function gen_config_server(node) {
+gen_config_server = function(node) {
 	ensure_version();
 	let endpoints = [];
 	let inbounds = [];
@@ -1300,9 +1301,9 @@ export function gen_config_server(node) {
 	for (let item in config.outbounds)
 		drop_underscore(item);
 	return finalize(config);
-}
+};
 
-function get_node_by_id(id) {
+get_node_by_id = function(id) {
 	let section = null;
 	let kind = type(id);
 	if (kind == "object" || kind == "array")
@@ -1330,9 +1331,9 @@ function get_node_by_id(id) {
 	if (section[".type"] == "nodes")
 		return section;
 	return null;
-}
+};
 
-function parse_rule_set(w, rs) {
+parse_rule_set = function(w, rs) {
 	ensure_version();
 	if (!(type(w) == "string" && length(w) > 0))
 		return null;
@@ -1375,18 +1376,18 @@ function parse_rule_set(w, rs) {
 			result.http_client = "remote_http_client";
 	}
 	return result;
-}
+};
 
-function geo_rule_set(prefix, rule_name) {
+geo_rule_set = function(prefix, rule_name) {
 	let output_srs_file = "local:" + GEO_VAR.TO_SRS_PATH + prefix + "-" + rule_name + ".srs";
 	return parse_rule_set(output_srs_file, false);
-}
+};
 
-function strip_at(w, prefix) {
+strip_at = function(w, prefix) {
 	return substr(w, length(prefix));
-}
+};
 
-function split_ports(s) {
+split_ports = function(s) {
 	let port = [];
 	let port_range = [];
 	for (let w in gmatch(s, /[^,]+/g)) {
@@ -1397,9 +1398,9 @@ function split_ports(s) {
 			push(port_range, w);
 	}
 	return [nonempty(port), nonempty(port_range)];
-}
+};
 
-function read_proxy_list(path, enabled) {
+read_proxy_list = function(path, enabled) {
 	if (enabled != "1")
 		return "";
 	let text = null;
@@ -1420,9 +1421,9 @@ function read_proxy_list(path, enabled) {
 		}
 	}
 	return join("\n", list);
-}
+};
 
-export function gen_config(var) {
+gen_config = function(var) {
 	ensure_version();
 	let flag = var["flag"];
 	let log = lor(var["log"], "0");
@@ -1483,11 +1484,9 @@ export function gen_config(var) {
 			rule_set_table[tab.tag] = tab;
 	}
 
-	function gen_urltest_outbound;
-	function set_outbound_detour;
-	function gen_outbound_get_tag;
+	let gen_urltest_outbound, set_outbound_detour, gen_outbound_get_tag;
 
-	function gen_urltest_outbound(_node) {
+	gen_urltest_outbound = function(_node) {
 		let urltest_id = _node[".name"];
 		let urltest_tag = "urltest-" + urltest_id;
 		for (let v in outbounds) {
@@ -1539,9 +1538,9 @@ export function gen_config(var) {
 			interrupt_exist_connections: (_node.urltest_interrupt_exist_connections == "true" || _node.urltest_interrupt_exist_connections == "1")
 		};
 		return [outbound, null];
-	}
+	};
 
-	function set_outbound_detour(node, outbound, outbounds_table) {
+	set_outbound_detour = function(node, outbound, outbounds_table) {
 		if (!ltruth(node) || !ltruth(outbound) || !ltruth(outbounds_table))
 			return [null, null];
 		let default_out_tag = outbound.tag;
@@ -1640,9 +1639,9 @@ export function gen_config(var) {
 			outbound.bind_interface = node.outbound_iface;
 		}
 		return [default_out_tag, last_insert_outbound];
-	}
+	};
 
-	function gen_outbound_get_tag(flag_in, id, tag, proxy_table) {
+	gen_outbound_get_tag = function(flag_in, id, tag, proxy_table) {
 		if (!ltruth(id) || id == "nil")
 			return null;
 		let node = get_node_by_id(id);
@@ -1695,7 +1694,7 @@ export function gen_config(var) {
 		if (ltruth(det[1]))
 			push(outbounds, det[1]);
 		return det[0];
-	}
+	};
 
 	if (ltruth(node_id)) {
 		let node = api.uci_get_c(node_id);
@@ -2385,9 +2384,9 @@ export function gen_config(var) {
 	if (length(endpoints) > 0)
 		config.endpoints = endpoints;
 	return api.jsonc.stringify(finalize(config), 1);
-}
+};
 
-export function gen_proto_config(var) {
+gen_proto_config = function(var) {
 	let local_socks_address = lor(var["local_socks_address"], "0.0.0.0");
 	let local_socks_port = var["local_socks_port"];
 	let local_socks_username = var["local_socks_username"];
@@ -2456,18 +2455,18 @@ export function gen_proto_config(var) {
 		outbounds: outbounds
 	};
 	return api.jsonc.stringify(finalize(config), 1);
-}
+};
 
-function print_result(result) {
+print_result = function(result) {
 	if (result == null)
 		print("nil\n");
 	else if (type(result) == "string")
 		print(result, "\n");
 	else
 		print(api.jsonc.stringify(result, 1), "\n");
-}
+};
 
-function dispatch(name) {
+dispatch = function(name) {
 	if (name == "gen_config")
 		return gen_config;
 	if (name == "gen_proto_config")
@@ -2481,11 +2480,11 @@ function dispatch(name) {
 	if (name == "check_geoview")
 		return check_geoview;
 	return null;
-}
+};
 
 // argv[0] = exported function name; argv[1] = JSON object string.
 // Not invoked on import.
-export function main(argv) {
+main = function(argv) {
 	if (argv == null || length(argv) < 1 || argv[0] == null || argv[0] === false)
 		return;
 	let func = dispatch(argv[0]);
@@ -2497,4 +2496,5 @@ export function main(argv) {
 	print_result(func(parsed));
 	if ((has_keys(GEO_VAR.SITE_TAGS) || has_keys(GEO_VAR.IP_TAGS)) && !ltruth(NO_RUN))
 		convert_geofile();
-}
+};
+export { check_geoview, geo_convert_srs, gen_outbound, gen_config_server, gen_config, gen_proto_config, main };

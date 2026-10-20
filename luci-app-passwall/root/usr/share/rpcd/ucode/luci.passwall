@@ -5,6 +5,7 @@ import * as com from 'passwall.com';
 import { main as subscribe_main } from 'passwall.subscribe';
 import { main } from 'passwall.rule_update';
 import { popen, open, readfile, writefile, access } from 'fs';
+let app_name, cfg_name, tmp_path, s_tmp_path, form_raw, trim_s, join, split_csv, split_lines, q, nonce, sh_exec, sh_call, popen_read, exists, read_text, write_text, write_bytes, rm_rf, move_file, rm_dir, b64encode, b64decode, log_msg, json_ok, json_err, as_json, text_out, log_alert, num, as_list, uci_value, random_id, cache_get, cache_set, found_com, found_bin, app_version, sh_set, sh_del, sh_get, sh_commit, del_c, save_c, revert_config, add_named, section_obj, sections_of, com_order, com_info, safe_task_id, is_ip, tail_file, mark_ipv6, list_grouped, apply_data, set_c, set_s, parse_timing, apply_timing, cmp_ge, short_version, page_url, geo_base, get_rules, show_menu, hide_menu, capabilities, link_add_node, socks_change, gen_client_config, get_now_use_node, get_redir_log, get_socks_log, get_chinadns_log, get_smartdns_log, get_log, clear_log, index_status, haproxy_status, socks_status, connect_status, ping_node, urltest_node, update_config, add_node, set_node, copy_node, clear_all_nodes, delete_select_nodes, get_node, reassign_group, save_node_list_opt, update_rules, rollback_rules, server_update_config, server_status, server_log, server_get_log, server_clear_log, do_app_check, do_app_update, do_com_check, do_com_update, do_com_version, read_rulelist, create_backup, restore_backup, reset_config, geo_view, subscribe_del_node, subscribe_del_all, subscribe_manual, subscribe_manual_all, flush_set, fetch_certsha256, get_shunt_rules, add_shunt_rule, delete_select_shunt_rules, gen_wireguard_keypair, make_check, make_update, make_version, com_update_args, app_update_args;
 
 let nonce_seq = 0;
 
@@ -43,23 +44,23 @@ const COM_META = {
 	'hysteria': { name: 'Hysteria', default_path: '/usr/bin/hysteria' }
 };
 
-function app_name() {
+app_name = function() {
 	return api.appname || 'passwall';
-}
+};
 
-function cfg_name() {
+cfg_name = function() {
 	return api.c_config || 'passwall';
-}
+};
 
-function tmp_path() {
+tmp_path = function() {
 	return api.TMP_PATH || ('/tmp/etc/' + app_name());
-}
+};
 
-function s_tmp_path() {
+s_tmp_path = function() {
 	return api.S_TMP_PATH || ('/tmp/etc/' + app_name() + '_server');
-}
+};
 
-function form_raw(req, key) {
+form_raw = function(req, key) {
 	if (!req || req.args == null)
 		return null;
 	let v = req.args[key];
@@ -68,15 +69,15 @@ function form_raw(req, key) {
 	if (type(v) == 'string')
 		return v;
 	return '' + v;
-}
+};
 
-function trim_s(s) {
+trim_s = function(s) {
 	if (s == null)
 		return '';
 	return trim('' + s);
-}
+};
 
-function join(arr, sep) {
+join = function(arr, sep) {
 	let s = '';
 	if (arr == null)
 		return s;
@@ -87,9 +88,9 @@ function join(arr, sep) {
 			s = s + arr[i];
 	}
 	return s;
-}
+};
 
-function split_csv(s) {
+split_csv = function(s) {
 	let out = [];
 	if (s == null || s == '')
 		return out;
@@ -99,9 +100,9 @@ function split_csv(s) {
 			push(out, parts[i]);
 	}
 	return out;
-}
+};
 
-function split_lines(s) {
+split_lines = function(s) {
 	let out = [];
 	if (s == null)
 		return out;
@@ -114,9 +115,9 @@ function split_lines(s) {
 		push(out, line);
 	}
 	return out;
-}
+};
 
-function q(s) {
+q = function(s) {
 	if (s == null)
 		s = '';
 	s = '' + s;
@@ -132,17 +133,17 @@ function q(s) {
 		i++;
 	}
 	return out + "'";
-}
+};
 
-function nonce() {
+nonce = function() {
 	nonce_seq++;
 	let rnd = '';
 	if (type(api.gen_random_char) == 'function')
 		rnd = trim_s(api.gen_random_char(6));
 	return '' + time() + '-' + nonce_seq + (rnd == '' ? '' : ('-' + rnd));
-}
+};
 
-function sh_exec(cmd) {
+sh_exec = function(cmd) {
 	if (api.sys && type(api.sys.exec) == 'function') {
 		let out = api.sys.exec(cmd);
 		return out == null ? '' : ('' + out);
@@ -153,9 +154,9 @@ function sh_exec(cmd) {
 	let out = fp.read('all');
 	fp.close();
 	return out == null ? '' : out;
-}
+};
 
-function sh_call(cmd) {
+sh_call = function(cmd) {
 	if (api.sys && type(api.sys.call) == 'function') {
 		let rc = api.sys.call(cmd);
 		if (rc == null)
@@ -168,24 +169,24 @@ function sh_call(cmd) {
 	let out = fp.read('all') || '1';
 	fp.close();
 	return int(trim_s(out));
-}
+};
 
-function popen_read(cmd) {
+popen_read = function(cmd) {
 	let fp = popen(cmd, 'r');
 	if (!fp)
 		return '';
 	let out = fp.read('all') || '';
 	fp.close();
 	return out;
-}
+};
 
-function exists(path) {
+exists = function(path) {
 	if (api.fs && type(api.fs.access) == 'function')
 		return api.fs.access(path) ? true : false;
 	return access(path) ? true : false;
-}
+};
 
-function read_text(path) {
+read_text = function(path) {
 	if (api.fs && type(api.fs.readfile) == 'function') {
 		let s = api.fs.readfile(path);
 		if (s != null)
@@ -193,58 +194,58 @@ function read_text(path) {
 	}
 	let s = readfile(path);
 	return s == null ? '' : s;
-}
+};
 
-function write_text(path, data) {
+write_text = function(path, data) {
 	if (api.fs && type(api.fs.writefile) == 'function') {
 		api.fs.writefile(path, data);
 		return;
 	}
 	writefile(path, data);
-}
+};
 
-function write_bytes(path, data, append) {
+write_bytes = function(path, data, append) {
 	let fp = open(path, append ? 'a' : 'w');
 	if (!fp)
 		return false;
 	fp.write(data == null ? '' : data);
 	fp.close();
 	return true;
-}
+};
 
-function rm_rf(path) {
+rm_rf = function(path) {
 	if (type(api.remove) == 'function') {
 		api.remove(path);
 		return;
 	}
 	sh_call('rm -rf ' + q(path));
-}
+};
 
-function move_file(src, dst) {
+move_file = function(src, dst) {
 	if (api.fs && type(api.fs.move) == 'function') {
 		api.fs.move(src, dst);
 		return;
 	}
 	sh_call('mv -f ' + q(src) + ' ' + q(dst));
-}
+};
 
-function rm_dir(path) {
+rm_dir = function(path) {
 	if (api.fs && type(api.fs.rmdir) == 'function') {
 		api.fs.rmdir(path);
 		return;
 	}
 	sh_call('rmdir ' + q(path) + ' 2>/dev/null');
-}
+};
 
-function b64encode(data) {
+b64encode = function(data) {
 	let in_f = '/tmp/pw-b64-' + nonce() + '.in';
 	writefile(in_f, data == null ? '' : data);
 	let out = sh_exec('base64 -w 0 ' + q(in_f) + ' 2>/dev/null || base64 ' + q(in_f));
 	sh_call('rm -f ' + q(in_f));
 	return join(split(out, '\n'), '');
-}
+};
 
-function b64decode(data) {
+b64decode = function(data) {
 	let idn = nonce();
 	let in_f = '/tmp/pw-b64-' + idn + '.in';
 	let out_f = '/tmp/pw-b64-' + idn + '.out';
@@ -255,40 +256,40 @@ function b64decode(data) {
 		out = readfile(out_f);
 	sh_call('rm -f ' + q(in_f) + ' ' + q(out_f));
 	return out;
-}
+};
 
-function log_msg(msg) {
+log_msg = function(msg) {
 	if (type(api.log) == 'function')
 		api.log(msg);
-}
+};
 
-function json_ok(data) {
+json_ok = function(data) {
 	if (data == null)
 		return { code: 1 };
 	return { code: 1, data: data };
-}
+};
 
-function json_err(data) {
+json_err = function(data) {
 	if (data == null)
 		return { code: 0 };
 	return { code: 0, data: data };
-}
+};
 
-function as_json(v) {
+as_json = function(v) {
 	if (v == null)
 		return { code: 1 };
 	return v;
-}
+};
 
-function text_out(text) {
+text_out = function(text) {
 	return { output: text == null ? '' : text };
-}
+};
 
-function log_alert(msg) {
+log_alert = function(msg) {
 	return { output: msg, alert: msg };
-}
+};
 
-function num(s) {
+num = function(s) {
 	if (s == null)
 		return null;
 	if (type(s) == 'int' || type(s) == 'double')
@@ -297,73 +298,73 @@ function num(s) {
 	if (type(n) == 'int' || type(n) == 'double')
 		return n;
 	return null;
-}
+};
 
-function as_list(v) {
+as_list = function(v) {
 	if (v == null || v == '')
 		return [];
 	if (type(v) == 'array')
 		return v;
 	return [ v ];
-}
+};
 
-function uci_value(v) {
+uci_value = function(v) {
 	let t = type(v);
 	if (t == 'bool')
 		return v ? '1' : '0';
 	if (t == 'int' || t == 'double')
 		return '' + v;
 	return v;
-}
+};
 
-function random_id() {
+random_id = function() {
 	let id = '';
 	if (type(api.gen_random_char) == 'function')
 		id = trim_s(api.gen_random_char());
 	if (id == '')
 		id = trim_s(sh_exec('head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8'));
 	return id;
-}
+};
 
-function cache_get(key) {
+cache_get = function(key) {
 	if (type(api.get_cache_var) != 'function')
 		return null;
 	let v = api.get_cache_var(key);
 	if (v == null || v == '')
 		return null;
 	return v;
-}
+};
 
-function cache_set(key, val) {
+cache_set = function(key, val) {
 	if (type(api.set_cache_var) == 'function')
 		api.set_cache_var(key, val);
-}
+};
 
-function found_com(name) {
+found_com = function(name) {
 	if (type(api.finded_com) != 'function')
 		return '';
 	let bin = api.finded_com(name);
 	if (bin == null)
 		return '';
 	return '' + bin;
-}
+};
 
-function found_bin(name) {
+found_bin = function(name) {
 	if (type(api.is_finded) != 'function')
 		return false;
 	return api.is_finded(name) ? true : false;
-}
+};
 
-function app_version(name) {
+app_version = function(name) {
 	if (type(api.get_app_version) != 'function')
 		return '';
 	let v = api.get_app_version(name);
 	if (v == null)
 		return '';
 	return '' + v;
-}
+};
 
-function sh_set(section, option, value, commit) {
+sh_set = function(section, option, value, commit) {
 	if (type(api.sh_uci_set) == 'function') {
 		api.sh_uci_set(cfg_name(), section, option, value, commit ? true : false);
 		return;
@@ -371,9 +372,9 @@ function sh_set(section, option, value, commit) {
 	api.uci_set_c(section, option, value);
 	if (commit)
 		api.uci_save_c(true, false);
-}
+};
 
-function sh_del(section, option, commit) {
+sh_del = function(section, option, commit) {
 	if (type(api.sh_uci_del) == 'function') {
 		api.sh_uci_del(cfg_name(), section, option, commit ? true : false);
 		return;
@@ -384,39 +385,39 @@ function sh_del(section, option, commit) {
 		api.uci_del_c(section, option);
 	if (commit)
 		api.uci_save_c(true, false);
-}
+};
 
-function sh_get(section, option) {
+sh_get = function(section, option) {
 	if (type(api.sh_uci_get) == 'function')
 		return api.sh_uci_get(cfg_name(), section, option);
 	return api.uci_get_c(section, option);
-}
+};
 
-function sh_commit() {
+sh_commit = function() {
 	if (type(api.sh_uci_commit) == 'function') {
 		api.sh_uci_commit(cfg_name());
 		return;
 	}
 	api.uci_save_c(true, false);
-}
+};
 
-function del_c(section, option) {
+del_c = function(section, option) {
 	if (option == null)
 		api.uci_del_c(section);
 	else
 		api.uci_del_c(section, option);
-}
+};
 
-function save_c(commit, apply) {
+save_c = function(commit, apply) {
 	if (commit == null)
 		api.uci_save_c();
 	else if (apply == null)
 		api.uci_save_c(commit);
 	else
 		api.uci_save_c(commit, apply);
-}
+};
 
-function revert_config(config, which) {
+revert_config = function(config, which) {
 	if (which == 'c' && type(api.uci_revert_c) == 'function')
 		return api.uci_revert_c();
 	if (which == 's' && type(api.uci_revert_s) == 'function')
@@ -424,9 +425,9 @@ function revert_config(config, which) {
 	if (api.uci && type(api.uci.revert) == 'function')
 		return api.uci.revert(config);
 	sh_call('uci revert ' + q(config));
-}
+};
 
-function add_named(server, name, stype) {
+add_named = function(server, name, stype) {
 	let config = server ? (api.s_config || 'passwall_server') : cfg_name();
 	if (type(api.uci_section) == 'function') {
 		api.uci_section(config, stype, name);
@@ -444,17 +445,17 @@ function add_named(server, name, stype) {
 		api.uci_set_s(name, null, stype);
 	else
 		api.uci_set_c(name, null, stype);
-}
+};
 
-function section_obj(a, b) {
+section_obj = function(a, b) {
 	if (type(a) == 'object')
 		return a;
 	if (type(b) == 'object')
 		return b;
 	return null;
-}
+};
 
-function sections_of(stype) {
+sections_of = function(stype) {
 	let rows = [];
 	api.uci_foreach_c(stype, function(a, b) {
 		let t = section_obj(a, b);
@@ -462,15 +463,15 @@ function sections_of(stype) {
 			push(rows, t);
 	});
 	return rows;
-}
+};
 
-function com_order() {
+com_order = function() {
 	if (com && type(com.order) == 'array' && length(com.order) > 0)
 		return com.order;
 	return COM_ORDER_FALLBACK;
-}
+};
 
-function com_info(key) {
+com_info = function(key) {
 	let c = null;
 	if (com) {
 		if (com[key])
@@ -484,15 +485,15 @@ function com_info(key) {
 		name: (c && c.name) ? c.name : (fb.name || key),
 		default_path: (c && c.default_path) ? c.default_path : (fb.default_path || ('/usr/bin/' + key))
 	};
-}
+};
 
-function safe_task_id(id) {
+safe_task_id = function(id) {
 	if (id == null || id == '')
 		return false;
 	return match(id, /^[A-Za-z0-9_-]+$/) != null;
-}
+};
 
-function is_ip(s) {
+is_ip = function(s) {
 	if (s == null || s == '')
 		return false;
 	if (api.datatypes) {
@@ -504,13 +505,13 @@ function is_ip(s) {
 	if (type(api.is_ipv6) == 'function' && api.is_ipv6(s))
 		return true;
 	return match('' + s, /^(\d{1,3}\.){3}\d{1,3}$/) != null;
-}
+};
 
-function tail_file(path) {
+tail_file = function(path) {
 	return sh_exec('tail -n 5000 ' + q(path));
-}
+};
 
-function mark_ipv6(o, show) {
+mark_ipv6 = function(o, show) {
 	if (!o || show != '1' || o.address == null || o.address == '')
 		return;
 	if (type(api.get_ipv6_full) != 'function')
@@ -520,9 +521,9 @@ function mark_ipv6(o, show) {
 		o.ipv6 = true;
 		o.full_address = f;
 	}
-}
+};
 
-function list_grouped(stype, mapfn) {
+list_grouped = function(stype, mapfn) {
 	let def_rows = [];
 	let other_rows = [];
 	api.uci_foreach_c(stype, function(a, b) {
@@ -542,9 +543,9 @@ function list_grouped(stype, mapfn) {
 	for (let i = 0; i < length(other_rows); i++)
 		push(result, other_rows[i]);
 	return result;
-}
+};
 
-function apply_data(setter, id, data) {
+apply_data = function(setter, id, data) {
 	if (id == null || data == null)
 		return false;
 	let data_t = json(data);
@@ -560,17 +561,17 @@ function apply_data(setter, id, data) {
 		applied++;
 	}
 	return applied > 0;
-}
+};
 
-function set_c(section, option, value) {
+set_c = function(section, option, value) {
 	api.uci_set_c(section, option, value);
-}
+};
 
-function set_s(section, option, value) {
+set_s = function(section, option, value) {
 	api.uci_set_s(section, option, value);
-}
+};
 
-function parse_timing(result) {
+parse_timing = function(result) {
 	let m = match(trim_s(result), /^(\d+):([\d.]+):([\d.]+)$/);
 	if (m == null)
 		return null;
@@ -579,9 +580,9 @@ function parse_timing(result) {
 		pre: num(m[1]),
 		start: num(m[2])
 	};
-}
+};
 
-function apply_timing(e, result, with_ping_type) {
+apply_timing = function(e, result, with_ping_type) {
 	let t = parse_timing(result);
 	if (t == null || t.code == null)
 		return;
@@ -593,30 +594,30 @@ function apply_timing(e, result, with_ping_type) {
 		if (with_ping_type)
 			e.ping_type = 'curl';
 	}
-}
+};
 
-function cmp_ge(left, right) {
+cmp_ge = function(left, right) {
 	if (type(api.compare_versions) != 'function')
 		return false;
 	return api.compare_versions(left, '>=', right) ? true : false;
-}
+};
 
-function short_version() {
+short_version = function() {
 	let version = '';
 	if (type(api.get_version) == 'function')
 		version = api.get_version() || '';
 	version = '' + version;
 	let m = match(version, /^([^-]+)/);
 	return m ? m[0] : '';
-}
+};
 
-function page_url(page, id) {
+page_url = function(page, id) {
 	if (type(api.url) == 'function')
 		return api.url(page, id);
 	return '/cgi-bin/luci/admin/services/' + app_name() + '/' + page + '/' + id;
-}
+};
 
-function geo_base() {
+geo_base = function() {
 	let loc = api.uci_get_c('@global_rules[0]', 'v2ray_location_asset');
 	if (loc == null || loc == '')
 		loc = '/usr/share/v2ray/';
@@ -624,9 +625,9 @@ function geo_base() {
 	if (m)
 		return m[0];
 	return '' + loc;
-}
+};
 
-function get_rules(str, geo_kind) {
+get_rules = function(str, geo_kind) {
 	let rules = [];
 	api.uci_foreach_c('shunt_rules', function(a, b) {
 		let s = section_obj(a, b);
@@ -654,19 +655,19 @@ function get_rules(str, geo_kind) {
 		}
 	});
 	return rules;
-}
+};
 
-function show_menu() {
+show_menu = function() {
 	sh_del('@global[0]', 'hide_from_luci', true);
 	return { ok: true };
-}
+};
 
-function hide_menu() {
+hide_menu = function() {
 	sh_set('@global[0]', 'hide_from_luci', '1', true);
 	return { ok: true };
-}
+};
 
-function capabilities() {
+capabilities = function() {
 	let e = {};
 	let singbox = found_com('sing-box');
 	let xray = found_com('xray');
@@ -722,9 +723,9 @@ function capabilities() {
 	for (let i = 0; i < length(order); i++)
 		push(e.components, com_info(order[i]));
 	return e;
-}
+};
 
-function link_add_node(req) {
+link_add_node = function(req) {
 	let chunk = form_raw(req, 'chunk');
 	let chunk_index_s = form_raw(req, 'chunk_index');
 	let total_s = form_raw(req, 'total_chunks');
@@ -739,9 +740,9 @@ function link_add_node(req) {
 			subscribe_main([ 'add', group ]);
 	}
 	return { ok: true };
-}
+};
 
-function socks_change(req, add) {
+socks_change = function(req, add) {
 	let id = form_raw(req, 'id');
 	let key = form_raw(req, 'key');
 	if (id != null && id != '' && key != null && key != '') {
@@ -765,9 +766,9 @@ function socks_change(req, add) {
 		save_c();
 	}
 	return { ok: true };
-}
+};
 
-function gen_client_config(req) {
+gen_client_config = function(req) {
 	let id = form_raw(req, 'id');
 	if (id == null)
 		id = '';
@@ -788,17 +789,17 @@ function gen_client_config(req) {
 		return text_out(text);
 	}
 	return { ok: false };
-}
+};
 
-function get_now_use_node() {
+get_now_use_node = function() {
 	let e = {};
 	let node = cache_get('ACL_GLOBAL_node');
 	if (node != null)
 		e.global = node;
 	return e;
-}
+};
 
-function get_redir_log(req) {
+get_redir_log = function(req) {
 	let id = form_raw(req, 'id');
 	let path = tmp_path() + '/acl/' + (id == null ? '' : id);
 	let name = 'global';
@@ -819,9 +820,9 @@ function get_redir_log(req) {
 	if (exists(file))
 		return text_out(tail_file(file));
 	return log_alert('Not enabled log');
-}
+};
 
-function get_socks_log(req) {
+get_socks_log = function(req) {
 	let name = form_raw(req, 'name');
 	if (name == null)
 		name = '';
@@ -829,9 +830,9 @@ function get_socks_log(req) {
 	if (exists(path))
 		return text_out(tail_file(path));
 	return log_alert('Not enabled log');
-}
+};
 
-function get_chinadns_log(req) {
+get_chinadns_log = function(req) {
 	let flag = form_raw(req, 'flag');
 	if (flag == null)
 		flag = '';
@@ -848,25 +849,25 @@ function get_chinadns_log(req) {
 	if (exists(path))
 		return text_out(tail_file(path));
 	return log_alert('Not enabled log');
-}
+};
 
-function get_smartdns_log() {
+get_smartdns_log = function() {
 	let path = tmp_path() + '/acl/default/smartdns.log';
 	if (exists(path))
 		return text_out(tail_file(path));
 	return log_alert('Not enabled log');
-}
+};
 
-function get_log() {
+get_log = function() {
 	return text_out(sh_exec("[ -f '/tmp/log/passwall.log' ] && cat /tmp/log/passwall.log"));
-}
+};
 
-function clear_log() {
+clear_log = function() {
 	sh_call("echo '' > /tmp/log/passwall.log");
 	return { ok: true };
-}
+};
 
-function index_status() {
+index_status = function() {
 	let e = {};
 	let dns_shunt = api.uci_get_c('@global[0]', 'dns_shunt') || 'dnsmasq';
 	let tmp = tmp_path();
@@ -897,14 +898,14 @@ function index_status() {
 			e.udp_status = sh_call("/bin/busybox top -bn1 | grep -v -E 'grep|naive' | grep " + q(tmp + '/bin/') + " | grep 'default' | grep 'global' >/dev/null") == 0;
 	}
 	return e;
-}
+};
 
-function haproxy_status() {
+haproxy_status = function() {
 	let rc = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep " + q(app_name() + '/bin/') + " | grep haproxy >/dev/null");
 	return { status: rc == 0 };
-}
+};
 
-function socks_status(req) {
+socks_status = function(req) {
 	let e = {};
 	let idx = form_raw(req, 'index');
 	if (idx != null)
@@ -922,9 +923,9 @@ function socks_status(req) {
 		e.http_status = sh_call("/bin/busybox top -bn1 | grep -v -E 'grep|acl/|acl_' | grep " + q(app_name() + '/bin/') + " | grep " + q('/' + id) + " | grep -E '\\+http|_http' > /dev/null") == 0;
 	}
 	return e;
-}
+};
 
-function connect_status(req) {
+connect_status = function(req) {
 	let e = { use_time: '' };
 	let url = form_raw(req, 'url');
 	if (url == null || url == '')
@@ -950,9 +951,9 @@ function connect_status(req) {
 	let cmd = 'curl_result=$(/usr/bin/curl --connect-timeout 3 --max-time 5 -o /dev/null -I -sk ' + curl_args + '); [ $? -eq 0 ] && printf "%s" "$curl_result"';
 	apply_timing(e, sh_exec(cmd), true);
 	return e;
-}
+};
 
-function ping_node(req) {
+ping_node = function(req) {
 	let e = {};
 	let idx = form_raw(req, 'index');
 	if (idx != null)
@@ -975,9 +976,9 @@ function ping_node(req) {
 		e.ping = trim_s(sh_exec('echo -n $(ping -c 1 -W 1 ' + q(address) + " 2>&1 | grep -o 'time=[0-9]*' | awk -F '=' '{print $2}') 2>/dev/null"));
 	}
 	return e;
-}
+};
 
-function urltest_node(req) {
+urltest_node = function(req) {
 	let e = {};
 	let idx = form_raw(req, 'index');
 	if (idx != null)
@@ -988,16 +989,16 @@ function urltest_node(req) {
 	let result = sh_exec('/usr/share/passwall/test.sh url_test_node ' + q(id));
 	apply_timing(e, result, false);
 	return e;
-}
+};
 
-function update_config(req) {
+update_config = function(req) {
 	if (!apply_data(set_c, form_raw(req, 'id'), form_raw(req, 'data')))
 		return json_err();
 	save_c();
 	return json_ok();
-}
+};
 
-function add_node(req) {
+add_node = function(req) {
 	let uid = random_id();
 	add_named(false, uid, 'nodes');
 	let group = form_raw(req, 'group');
@@ -1022,9 +1023,9 @@ function add_node(req) {
 	else
 		save_c(true, true);
 	return { result: uid };
-}
+};
 
-function set_node(req) {
+set_node = function(req) {
 	let target = form_raw(req, 'type');
 	let option = form_raw(req, 'config');
 	let value = form_raw(req, 'section');
@@ -1047,9 +1048,9 @@ function set_node(req) {
 	api.uci_set_c(target, option, value);
 	save_c(true, true);
 	return { ok: true };
-}
+};
 
-function copy_node(req) {
+copy_node = function(req) {
 	let section = form_raw(req, 'section');
 	let src = section == null ? null : api.uci_get_c(section);
 	if (src == null || type(src) != 'object')
@@ -1071,9 +1072,9 @@ function copy_node(req) {
 	api.uci_set_c(uid, 'add_mode', '1');
 	save_c();
 	return { ok: true, section: uid };
-}
+};
 
-function clear_all_nodes() {
+clear_all_nodes = function() {
 	api.uci_set_c('@global[0]', 'enabled', '0');
 	api.uci_set_c('@global[0]', 'socks_enabled', '0');
 	api.uci_set_c('@global_haproxy[0]', 'balancing_enable', '0');
@@ -1103,9 +1104,9 @@ function clear_all_nodes() {
 	}
 	save_c(true, true);
 	return { ok: true };
-}
+};
 
-function delete_select_nodes(req) {
+delete_select_nodes = function(req) {
 	let ids = form_raw(req, 'ids');
 	if (ids == null)
 		ids = '';
@@ -1214,9 +1215,9 @@ function delete_select_nodes(req) {
 	else
 		save_c(true, true);
 	return { ok: true };
-}
+};
 
-function get_node(req) {
+get_node = function(req) {
 	let show = api.uci_get_c('@global_other[0]', 'show_node_info') || '0';
 	let id = form_raw(req, 'id');
 	if (id != null) {
@@ -1229,9 +1230,9 @@ function get_node(req) {
 	return list_grouped('nodes', function(t) {
 		mark_ipv6(t, show);
 	});
-}
+};
 
-function reassign_group(req) {
+reassign_group = function(req) {
 	let ids = form_raw(req, 'ids');
 	if (ids == null)
 		ids = '';
@@ -1248,9 +1249,9 @@ function reassign_group(req) {
 	}
 	sh_commit();
 	return { status: 'ok' };
-}
+};
 
-function save_node_list_opt(req) {
+save_node_list_opt = function(req) {
 	let option = form_raw(req, 'option');
 	if (option == null)
 		option = '';
@@ -1260,9 +1261,9 @@ function save_node_list_opt(req) {
 	if (option != '')
 		sh_set('@global_other[0]', option, value, true);
 	return { status: 'ok' };
-}
+};
 
-function update_rules(req) {
+update_rules = function(req) {
 	let update = form_raw(req, 'update');
 	if (update == null)
 		update = '';
@@ -1270,9 +1271,9 @@ function update_rules(req) {
 		return json_err({ message: 'missing update target' });
 	main([ 'log', update ]);
 	return { code: 1 };
-}
+};
 
-function rollback_rules(req) {
+rollback_rules = function(req) {
 	let arg_type = form_raw(req, 'type');
 	let rules = form_raw(req, 'rules');
 	if (rules == null)
@@ -1289,16 +1290,16 @@ function rollback_rules(req) {
 	api.uci_set_c('@global[0]', 'flush_set', '1');
 	save_c(true);
 	return json_ok();
-}
+};
 
-function server_update_config(req) {
+server_update_config = function(req) {
 	if (!apply_data(set_s, form_raw(req, 'id'), form_raw(req, 'data')))
 		return json_err();
 	api.uci_save_s();
 	return json_ok();
-}
+};
 
-function server_status(req) {
+server_status = function(req) {
 	let e = {};
 	let idx = form_raw(req, 'index');
 	if (idx != null)
@@ -1309,9 +1310,9 @@ function server_status(req) {
 	let rc = sh_call("/bin/busybox top -bn1 | grep -v 'grep' | grep " + q(app_name() + '_server/bin/') + ' | grep -i ' + q(id) + ' >/dev/null');
 	e.status = rc == 0;
 	return e;
-}
+};
 
-function server_log(req) {
+server_log = function(req) {
 	let id = form_raw(req, 'id');
 	if (id == null)
 		id = '';
@@ -1319,24 +1320,24 @@ function server_log(req) {
 	if (exists(file))
 		return text_out(join(split(read_text(file), '\n'), '<br />'));
 	return log_alert('Not enabled log');
-}
+};
 
-function server_get_log() {
+server_get_log = function() {
 	return text_out(sh_exec("[ -f '/tmp/log/passwall_server.log' ] && cat /tmp/log/passwall_server.log"));
-}
+};
 
-function server_clear_log() {
+server_clear_log = function() {
 	sh_call("echo '' > /tmp/log/passwall_server.log");
 	return { ok: true };
-}
+};
 
-function do_app_check() {
+do_app_check = function() {
 	if (type(api.to_check_self) != 'function')
 		return { code: 1 };
 	return as_json(api.to_check_self());
-}
+};
 
-function do_app_update(req) {
+do_app_update = function(req) {
 	let id = form_raw(req, 'id');
 	if (!safe_task_id(id))
 		return { code: 1 };
@@ -1351,15 +1352,15 @@ function do_app_update(req) {
 		result = api.to_download(app_name(), form_raw(req, 'url'), form_raw(req, 'size'), id + part, part == '2');
 	}
 	return as_json(result);
-}
+};
 
-function do_com_check(comname) {
+do_com_check = function(comname) {
 	if (type(api.to_check) != 'function')
 		return { code: 1 };
 	return as_json(api.to_check('', comname));
-}
+};
 
-function do_com_update(comname, req) {
+do_com_update = function(comname, req) {
 	let task = form_raw(req, 'task');
 	let result = null;
 	if (task == 'progress')
@@ -1371,16 +1372,16 @@ function do_com_update(comname, req) {
 	else
 		result = api.to_download(comname, form_raw(req, 'url'), form_raw(req, 'size'), form_raw(req, 'id'));
 	return as_json(result);
-}
+};
 
-function do_com_version(comname) {
+do_com_version = function(comname) {
 	let version = null;
 	if (type(api.get_app_version) == 'function')
 		version = api.get_app_version(comname);
 	return json_ok(version);
-}
+};
 
-function read_rulelist(req) {
+read_rulelist = function(req) {
 	let rule_type = form_raw(req, 'type');
 	let rule_path = null;
 	if (rule_type == 'gfw')
@@ -1394,9 +1395,9 @@ function read_rulelist(req) {
 	if (exists(rule_path))
 		return text_out(read_text(rule_path));
 	return text_out('');
-}
+};
 
-function create_backup() {
+create_backup = function() {
 	let date = trim_s(sh_exec('date +%y%m%d%H%M'));
 	let filename = 'passwall-' + date + '-backup.tar.gz';
 	let tar_file = '/tmp/' + filename;
@@ -1413,9 +1414,9 @@ function create_backup() {
 	if (raw == null)
 		return { code: 0, filename: filename, output: '' };
 	return { filename: filename, output: b64encode(raw) };
-}
+};
 
-function restore_backup(req) {
+restore_backup = function(req) {
 	let kind = form_raw(req, 'type');
 	let filename = form_raw(req, 'filename');
 	let chunk = form_raw(req, 'chunk');
@@ -1472,9 +1473,9 @@ function restore_backup(req) {
 	rm_rf(temp_dir);
 	rm_rf(file_path);
 	return result;
-}
+};
 
-function reset_config(req) {
+reset_config = function(req) {
 	let kind = form_raw(req, 'type');
 	if (kind == 'client') {
 		revert_config(cfg_name(), 'c');
@@ -1499,9 +1500,9 @@ function reset_config(req) {
 		sh_call("echo \"config global 'global'\" > /etc/config/passwall_server");
 	}
 	return { ok: true };
-}
+};
 
-function geo_view(req) {
+geo_view = function(req) {
 	let action = form_raw(req, 'action');
 	let value = form_raw(req, 'value');
 	if (value == null || value == '')
@@ -1571,21 +1572,21 @@ function geo_view(req) {
 	if (geo_string != null && geo_string != '')
 		return text_out(geo_string);
 	return text_out('No results were found!');
-}
+};
 
-function subscribe_del_node(req) {
+subscribe_del_node = function(req) {
 	let remark = form_raw(req, 'remark');
 	if (remark != null && remark != '')
 		subscribe_main([ 'truncate', remark ]);
 	return { ok: true };
-}
+};
 
-function subscribe_del_all() {
+subscribe_del_all = function() {
 	subscribe_main([ 'truncate' ]);
 	return { ok: true };
-}
+};
 
-function subscribe_manual(req) {
+subscribe_manual = function(req) {
 	let section = form_raw(req, 'section');
 	if (section == null)
 		section = '';
@@ -1601,9 +1602,9 @@ function subscribe_manual(req) {
 		sh_set(section, 'url', current_url, true);
 	subscribe_main([ 'start', section, 'manual' ]);
 	return { success: true, msg: 'Subscribe triggered.' };
-}
+};
 
-function subscribe_manual_all(req) {
+subscribe_manual_all = function(req) {
 	let sections = form_raw(req, 'sections');
 	let urls = form_raw(req, 'urls');
 	if (sections == null)
@@ -1627,9 +1628,9 @@ function subscribe_manual_all(req) {
 	}
 	subscribe_main([ 'start', 'all', 'manual' ]);
 	return { success: true, msg: 'Subscribe triggered.' };
-}
+};
 
-function flush_set(req) {
+flush_set = function(req) {
 	let reload = form_raw(req, 'reload');
 	if (reload == null)
 		reload = '0';
@@ -1641,9 +1642,9 @@ function flush_set(req) {
 		sh_set('@global[0]', 'flush_set', '1', true);
 	}
 	return { ok: true };
-}
+};
 
-function fetch_certsha256(req) {
+fetch_certsha256 = function(req) {
 	let id = form_raw(req, 'id');
 	if (id == null)
 		id = '';
@@ -1680,9 +1681,9 @@ function fetch_certsha256(req) {
 	if (data != null && data != '')
 		return { code: 1, data: data };
 	return { code: 0 };
-}
+};
 
-function get_shunt_rules(req) {
+get_shunt_rules = function(req) {
 	let id = form_raw(req, 'id');
 	if (id != null) {
 		let result = api.uci_get_c(id);
@@ -1691,9 +1692,9 @@ function get_shunt_rules(req) {
 		return result;
 	}
 	return list_grouped('shunt_rules', null);
-}
+};
 
-function add_shunt_rule(req) {
+add_shunt_rule = function(req) {
 	let add_name = form_raw(req, 'add_name');
 	let uid = add_name;
 	if (add_name != null) {
@@ -1710,9 +1711,9 @@ function add_shunt_rule(req) {
 		api.uci_set_c(uid, 'group', group);
 	save_c();
 	return json_ok({ uid: uid, redirect_url: page_url('shunt_rules', uid) });
-}
+};
 
-function delete_select_shunt_rules(req) {
+delete_select_shunt_rules = function(req) {
 	let ids = form_raw(req, 'ids');
 	if (ids == null)
 		ids = '';
@@ -1732,36 +1733,36 @@ function delete_select_shunt_rules(req) {
 	else
 		save_c(true, true);
 	return { ok: true };
-}
+};
 
-function gen_wireguard_keypair() {
+gen_wireguard_keypair = function() {
 	if (type(api.gen_wireguard_key) != 'function')
 		return json_err();
 	let key = api.gen_wireguard_key();
 	if (key)
 		return json_ok(key);
 	return json_err();
-}
+};
 
-function make_check(name) {
+make_check = function(name) {
 	return function() {
 		return do_com_check(name);
 	};
-}
+};
 
-function make_update(name) {
+make_update = function(name) {
 	return function(req) {
 		return do_com_update(name, req);
 	};
-}
+};
 
-function make_version(name) {
+make_version = function(name) {
 	return function() {
 		return do_com_version(name);
 	};
-}
+};
 
-function com_update_args() {
+com_update_args = function() {
 	return {
 		task: 'string',
 		id: 'string',
@@ -1771,9 +1772,9 @@ function com_update_args() {
 		url: 'string',
 		size: 'string'
 	};
-}
+};
 
-function app_update_args() {
+app_update_args = function() {
 	return {
 		id: 'string',
 		task: 'string',
@@ -1783,7 +1784,7 @@ function app_update_args() {
 		url: 'string',
 		size: 'string'
 	};
-}
+};
 
 let methods = {
 	show_menu: {

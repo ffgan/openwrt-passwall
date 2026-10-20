@@ -1,6 +1,7 @@
 'use strict';
 
 import * as api from 'passwall.api';
+let truthy, lua_or, nonempty, lua_tostring, is_table, to_number, tonumber_or, trim_s, nl_to_real, contains, has_prefix, split_matches, linsert, file_lines, try_parse_b64_json, strip_nulls, drop_private_keys, http_paths, gecko_packet_size, hop_interval, hysteria_idle, hysteria_keepalive, mb_window, tolerance_ratio, expected_count, probe_every, kcp_settings, mkcp_udp, hysteria_obfs, hysteria_realm, client_quic, server_quic, client_finalmask, server_finalmask, xhttp_extra, masque_headers, shadowsocks_method, vless_flow, csv_tokens, noise_rand, noise_delay, get_domain_excluded, get_log_level, need_stream_settings, client_stream_settings, apply_alpn, register_domain_resolver, decode_wireguard_reserved, gen_outbound, server_users, server_stream_settings, gen_config_server, collect_rule_items, geosite_dat_path, gen_config, gen_proto_config, print_result, dispatch, main;
 
 const xray_min_version = "26.7.11";
 
@@ -44,19 +45,19 @@ let inner_fakedns = null;
 
 /* Lua truthiness: only null and false are falsy. 0 and "" are truthy.
    ucode == treats 0 and "" as false, so comparisons here stay strict. */
-function truthy(v) {
+truthy = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function lua_or(val, fallback) {
+lua_or = function(val, fallback) {
 	return truthy(val) ? val : fallback;
-}
+};
 
-function nonempty(v) {
+nonempty = function(v) {
 	return truthy(v) && v !== "";
-}
+};
 
-function lua_tostring(v) {
+lua_tostring = function(v) {
 	if (v == null)
 		return "nil";
 	if (v === true)
@@ -64,14 +65,14 @@ function lua_tostring(v) {
 	if (v === false)
 		return "false";
 	return "" + v;
-}
+};
 
-function is_table(v) {
+is_table = function(v) {
 	let t = type(v);
 	return t == "object" || t == "array";
-}
+};
 
-function to_number(v) {
+to_number = function(v) {
 	if (v == null || type(v) == "bool")
 		return null;
 	let t = type(v);
@@ -84,34 +85,34 @@ function to_number(v) {
 	if (!match(v, /^[[:space:]]*[+-]?([[:digit:]]+(\.[[:digit:]]*)?|\.[[:digit:]]+)([eE][+-]?[[:digit:]]+)?[[:space:]]*$/))
 		return null;
 	return +v;
-}
+};
 
-function tonumber_or(v, fallback) {
+tonumber_or = function(v, fallback) {
 	if (!truthy(v))
 		return fallback;
 	let n = to_number(v);
 	return n != null ? n : fallback;
-}
+};
 
-function trim_s(s) {
+trim_s = function(s) {
 	if (type(s) != "string")
 		return "";
 	return api.trim(s);
-}
+};
 
-function nl_to_real(s) {
+nl_to_real = function(s) {
 	return replace(s, "\\n", "\n");
-}
+};
 
-function contains(s, needle) {
+contains = function(s, needle) {
 	return type(s) == "string" && type(needle) == "string" && index(s, needle) >= 0;
-}
+};
 
-function has_prefix(s, prefix) {
+has_prefix = function(s, prefix) {
 	return type(s) == "string" && substr(s, 0, length(prefix)) == prefix;
-}
+};
 
-function split_matches(s, re) {
+split_matches = function(s, re) {
 	let out = [];
 	if (type(s) != "string")
 		return out;
@@ -121,13 +122,13 @@ function split_matches(s, re) {
 	for (let m in ms)
 		push(out, m[0]);
 	return out;
-}
+};
 
-function linsert(arr, lua_pos, value) {
+linsert = function(arr, lua_pos, value) {
 	splice(arr, lua_pos - 1, 0, value);
-}
+};
 
-function file_lines(content) {
+file_lines = function(content) {
 	if (content == null)
 		return null;
 	if (content == "")
@@ -136,9 +137,9 @@ function file_lines(content) {
 	if (length(parts) > 0 && parts[length(parts) - 1] == "" && substr(content, -1) == "\n")
 		pop(parts);
 	return parts;
-}
+};
 
-function try_parse_b64_json(s) {
+try_parse_b64_json = function(s) {
 	try {
 		let parsed = api.jsonc.parse(api.base64Decode(s));
 		return is_table(parsed) ? parsed : null;
@@ -146,9 +147,9 @@ function try_parse_b64_json(s) {
 	catch (e) {
 		return null;
 	}
-}
+};
 
-function strip_nulls(v) {
+strip_nulls = function(v) {
 	let t = type(v);
 	if (t == "array") {
 		let out = [];
@@ -165,9 +166,9 @@ function strip_nulls(v) {
 		return out;
 	}
 	return v;
-}
+};
 
-function drop_private_keys(list) {
+drop_private_keys = function(list) {
 	for (let value in list) {
 		if (type(value) != "object")
 			continue;
@@ -177,18 +178,18 @@ function drop_private_keys(list) {
 				delete value[k];
 		}
 	}
-}
+};
 
-function http_paths(t) {
+http_paths = function(t) {
 	let r = [];
 	if (type(t) != "array")
 		return r;
 	for (let v in t)
 		push(r, v === "" ? "/" : v);
 	return r;
-}
+};
 
-function gecko_packet_size(node) {
+gecko_packet_size = function(node) {
 	let min = to_number(node.hysteria2_obfs_MinPacketSize);
 	let max = to_number(node.hysteria2_obfs_MaxPacketSize);
 	if (min == null)
@@ -200,9 +201,9 @@ function gecko_packet_size(node) {
 		max = 1200;
 	}
 	return min + "-" + max;
-}
+};
 
-function hop_interval(v) {
+hop_interval = function(v) {
 	if (!truthy(v))
 		return 30;
 	if (type(v) == "string" && index(v, "-") >= 0) {
@@ -224,28 +225,28 @@ function hop_interval(v) {
 	let md = match(src, /^\d+/);
 	let num = md ? to_number(md[0]) : null;
 	return (num != null && num >= 5) ? num : 30;
-}
+};
 
-function hysteria_idle(t) {
+hysteria_idle = function(t) {
 	let s = "" + lua_or(t, "30");
 	let md = match(s, /^\d+/);
 	let n = md ? to_number(md[0]) : null;
 	return (n != null && n >= 4 && n <= 120) ? n : 30;
-}
+};
 
-function hysteria_keepalive(t) {
+hysteria_keepalive = function(t) {
 	let s = "" + lua_or(t, "0");
 	let md = match(s, /^\d+/);
 	let n = md ? to_number(md[0]) : null;
 	return (n != null && n >= 2 && n <= 60) ? n : null;
-}
+};
 
-function mb_window(raw) {
+mb_window = function(raw) {
 	let n = to_number(raw);
 	return n != null ? n * 1048576 : null;
-}
+};
 
-function tolerance_ratio(raw) {
+tolerance_ratio = function(raw) {
 	let t = to_number(raw);
 	if (t == null)
 		t = 0;
@@ -254,16 +255,16 @@ function tolerance_ratio(raw) {
 	if (t > 100)
 		t = 100;
 	return t / 100.0;
-}
+};
 
-function expected_count(raw) {
+expected_count = function(raw) {
 	if (!truthy(raw))
 		return 2;
 	let n = to_number(raw);
 	return n != null ? n : 2;
-}
+};
 
-function probe_every(raw) {
+probe_every = function(raw) {
 	let t = api.format_go_time(raw);
 	if (t == "0s")
 		return "60s";
@@ -274,9 +275,9 @@ function probe_every(raw) {
 			return "10s";
 	}
 	return t;
-}
+};
 
-function kcp_settings(node) {
+kcp_settings = function(node) {
 	return {
 		mtu: (nonempty(node.mkcp_mtu)) ? tonumber_or(node.mkcp_mtu, 1350) : 1350,
 		tti: 50,
@@ -285,9 +286,9 @@ function kcp_settings(node) {
 		cwndMultiplier: 1,
 		maxSendingWindow: 2 * 1024 * 1024
 	};
-}
+};
 
-function mkcp_udp(node) {
+mkcp_udp = function(node) {
 	let udp = [];
 	if (truthy(node.mkcp_guise) && node.mkcp_guise !== "none") {
 		let g = { type: "mkcp-legacy" };
@@ -301,9 +302,9 @@ function mkcp_udp(node) {
 		s.settings = { value: node.mkcp_seed };
 	push(udp, s);
 	return udp;
-}
+};
 
-function hysteria_obfs(node, udp) {
+hysteria_obfs = function(node, udp) {
 	if (!(nonempty(node.hysteria2_obfs_type)))
 		return;
 	let o = {
@@ -313,9 +314,9 @@ function hysteria_obfs(node, udp) {
 	if (node.hysteria2_obfs_type == "gecko")
 		o.settings.packetSize = gecko_packet_size(node);
 	push(udp, o);
-}
+};
 
-function hysteria_realm(node, udp) {
+hysteria_realm = function(node, udp) {
 	if (!truthy(node.hysteria2_realms))
 		return;
 	let realm = api.parse_realm_uri(node.hysteria2_realm_url);
@@ -333,9 +334,9 @@ function hysteria_realm(node, udp) {
 			portMapping: node.hysteria2_realm_upnp == "1" ? { enabled: true } : null
 		}
 	});
-}
+};
 
-function client_quic(node) {
+client_quic = function(node) {
 	let up = to_number(node.hysteria2_up_mbps);
 	let down = to_number(node.hysteria2_down_mbps);
 	if (up == null)
@@ -356,9 +357,9 @@ function client_quic(node) {
 		initStreamReceiveWindow: mb_window(node.hysteria2_stream_recv_win),
 		initConnectionReceiveWindow: mb_window(node.hysteria2_conn_recv_win)
 	};
-}
+};
 
-function server_quic(node) {
+server_quic = function(node) {
 	let ignore = to_number(node.hysteria2_ignore_client_bandwidth) == 1;
 	let up = !ignore ? to_number(node.hysteria2_up_mbps) : 0;
 	let down = !ignore ? to_number(node.hysteria2_down_mbps) : 0;
@@ -371,9 +372,9 @@ function server_quic(node) {
 		brutalUp: up > 0 ? (up + "mbps") : null,
 		brutalDown: down > 0 ? (down + "mbps") : null
 	};
-}
+};
 
-function client_finalmask(node, fragment, noise) {
+client_finalmask = function(node, fragment, noise) {
 	let finalmask = {};
 	let TP = node.transport;
 	if (TP == "mkcp") {
@@ -402,9 +403,9 @@ function client_finalmask(node, fragment, noise) {
 			finalmask = fm;
 	}
 	return api.cleanEmptyTables(finalmask);
-}
+};
 
-function server_finalmask(node) {
+server_finalmask = function(node) {
 	let finalmask = {};
 	if (node.transport == "mkcp") {
 		finalmask.udp = mkcp_udp(node);
@@ -422,9 +423,9 @@ function server_finalmask(node) {
 			finalmask = fm;
 	}
 	return api.cleanEmptyTables(finalmask);
-}
+};
 
-function xhttp_extra(node) {
+xhttp_extra = function(node) {
 	let extra = {};
 	if (truthy(node.xhttp_extra)) {
 		let parsed = null;
@@ -444,9 +445,9 @@ function xhttp_extra(node) {
 			extra.headers["User-Agent"] = node.user_agent;
 	}
 	return api.cleanEmptyTables(extra);
-}
+};
 
-function masque_headers(node) {
+masque_headers = function(node) {
 	let headers = {};
 	if (node.masque_warp != "1" && (nonempty(node.username) || nonempty(node.password))) {
 		headers["authorization"] = "Basic " + api.base64Encode(lua_or(node.username, "") + ":" + lua_or(node.password, ""));
@@ -464,9 +465,9 @@ function masque_headers(node) {
 		}
 	}
 	return length(headers) > 0 ? headers : null;
-}
+};
 
-function shadowsocks_method(method) {
+shadowsocks_method = function(method) {
 	if (method == "chacha20-ietf-poly1305")
 		return "chacha20-poly1305";
 	if (method == "xchacha20-ietf-poly1305")
@@ -474,16 +475,16 @@ function shadowsocks_method(method) {
 	if (truthy(method) && method !== "")
 		return method;
 	return null;
-}
+};
 
-function vless_flow(node) {
+vless_flow = function(node) {
 	let enc_active = nonempty(node.encryption) && node.encryption != "none";
 	if (node.protocol == "vless" && (node.tls == "1" || enc_active) && nonempty(node.flow))
 		return node.flow;
 	return null;
-}
+};
 
-function csv_tokens(s) {
+csv_tokens = function(s) {
 	let out = [];
 	let parts = split_matches(trim_s(s), /[^,]+/g);
 	for (let w in parts) {
@@ -492,25 +493,25 @@ function csv_tokens(s) {
 			push(out, w);
 	}
 	return out;
-}
+};
 
-function noise_rand(n) {
+noise_rand = function(n) {
 	if (!(n.type == "rand" && truthy(n.packet)))
 		return null;
 	if (type(n.packet) == "string" && index(n.packet, "-") >= 0)
 		return n.packet;
 	return to_number(n.packet);
-}
+};
 
-function noise_delay(v) {
+noise_delay = function(v) {
 	if (!truthy(v))
 		return null;
 	if (type(v) == "string" && index(v, "-") >= 0)
 		return v;
 	return to_number(v);
-}
+};
 
-function get_domain_excluded() {
+get_domain_excluded = function() {
 	let path = sprintf("/etc/%s/rules/domains_excluded", api.c_config);
 	let content = api.fs.readfile(path);
 	if (content == null)
@@ -527,22 +528,22 @@ function get_domain_excluded() {
 	if (length(hosts) == 0)
 		return null;
 	return hosts;
-}
+};
 
-function get_log_level(s) {
+get_log_level = function(s) {
 	if (s == "warn")
 		return "warning";
 	return s;
-}
+};
 
-function need_stream_settings(node, dialer_proxy_tag) {
+need_stream_settings = function(node, dialer_proxy_tag) {
 	if (truthy(node.streamSettings) || truthy(dialer_proxy_tag))
 		return true;
 	let p = node.protocol;
 	return p == "vmess" || p == "vless" || p == "socks" || p == "shadowsocks" || p == "trojan" || p == "hysteria" || p == "http" || p == "masque";
-}
+};
 
-function client_stream_settings(node, dialer_proxy_tag, fragment, noise) {
+client_stream_settings = function(node, dialer_proxy_tag, fragment, noise) {
 	let raw_ok = (node.transport == "raw" || node.transport == "tcp") && node.protocol != "socks" && truthy(node.tcp_guise) && node.tcp_guise !== "none";
 	return {
 		sockopt: {
@@ -641,9 +642,9 @@ function client_stream_settings(node, dialer_proxy_tag, fragment, noise) {
 		} : null,
 		finalmask: client_finalmask(node, fragment, noise)
 	};
-}
+};
 
-function apply_alpn(node, streamSettings) {
+apply_alpn = function(node, streamSettings) {
 	let alpn = [];
 	if (truthy(node.alpn) && node.alpn != "default") {
 		for (let w in split_matches(node.alpn, /[^,]+/g))
@@ -651,9 +652,9 @@ function apply_alpn(node, streamSettings) {
 	}
 	if (length(alpn) > 0 && streamSettings != null && streamSettings.tlsSettings != null)
 		streamSettings.tlsSettings.alpn = alpn;
-}
+};
 
-function register_domain_resolver(node) {
+register_domain_resolver = function(node) {
 	if (!(api.datatypes.hostname(node.address) && truthy(node.domain_resolver) && (truthy(node.domain_resolver_dns) || truthy(node.domain_resolver_dns_https))))
 		return;
 	let dns_proto = node.domain_resolver;
@@ -708,9 +709,9 @@ function register_domain_resolver(node) {
 	if (!exists)
 		push(GLOBAL.DNS_SERVER[dns_key].domains, domain);
 	GLOBAL.VPS_EXCLUDE[node.address] = true;
-}
+};
 
-function decode_wireguard_reserved(node) {
+decode_wireguard_reserved = function(node) {
 	if (!(node.protocol == "wireguard" && truthy(node.wireguard_reserved)))
 		return;
 	let bytes = [];
@@ -729,9 +730,9 @@ function decode_wireguard_reserved(node) {
 		}
 	}
 	node.wireguard_reserved = length(bytes) > 0 ? bytes : null;
-}
+};
 
-function gen_outbound(flag, node, tag, proxy_table) {
+gen_outbound = function(flag, node, tag, proxy_table) {
 	let result = null;
 	if (truthy(node)) {
 		let node_id = node[".name"];
@@ -888,9 +889,9 @@ function gen_outbound(flag, node, tag, proxy_table) {
 		register_domain_resolver(node);
 	}
 	return result;
-}
+};
 
-function server_users(node) {
+server_users = function(node) {
 	if (!(truthy(node.users) && type(node.users) == "array" && length(node.users) > 0))
 		return null;
 	let users = [];
@@ -936,9 +937,9 @@ function server_users(node) {
 	if (length(users) == 0)
 		return null;
 	return users;
-}
+};
 
-function server_stream_settings(node) {
+server_stream_settings = function(node) {
 	return {
 		method: node.transport,
 		security: "none",
@@ -993,9 +994,9 @@ function server_stream_settings(node) {
 			acceptProxyProtocol: (truthy(node.acceptProxyProtocol) && node.acceptProxyProtocol == "1")
 		}
 	};
-}
+};
 
-export function gen_config_server(node) {
+gen_config_server = function(node) {
 	let settings = null;
 	let routing = null;
 	let outbounds = [
@@ -1195,9 +1196,9 @@ export function gen_config_server(node) {
 
 	drop_private_keys(config.outbounds);
 	return strip_nulls(config);
-}
+};
 
-function collect_rule_items(text) {
+collect_rule_items = function(text) {
 	let sink = [];
 	for (let w in split_matches(text, /[^\r\n]+/g)) {
 		w = api.trim(w);
@@ -1208,17 +1209,17 @@ function collect_rule_items(text) {
 		push(sink, w);
 	}
 	return sink;
-}
+};
 
-function geosite_dat_path() {
+geosite_dat_path = function() {
 	let asset = lua_or(api.uci_get_c("@global_rules[0]", "v2ray_location_asset"), "/usr/share/v2ray/");
 	let m = match(asset, /^(.*)\//);
 	if (!m)
 		die("attempt to concatenate a nil value");
 	return m[1] + "/geosite.dat";
-}
+};
 
-export function gen_config(vars) {
+gen_config = function(vars) {
 	let flag = vars["flag"];
 	let node_id = vars["node"];
 	let server_host = vars["server_host"];
@@ -1352,13 +1353,9 @@ export function gen_config(vars) {
 			push(inbounds, inbound);
 		}
 
-		function get_node_by_id;
-		function gen_loopback;
-		function gen_balancer;
-		function set_outbound_detour;
-		function gen_outbound_get_tag;
+		let get_node_by_id, gen_loopback, gen_balancer, set_outbound_detour, gen_outbound_get_tag;
 
-		function get_node_by_id(id) {
+		get_node_by_id = function(id) {
 			let section;
 			let id_type = type(id);
 			if (id_type == "object" || id_type == "array") {
@@ -1387,9 +1384,9 @@ export function gen_config(vars) {
 			if (section[".type"] == "nodes")
 				return section;
 			return null;
-		}
+		};
 
-		function gen_loopback(outbound_tag, loopback_dst) {
+		gen_loopback = function(outbound_tag, loopback_dst) {
 			if (!truthy(outbound_tag) || outbound_tag === "")
 				return null;
 			let inbound_tag = truthy(loopback_dst) ? ("lo-to-" + loopback_dst) : (outbound_tag + "-lo");
@@ -1407,9 +1404,9 @@ export function gen_config(vars) {
 			else
 				push(outbounds, loopback_outbound);
 			return loopback_outbound;
-		}
+		};
 
-		function gen_balancer(_node, loopback_tag) {
+		gen_balancer = function(_node, loopback_tag) {
 			let balancer_id = _node[".name"];
 			let balancer_tag = "balancer-" + balancer_id;
 			let loopback_dst = balancer_id;
@@ -1536,9 +1533,9 @@ export function gen_config(vars) {
 			let inbound_tag = loopback_outbound.settings.inboundTag;
 			push(rules, { inboundTag: [inbound_tag], balancerTag: balancer_tag });
 			return [balancer_tag, loopback_outbound];
-		}
+		};
 
-		function set_outbound_detour(detour_node, outbound, outbounds_table) {
+		set_outbound_detour = function(detour_node, outbound, outbounds_table) {
 			if (!truthy(detour_node) || !truthy(outbound) || !truthy(outbounds_table))
 				return [null, null];
 			let default_outTag = outbound.tag;
@@ -1632,9 +1629,9 @@ export function gen_config(vars) {
 					outbound.streamSettings.sockopt.interface = detour_node.outbound_iface;
 			}
 			return [default_outTag, last_insert_outbound];
-		}
+		};
 
-		function gen_outbound_get_tag(ob_flag, id, tag, proxy_table) {
+		gen_outbound_get_tag = function(ob_flag, id, tag, proxy_table) {
 			if (!truthy(id) || id === "" || id === "nil")
 				return null;
 			let ob_node = get_node_by_id(id);
@@ -1703,7 +1700,7 @@ export function gen_config(vars) {
 				}
 			}
 			return null;
-		}
+		};
 
 		if (node && node.protocol == "_shunt") {
 			inner_fakedns = lua_or(node.fakedns, "0");
@@ -2343,9 +2340,9 @@ export function gen_config(vars) {
 		return api.jsonc.stringify(strip_nulls(config), 1);
 	}
 	return null;
-}
+};
 
-export function gen_proto_config(vars) {
+gen_proto_config = function(vars) {
 	let local_socks_address = lua_or(vars["local_socks_address"], "0.0.0.0");
 	let local_socks_port = vars["local_socks_port"];
 	let local_socks_username = vars["local_socks_username"];
@@ -2447,18 +2444,18 @@ export function gen_proto_config(vars) {
 		}
 	};
 	return api.jsonc.stringify(strip_nulls(config), 1);
-}
+};
 
-function print_result(result) {
+print_result = function(result) {
 	if (result == null)
 		print("nil\n");
 	else if (type(result) == "string")
 		print(result, "\n");
 	else
 		print(api.jsonc.stringify(result, 1), "\n");
-}
+};
 
-function dispatch(name) {
+dispatch = function(name) {
 	if (name == "gen_config")
 		return gen_config;
 	if (name == "gen_proto_config")
@@ -2466,11 +2463,11 @@ function dispatch(name) {
 	if (name == "gen_config_server")
 		return gen_config_server;
 	return null;
-}
+};
 
 // argv[0] = gen_config | gen_proto_config | gen_config_server
 // argv[1] = JSON object string. Not invoked on import.
-export function main(argv) {
+main = function(argv) {
 	if (argv == null || length(argv) < 1 || argv[0] == null || argv[0] === false)
 		return;
 	let func = dispatch(argv[0]);
@@ -2480,4 +2477,5 @@ export function main(argv) {
 	if (length(argv) > 1 && argv[1] != null)
 		parsed = api.jsonc.parse(argv[1]);
 	print_result(func(parsed));
-}
+};
+export { gen_config_server, gen_config, gen_proto_config, main };

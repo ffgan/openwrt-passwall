@@ -2,8 +2,9 @@
 'use strict';
 
 import * as api from 'passwall.api';
+let join_sp, emit;
 
-function join_sp(arr) {
+join_sp = function(arr) {
 	let s = '';
 	for (let i = 0; i < length(arr); i++) {
 		if (i > 0)
@@ -12,9 +13,9 @@ function join_sp(arr) {
 			s += arr[i];
 	}
 	return s;
-}
+};
 
-function emit(v) {
+emit = function(v) {
 	if (v == null)
 		print('nil');
 	else if (type(v) == 'bool')
@@ -23,7 +24,7 @@ function emit(v) {
 		print(join_sp(v));
 	else
 		print(v);
-}
+};
 
 let expr = ARGV[0];
 if (expr == null || expr == '') {

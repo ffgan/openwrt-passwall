@@ -2,13 +2,13 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
-import * as math from 'math';
+let ltruth, tonumber, gmatch, leading_int, get_ip_port_from, server_endpoint, main;
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function tonumber(v) {
+tonumber = function(v) {
 	if (type(v) == "int")
 		return v;
 	if (type(v) == "double")
@@ -21,9 +21,9 @@ function tonumber(v) {
 	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
 		return s * 1;
 	return int(s);
-}
+};
 
-function gmatch(s, pattern) {
+gmatch = function(s, pattern) {
 	if (s == null || s === false)
 		return [];
 	let found = match("" + s, pattern);
@@ -33,30 +33,30 @@ function gmatch(s, pattern) {
 	for (let m in found)
 		push(out, m[0]);
 	return out;
-}
+};
 
-function leading_int(v) {
+leading_int = function(v) {
 	let m = match("" + v, /^[0-9]+/);
 	if (m == null)
 		return null;
 	return tonumber(m[0]);
-}
+};
 
-export function get_ip_port_from(str) {
+get_ip_port_from = function(str) {
 	let result_port = api.sys.exec("echo -n " + str + " | sed -n 's/^.*[:#]\\([0-9]*\\)$/\\1/p'");
 	let result_ip = api.sys.exec(sprintf("__host=%s;__varport=%s;", str, result_port) + "echo -n ${__host%%${__varport:+[:#]${__varport}*}}");
 	return [result_ip, result_port];
-}
+};
 
-function server_endpoint(o) {
+server_endpoint = function(o) {
 	let address = replace(o.server_address, /^\[(.*)\]$/, "$1");
 	if (index(address, ":") >= 0)
 		address = "[" + address + "]";
 	return address + ":" + o.server_port;
-}
+};
 
 // argv is -path <dir> -conf <file>, parsed by api.get_args. No script name in argv.
-export function main(argv) {
+main = function(argv) {
 	let appname = api.appname;
 	let log = api.log;
 	let vmap = api.get_args(argv ?? []);
@@ -206,7 +206,9 @@ resolvers mydns
 		inter = 60;
 	inter = max(inter, 20);
 	let fastinter = max(10, min(15, inter / 2));
-	let downinter = math.ceil(inter * 1.5);
+	let downinter = int(inter * 1.5);
+	if (downinter < inter * 1.5)
+		downinter++;
 	let inter_arg = sprintf("inter %ds fastinter %ds downinter %ds", inter, fastinter, downinter);
 
 	let sortTable = [];
@@ -298,4 +300,5 @@ resolvers mydns
 			probeUrl = "https://www.google.com/generate_204";
 		api.set_cache_var("HAPROXY_PROBE_URL", probeUrl);
 	}
-}
+};
+export { get_ip_port_from, main };

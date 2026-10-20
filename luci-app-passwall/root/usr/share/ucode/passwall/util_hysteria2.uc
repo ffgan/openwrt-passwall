@@ -1,18 +1,19 @@
 'use strict';
 
 import * as api from 'passwall.api';
+let ltruth, lor, tonumber, set_if, leading_int, obfs_of, bandwidth_of, realm_of, apply_gecko, server_users, server_listen, hop_udp, idle_timeout, keep_alive, auth_pair, gen_config_server, gen_config, print_result, dispatch, main;
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function lor(a, b) {
+lor = function(a, b) {
 	if (a == null || a === false)
 		return b;
 	return a;
-}
+};
 
-function tonumber(v) {
+tonumber = function(v) {
 	if (type(v) == "int")
 		return v;
 	if (type(v) == "double")
@@ -25,29 +26,29 @@ function tonumber(v) {
 	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
 		return s * 1;
 	return int(s);
-}
+};
 
-function set_if(obj, key, val) {
+set_if = function(obj, key, val) {
 	if (val != null)
 		obj[key] = val;
-}
+};
 
-function leading_int(v) {
+leading_int = function(v) {
 	let m = match("" + v, /^[0-9]+/);
 	if (m == null)
 		return null;
 	return tonumber(m[0]);
-}
+};
 
-function obfs_of(node) {
+obfs_of = function(node) {
 	if (!(ltruth(node.hysteria2_obfs_type) && ltruth(node.hysteria2_obfs_password)))
 		return null;
 	let obfs = { type: node.hysteria2_obfs_type };
 	obfs[node.hysteria2_obfs_type] = { password: node.hysteria2_obfs_password };
 	return obfs;
-}
+};
 
-function bandwidth_of(node) {
+bandwidth_of = function(node) {
 	if (!(ltruth(node.hysteria2_up_mbps) || ltruth(node.hysteria2_down_mbps)))
 		return null;
 	let bw = {};
@@ -56,18 +57,18 @@ function bandwidth_of(node) {
 	if (ltruth(node.hysteria2_down_mbps))
 		bw.down = node.hysteria2_down_mbps + " mbps";
 	return bw;
-}
+};
 
-function realm_of(node) {
+realm_of = function(node) {
 	if (!(ltruth(node.hysteria2_realms) && ltruth(node.hysteria2_realm_stun)))
 		return null;
 	let realm = { stunServers: node.hysteria2_realm_stun };
 	if (node.hysteria2_realm_upnp === "1")
 		realm.portMapping = { enabled: true };
 	return realm;
-}
+};
 
-function apply_gecko(config, node) {
+apply_gecko = function(config, node) {
 	if (config.obfs == null || config.obfs.gecko == null)
 		return;
 	let min = tonumber(node.hysteria2_obfs_MinPacketSize);
@@ -82,9 +83,9 @@ function apply_gecko(config, node) {
 	}
 	config.obfs.gecko.minPacketSize = min;
 	config.obfs.gecko.maxPacketSize = max;
-}
+};
 
-function server_users(node) {
+server_users = function(node) {
 	if (!(ltruth(node.users) && length(node.users) > 0))
 		return null;
 	let users = {};
@@ -98,9 +99,9 @@ function server_users(node) {
 	if (length(users) == 0)
 		return null;
 	return users;
-}
+};
 
-function server_listen(node) {
+server_listen = function(node) {
 	if (ltruth(node.hysteria2_realms) && ltruth(node.hysteria2_realm_url)) {
 		let url = replace(node.hysteria2_realm_url, /\/+$/, "");
 		if (ltruth(node.port))
@@ -111,9 +112,9 @@ function server_listen(node) {
 	if (port == null || port === false)
 		port = "0";
 	return ":" + port;
-}
+};
 
-function hop_udp(node) {
+hop_udp = function(node) {
 	if (!ltruth(node.hysteria2_hop))
 		return null;
 	let t = node.hysteria2_hop_interval;
@@ -138,31 +139,31 @@ function hop_udp(node) {
 	n = (n != null && n >= 5) ? n : 30;
 	udp.hopInterval = n + "s";
 	return udp;
-}
+};
 
-function idle_timeout(t) {
+idle_timeout = function(t) {
 	if (t == null || t === false)
 		t = "30";
 	let n = leading_int(t);
 	return (n != null && n >= 4 && n <= 120) ? (n + "s") : "30s";
-}
+};
 
-function keep_alive(t) {
+keep_alive = function(t) {
 	if (t == null || t === false)
 		t = "0";
 	let n = leading_int(t);
 	if (n != null && n >= 2 && n <= 60)
 		return n + "s";
 	return null;
-}
+};
 
-function auth_pair(user, pass) {
+auth_pair = function(user, pass) {
 	if (ltruth(user) && ltruth(pass))
 		return [user, pass];
 	return [null, null];
-}
+};
 
-export function gen_config_server(node) {
+gen_config_server = function(node) {
 	let users = server_users(node);
 	let config = {
 		listen: server_listen(node),
@@ -182,9 +183,9 @@ export function gen_config_server(node) {
 		config.ech = { keyPath: node.ech_keyFile };
 	apply_gecko(config, node);
 	return config;
-}
+};
 
-export function gen_config(var) {
+gen_config = function(var) {
 	let node_id = var["node"];
 	if (node_id == null || node_id === false) {
 		print("node 不能为空\n");
@@ -280,27 +281,27 @@ export function gen_config(var) {
 
 	apply_gecko(config, node);
 	return api.jsonc.stringify(config, 1);
-}
+};
 
-function print_result(result) {
+print_result = function(result) {
 	if (result == null)
 		print("nil\n");
 	else if (type(result) == "string")
 		print(result, "\n");
 	else
 		print(api.jsonc.stringify(result, 1), "\n");
-}
+};
 
-function dispatch(name) {
+dispatch = function(name) {
 	if (name == "gen_config")
 		return gen_config;
 	if (name == "gen_config_server")
 		return gen_config_server;
 	return null;
-}
+};
 
 // argv[0] = gen_config | gen_config_server; argv[1] = JSON object string.
-export function main(argv) {
+main = function(argv) {
 	if (argv == null || length(argv) < 1 || argv[0] == null || argv[0] === false)
 		return;
 	let func = dispatch(argv[0]);
@@ -310,4 +311,5 @@ export function main(argv) {
 	if (length(argv) > 1 && argv[1] != null)
 		parsed = api.jsonc.parse(argv[1]);
 	print_result(func(parsed));
-}
+};
+export { gen_config_server, gen_config, main };

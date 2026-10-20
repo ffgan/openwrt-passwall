@@ -2,12 +2,13 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+let ltruth, tonumber, lua_quote, exec_pair, read_lines, gmatch, is_file_nonzero, insert_unique, merge_array, insert_array_before, insert_array_after, tail_after_colon, geosite_file, get_geosite, write_lines, ucfirst, make_server_param, main;
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function tonumber(v) {
+tonumber = function(v) {
 	if (type(v) == "int")
 		return v;
 	if (type(v) == "double")
@@ -20,9 +21,9 @@ function tonumber(v) {
 	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
 		return s * 1;
 	return int(s);
-}
+};
 
-function lua_quote(s) {
+lua_quote = function(s) {
 	if (s == null || s === false)
 		s = "";
 	else
@@ -43,18 +44,18 @@ function lua_quote(s) {
 			out += c;
 	}
 	return out + "\"";
-}
+};
 
-function exec_pair(cmd) {
+exec_pair = function(cmd) {
 	let ret = api.exec_call(cmd);
 	if (type(ret) == "array")
 		return [ret[0], ret[1]];
 	if (type(ret) == "object" && ret != null)
 		return [ret.code ?? ret[0], ret.out ?? ret.stdout ?? ret[1]];
 	return [ret, ""];
-}
+};
 
-function read_lines(path) {
+read_lines = function(path) {
 	let data = api.fs.readfile(path);
 	if (data == null)
 		return null;
@@ -65,9 +66,9 @@ function read_lines(path) {
 	if (data == "")
 		return [""];
 	return split(data, "\n");
-}
+};
 
-function gmatch(s, pattern) {
+gmatch = function(s, pattern) {
 	if (s == null || s === false)
 		return [];
 	let found = match("" + s, pattern);
@@ -77,29 +78,29 @@ function gmatch(s, pattern) {
 	for (let m in found)
 		push(out, m[0]);
 	return out;
-}
+};
 
-function is_file_nonzero(path) {
+is_file_nonzero = function(path) {
 	if (path != null && type(path) == "string" && length(path) > 1) {
 		if (api.sys.exec(sprintf('[ -s "%s" ] && echo -n 1', path)) == "1")
 			return true;
 	}
 	return null;
-}
+};
 
-function insert_unique(dest_table, value, lookup_table) {
+insert_unique = function(dest_table, value, lookup_table) {
 	if (!lookup_table[value]) {
 		push(dest_table, value);
 		lookup_table[value] = true;
 	}
-}
+};
 
-function merge_array(array1, array2) {
+merge_array = function(array1, array2) {
 	for (let line in array2)
 		push(array1, line);
-}
+};
 
-function insert_array_before(array1, array2, target) {
+insert_array_before = function(array1, array2, target) {
 	for (let i = 0; i < length(array1); i++) {
 		if (array1[i] == target) {
 			for (let j = length(array2) - 1; j >= 0; j--)
@@ -108,9 +109,9 @@ function insert_array_before(array1, array2, target) {
 		}
 	}
 	merge_array(array1, array2);
-}
+};
 
-function insert_array_after(array1, array2, target) {
+insert_array_after = function(array1, array2, target) {
 	for (let i = 0; i < length(array1); i++) {
 		if (array1[i] == target) {
 			for (let j = 0; j < length(array2); j++)
@@ -119,24 +120,24 @@ function insert_array_after(array1, array2, target) {
 		}
 	}
 	merge_array(array1, array2);
-}
+};
 
-function tail_after_colon(line) {
+tail_after_colon = function(line) {
 	let m = match(line, /:([^:]+)$/);
 	if (m == null)
 		return null;
 	return m[1];
-}
+};
 
-function geosite_file() {
+geosite_file = function() {
 	let geosite_path = api.uci_get_c("@global_rules[0]", "v2ray_location_asset");
 	if (geosite_path == null || geosite_path === false)
 		geosite_path = "/usr/share/v2ray/";
 	let m = match(geosite_path, /^(.*)\//);
 	return (m != null ? m[1] : geosite_path) + "/geosite.dat";
-}
+};
 
-function get_geosite(list_arg, out_path) {
+get_geosite = function(list_arg, out_path) {
 	let geosite_path = geosite_file();
 	if (!is_file_nonzero(geosite_path))
 		return [1, "File geosite.dat not found"];
@@ -148,25 +149,25 @@ function get_geosite(list_arg, out_path) {
 	let cmd = sprintf("%s -type geosite -append=true -input %s -list %s -output %s -lowmem=true",
 		lua_quote(bin), lua_quote(geosite_path), lua_quote(list_arg), lua_quote(out_path));
 	return exec_pair(cmd);
-}
+};
 
-function write_lines(path, lines) {
+write_lines = function(path, lines) {
 	let data = "";
 	for (let line in lines)
 		data += line + "\n";
 	api.fs.writefile(path, data);
-}
+};
 
-function ucfirst(s) {
+ucfirst = function(s) {
 	if (type(s) != "string" || s == "")
 		return s;
 	let first = substr(s, 0, 1);
 	if (match(first, /^[a-z]/) == null)
 		return s;
 	return uc(first) + substr(s, 1);
-}
+};
 
-function make_server_param(endpoint) {
+make_server_param = function(endpoint) {
 	let dns = api.split(api.trim(endpoint), ",");
 	if (type(dns) != "array")
 		dns = [];
@@ -193,10 +194,10 @@ function make_server_param(endpoint) {
 	if (dns[1] != null && dns[1] != "")
 		server_param = server_param + " -host-ip " + replace(api.trim(dns[1]), /^\[(.*)\]$/, "$1");
 	return server_param;
-}
+};
 
 // argv is -FLAG value pairs, same as lua arg after the script name. Parsed by api.get_args.
-export function main(argv) {
+main = function(argv) {
 	let vmap = api.get_args(argv ?? []);
 	let FLAG = vmap["-FLAG"];
 	let DIRECT_DNS = vmap["-DIRECT_DNS"];
@@ -258,7 +259,7 @@ export function main(argv) {
 
 	api.sys.call(sprintf("mkdir -p %s", FLAG_PATH));
 	api.sys.call(sprintf("mkdir -p %s", CACHE_RULES_PATH));
-	api.sys.call("mkdir -p " + api.util.shellquote(SMARTDNS_DATA_PATH));
+	api.sys.call("mkdir -p " + api.shellquote(SMARTDNS_DATA_PATH));
 
 	let LOG_LEVELS = { off: true, fatal: true, error: true, warn: true, notice: true, info: true, debug: true };
 	if (!LOG_LEVELS[LOG_LEVEL])
@@ -277,7 +278,7 @@ export function main(argv) {
 	let ENABLE_UI = UI && api.fs.access(UI_PLUGIN);
 	let data_dir = ENABLE_UI ? UI_DATA_DIR : SMARTDNS_DATA_PATH;
 	if (data_dir != SMARTDNS_DATA_PATH)
-		api.sys.call("mkdir -p " + api.util.shellquote(data_dir));
+		api.sys.call("mkdir -p " + api.shellquote(data_dir));
 
 	let DIRECT_SERVERS = [];
 	let direct_src = (DIRECT_DNS == null || DIRECT_DNS === false) ? "" : DIRECT_DNS;
@@ -818,4 +819,5 @@ export function main(argv) {
 		log("  - DNS 重定向直接使用 SmartDNS，DHCP 租约由 SmartDNS 自动加载。");
 	else
 		log("  - SmartDNS已作为Dnsmasq上游，如果你自行配置了错误的DNS流程，将会导致域名(直连/代理)分流失效！！！");
-}
+};
+export { main };

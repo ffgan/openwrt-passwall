@@ -6,6 +6,7 @@ import { readfile, writefile, stat, unlink, mkdir, lsdir, popen, error, open, ac
 import { cursor } from 'uci';
 import { md5 } from 'digest';
 import * as com from 'passwall.com';
+let isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
 
 export let appname = "passwall";
 export let c_config = "passwall";
@@ -29,48 +30,48 @@ let normal_nodes = [];
 let bin_cache = {};
 let ffi_gid_ok = null;
 
-function isset(v) {
+isset = function(v) {
 	// ucode == coerces, so "0", "" and NUL strings compare equal to false.
 	return v !== null && v !== false;
-}
+};
 
 // Lua `or`: only nil and false fall through. "" and 0 do not.
-function ifnil(v, d) {
+ifnil = function(v, d) {
 	if (v === null || v === false)
 		return d;
 	return v;
-}
+};
 
-function translate(msg) {
+translate = function(msg) {
 	if (!isset(msg))
 		return "";
 	return "" + msg;
-}
+};
 
-function translatef(fmt, ...args) {
+translatef = function(fmt, ...args) {
 	fmt = translate(fmt);
 	if (length(args) == 0)
 		return fmt;
 	return sprintf(fmt, ...args);
-}
+};
 
-function as_str(v) {
+as_str = function(v) {
 	if (type(v) == "string")
 		return v;
 	if (type(v) == "int" || type(v) == "double")
 		return "" + v;
 	return null;
-}
+};
 
-function comp(name) {
+comp = function(name) {
 	if (com.index != null && com.index[name] != null)
 		return com.index[name];
 	if (com[name] != null)
 		return com[name];
 	return null;
-}
+};
 
-function read_all(p) {
+read_all = function(p) {
 	let out = "";
 	if (p == null)
 		return out;
@@ -80,9 +81,9 @@ function read_all(p) {
 		chunk = p.read(4096);
 	}
 	return out;
-}
+};
 
-function rand_int(a, b) {
+rand_int = function(a, b) {
 	if (b == null) {
 		b = a;
 		a = 0;
@@ -111,17 +112,17 @@ function rand_int(a, b) {
 	if (n == null)
 		n = time();
 	return a + (n % span);
-}
+};
 
-export function shellquote(s) {
+shellquote = function(s) {
 	if (s === null || s === false)
 		s = "";
 	else
 		s = "" + s;
 	return "'" + replace(s, "'", "'\\''") + "'";
-}
+};
 
-export function trim(s) {
+trim = function(s) {
 	if (type(s) != "string")
 		return "";
 	let i = 0;
@@ -133,10 +134,27 @@ export function trim(s) {
 	if (i > j)
 		return "";
 	return substr(s, i, j - i + 1);
-}
+};
+
+// ucode index() does not take a start offset. Search from `off` by slicing.
+index_from = function(s, needle, off) {
+	if (type(s) != "string") {
+		if (s == null)
+			return -1;
+		s = "" + s;
+	}
+	if (off == null || off <= 0)
+		return index(s, needle);
+	if (off >= length(s))
+		return -1;
+	let n = index(substr(s, off), needle);
+	if (n < 0)
+		return -1;
+	return n + off;
+};
 
 // Literal split. Drops a trailing empty field, keeps empty fields in the middle, strips NUL.
-export function split(full, sep) {
+split = function(full, sep) {
 	if (!isset(full))
 		return [];
 	if (type(full) != "string")
@@ -158,7 +176,7 @@ export function split(full, sep) {
 	let off = 0;
 	let seplen = length(sep);
 	while (true) {
-		let nstart = index(full, sep, off);
+		let nstart = index_from(full, sep, off);
 		if (nstart < 0) {
 			let res = substr(full, off);
 			if (length(res) > 0)
@@ -169,9 +187,9 @@ export function split(full, sep) {
 		off = nstart + seplen;
 	}
 	return result;
-}
+};
 
-function sys_call(cmd) {
+sys_call = function(cmd) {
 	let p = popen(cmd, "r");
 	if (p == null)
 		return 127;
@@ -180,9 +198,9 @@ function sys_call(cmd) {
 	if (rc == null)
 		return 127;
 	return rc;
-}
+};
 
-function sys_exec(cmd) {
+sys_exec = function(cmd) {
 	let p = popen(cmd, "r");
 	if (p == null)
 		return "";
@@ -191,14 +209,14 @@ function sys_exec(cmd) {
 	if (out == null)
 		return "";
 	return out;
-}
+};
 
 export const sys = {
 	call: sys_call,
 	exec: sys_exec
 };
 
-function nixio_type(t) {
+nixio_type = function(t) {
 	if (t == "file")
 		return "reg";
 	if (t == "directory")
@@ -214,9 +232,9 @@ function nixio_type(t) {
 	if (t == "block")
 		return "blk";
 	return t;
-}
+};
 
-function fs_stat(path, field) {
+fs_stat = function(path, field) {
 	if (type(path) != "string" || path == "")
 		return null;
 	let st = stat(path);
@@ -256,9 +274,9 @@ function fs_stat(path, field) {
 		perm: st.perm,
 		type: kind
 	};
-}
+};
 
-function perm_has(st, owner, group, other) {
+perm_has = function(st, owner, group, other) {
 	if (st == null || st.perm == null)
 		return false;
 	let rows = [
@@ -275,9 +293,9 @@ function perm_has(st, owner, group, other) {
 		}
 	}
 	return true;
-}
+};
 
-function fs_access(path, ...modes) {
+fs_access = function(path, ...modes) {
 	if (type(path) != "string" || path == "")
 		return false;
 	if (length(modes) >= 3 && type(modes[0]) == "string") {
@@ -288,9 +306,9 @@ function fs_access(path, ...modes) {
 	if (length(modes) > 0 && type(modes[0]) == "string" && modes[0] != "")
 		mode = modes[0];
 	return access(path, mode) == true;
-}
+};
 
-function mkdir_p(path) {
+mkdir_p = function(path) {
 	if (path == null || path == "" || path == "/")
 		return true;
 	if (stat(path) != null)
@@ -299,9 +317,9 @@ function mkdir_p(path) {
 	if (mkdir(path) == true)
 		return true;
 	return stat(path) != null;
-}
+};
 
-function fs_dir(path) {
+fs_dir = function(path) {
 	let names = lsdir(path);
 	if (names == null)
 		return [];
@@ -311,7 +329,7 @@ function fs_dir(path) {
 			push(out, name);
 	}
 	return out;
-}
+};
 
 export const fs = {
 	readfile: function(path) { return readfile(path); },
@@ -328,25 +346,43 @@ export const fs = {
 	dirname: function(path) { return dirname(path); }
 };
 
-function attach_section(cur) {
-	if (cur == null || cur.section != null)
-		return cur;
-	cur.section = function(config, stype, name) {
-		let self = this;
-		if (self == null || self.set == null)
-			self = uci;
-		if (isset(name) && ("" + name) != "") {
-			self.set(config, name, stype);
-			return name;
-		}
-		return self.add(config, stype);
+// ucode's uci cursor is a resource. Properties cannot be added to it, and a
+// method copied off the resource loses its receiver, so calls go through cur[name].
+wrap_uci = function(cur) {
+	let call = function(name) {
+		return function(...args) {
+			return cur[name](...args);
+		};
 	};
-	return cur;
-}
+	return {
+		get: call("get"),
+		get_all: call("get_all"),
+		set: call("set"),
+		add: call("add"),
+		delete: call("delete"),
+		foreach: call("foreach"),
+		revert: call("revert"),
+		commit: call("commit"),
+		save: call("save"),
+		add_list: call("add_list"),
+		del_list: call("del_list"),
+		rename: call("rename"),
+		reorder: call("reorder"),
+		changes: call("changes"),
+		unload: call("unload"),
+		section: function(config, stype, name) {
+			if (isset(name) && ("" + name) != "") {
+				cur.set(config, name, stype);
+				return name;
+			}
+			return cur.add(config, stype);
+		}
+	};
+};
 
-export let uci = attach_section(cursor());
+export let uci = wrap_uci(cursor());
 
-export function log(...args) {
+log = function(...args) {
 	let t = localtime();
 	let parts = [];
 	for (let a in args) {
@@ -361,17 +397,17 @@ export function log(...args) {
 		fh.write(line + "\n");
 		fh.close();
 	}
-}
+};
 
 // ucode's uci cursor matches current LuCI: commit goes through the uci CLI.
 // The old Lua cursor's save()/commit() split is not used.
-export function is_old_uci() {
+is_old_uci = function() {
 	return false;
-}
+};
 
 // libuci extended names such as @global[0]. Resolved here so every caller
 // hits a real section id.
-function resolve_sid(config, section) {
+resolve_sid = function(config, section) {
 	if (type(section) != "string")
 		return section;
 	let m = match(section, /^@([A-Za-z0-9_]+)\[(-?[0-9]+)\]$/);
@@ -387,18 +423,18 @@ function resolve_sid(config, section) {
 	if (idx < 0 || idx >= length(found))
 		return null;
 	return found[idx];
-}
+};
 
-export function uci_del(config, section, option) {
+uci_del = function(config, section, option) {
 	section = resolve_sid(config, section);
 	if (section == null)
 		return null;
 	if (isset(option))
 		return uci.delete(config, section, option);
 	return uci.delete(config, section);
-}
+};
 
-export function uci_get(config, section, option) {
+uci_get = function(config, section, option) {
 	if (!isset(section))
 		return uci.get_all(config);
 	section = resolve_sid(config, section);
@@ -407,9 +443,9 @@ export function uci_get(config, section, option) {
 	if (isset(option))
 		return uci.get(config, section, option);
 	return uci.get_all(config, section);
-}
+};
 
-export function uci_set(config, section, option, value) {
+uci_set = function(config, section, option, value) {
 	section = resolve_sid(config, section);
 	if (section == null)
 		return null;
@@ -434,53 +470,53 @@ export function uci_set(config, section, option, value) {
 		return uci.set(config, section, value);
 	}
 	return uci_del(config, section, option);
-}
+};
 
-export function uci_del_c(section, option) {
+uci_del_c = function(section, option) {
 	return uci_del(c_config, section, option);
-}
+};
 
-export function uci_foreach_c(stype, func) {
+uci_foreach_c = function(stype, func) {
 	return uci.foreach(c_config, stype, func);
-}
+};
 
-export function uci_get_c(section, option) {
+uci_get_c = function(section, option) {
 	return uci_get(c_config, section, option);
-}
+};
 
-export function uci_set_c(section, option, value) {
+uci_set_c = function(section, option, value) {
 	return uci_set(c_config, section, option, value);
-}
+};
 
-export function uci_save_c(commit_flag, apply) {
+uci_save_c = function(commit_flag, apply) {
 	return uci_save(uci, c_config, commit_flag, apply);
-}
+};
 
-export function uci_del_s(section, option) {
+uci_del_s = function(section, option) {
 	return uci_del(s_config, section, option);
-}
+};
 
-export function uci_foreach_s(stype, func) {
+uci_foreach_s = function(stype, func) {
 	return uci.foreach(s_config, stype, func);
-}
+};
 
-export function uci_get_s(section, option) {
+uci_get_s = function(section, option) {
 	return uci_get(s_config, section, option);
-}
+};
 
-export function uci_set_s(section, option, value) {
+uci_set_s = function(section, option, value) {
 	return uci_set(s_config, section, option, value);
-}
+};
 
-export function uci_save_s(commit_flag, apply) {
+uci_save_s = function(commit_flag, apply) {
 	return uci_save(uci, s_config, commit_flag, apply);
-}
+};
 
-export function sh_uci_commit(config) {
+sh_uci_commit = function(config) {
 	exec_call(sprintf("uci -q commit %s", config));
-}
+};
 
-export function uci_save(cur, config, commit_flag, apply) {
+uci_save = function(cur, config, commit_flag, apply) {
 	if (!isset(cur))
 		cur = uci;
 	if (is_old_uci()) {
@@ -495,49 +531,49 @@ export function uci_save(cur, config, commit_flag, apply) {
 	} else {
 		sh_uci_commit(config);
 	}
-}
+};
 
-export function sh_uci_get(config, section, option) {
+sh_uci_get = function(config, section, option) {
 	let res = exec_call(sprintf("uci -q get %s.%s.%s", config, section, option));
 	return res[1];
-}
+};
 
-export function sh_uci_set(config, section, option, val, commit_flag) {
+sh_uci_set = function(config, section, option, val, commit_flag) {
 	exec_call(sprintf("uci -q set %s.%s.%s=\"%s\"", config, section, option, val));
 	if (commit_flag)
 		sh_uci_commit(config);
-}
+};
 
-export function sh_uci_del(config, section, option, commit_flag) {
+sh_uci_del = function(config, section, option, commit_flag) {
 	exec_call(sprintf("uci -q delete %s.%s.%s", config, section, option));
 	if (commit_flag)
 		sh_uci_commit(config);
-}
+};
 
-export function sh_uci_add_list(config, section, option, val, commit_flag) {
+sh_uci_add_list = function(config, section, option, val, commit_flag) {
 	exec_call(sprintf("uci -q del_list %s.%s.%s=\"%s\"", config, section, option, val));
 	exec_call(sprintf("uci -q add_list %s.%s.%s=\"%s\"", config, section, option, val));
 	if (commit_flag)
 		sh_uci_commit(config);
-}
+};
 
 // Lua sourced passwall2 here; the shell helpers live in passwall.
-export function del_cache_var(key) {
+del_cache_var = function(key) {
 	sys_call(". /usr/share/passwall/utils.sh ; del_cache_var " + shellquote("" + key));
-}
+};
 
-export function set_cache_var(key, val) {
+set_cache_var = function(key, val) {
 	sys_call(". /usr/share/passwall/utils.sh ; set_cache_var " + shellquote("" + key) + " " + shellquote("" + val));
-}
+};
 
-export function get_cache_var(key) {
+get_cache_var = function(key) {
 	let val = sys_exec(". /usr/share/passwall/utils.sh ; echo -n $(get_cache_var " + shellquote("" + key) + ")");
 	if (val == null || val == "")
 		return null;
 	return val;
-}
+};
 
-export function get_new_port(start_port, protocol) {
+get_new_port = function(start_port, protocol) {
 	if (!isset(start_port) || match(trim("" + start_port), /^-?[0-9]+$/) == null)
 		start_port = "auto";
 	else
@@ -549,9 +585,9 @@ export function get_new_port(start_port, protocol) {
 	if (n != n)
 		return null;
 	return n;
-}
+};
 
-export function exec_call(cmd) {
+exec_call = function(cmd) {
 	let tag = "\x01__RC__" + rand_int(100000, 999999) + "\x01";
 	let wrapped = "(" + cmd + ") 2>&1; printf '\n" + tag + "%d' \"$?\"";
 	let p = popen(wrapped, "r");
@@ -567,9 +603,9 @@ export function exec_call(cmd) {
 	let strip_re = regexp("\n?" + tag + "[0-9]+[[:space:]]*$");
 	out = replace(out, strip_re, "");
 	return [rc, trim(out)];
-}
+};
 
-function has_bin(name) {
+has_bin = function(name) {
 	if (bin_cache[name] != null)
 		return bin_cache[name];
 	let p = popen("command -v " + shellquote(name) + " >/dev/null 2>&1", "r");
@@ -581,9 +617,9 @@ function has_bin(name) {
 	let ok = p.close() == 0;
 	bin_cache[name] = ok;
 	return ok;
-}
+};
 
-function ffi_can_setgid() {
+ffi_can_setgid = function() {
 	if (ffi_gid_ok != null)
 		return ffi_gid_ok;
 	ffi_gid_ok = false;
@@ -603,9 +639,9 @@ function ffi_can_setgid() {
 		ffi_gid_ok = false;
 	}
 	return ffi_gid_ok;
-}
+};
 
-export function exec_call_as_gid(cmd, gid) {
+exec_call_as_gid = function(cmd, gid) {
 	let g = int(gid);
 	if (g != g)
 		return [255, "invalid gid"];
@@ -634,9 +670,9 @@ export function exec_call_as_gid(cmd, gid) {
 	}
 	// No setgid helper on this system. The command still runs, without DIRECT_GID.
 	return exec_call(cmd);
-}
+};
 
-function strip_controls(s) {
+strip_controls = function(s) {
 	let out = "";
 	for (let i = 0; i < length(s); i++) {
 		let c = ord(s, i);
@@ -645,9 +681,9 @@ function strip_controls(s) {
 			out += substr(s, i, 1);
 	}
 	return out;
-}
+};
 
-function strip_nul(s) {
+strip_nul = function(s) {
 	if (type(s) != "string" || index(s, "\0") < 0)
 		return s ?? "";
 	let out = "";
@@ -656,9 +692,9 @@ function strip_nul(s) {
 			out += substr(s, i, 1);
 	}
 	return out;
-}
+};
 
-export function base64Decode(text) {
+base64Decode = function(text) {
 	if (type(text) != "string")
 		return "";
 	let encoded = strip_controls(text);
@@ -686,34 +722,34 @@ export function base64Decode(text) {
 	if (reencoded != encoded)
 		return text;
 	return strip_nul(result);
-}
+};
 
-export function base64Encode(text) {
+base64Encode = function(text) {
 	if (text === null || text === false)
 		return null;
 	if (type(text) != "string")
 		text = "" + text;
 	return b64enc(text);
-}
+};
 
-export function UrlEncode(szText) {
+UrlEncode = function(szText) {
 	if (type(szText) != "string")
 		return "";
 	return replace(szText, /[^A-Za-z0-9_.~-]/g, function(ch) {
 		return sprintf("%%%02X", ord(ch));
 	});
-}
+};
 
-export function UrlDecode(szText) {
+UrlDecode = function(szText) {
 	if (type(szText) != "string")
 		return "";
 	let s = replace(szText, /\+/g, " ");
 	return replace(s, /%([0-9A-Fa-f][0-9A-Fa-f])/g, function(all, h) {
 		return chr(hex(h));
 	});
-}
+};
 
-export function md5_file(path) {
+md5_file = function(path) {
 	if (type(path) != "string")
 		return "";
 	try {
@@ -728,9 +764,9 @@ export function md5_file(path) {
 	if (out == null || out == "")
 		return "";
 	return substr(out, 0, 32);
-}
+};
 
-export function md5_string(str) {
+md5_string = function(str) {
 	if (type(str) != "string")
 		return "";
 	if (type(md5) == "function") {
@@ -745,9 +781,9 @@ export function md5_string(str) {
 	let out = (n == length(str)) ? md5_file(path) : "";
 	unlink(path);
 	return out;
-}
+};
 
-function ip4addr(val) {
+ip4addr = function(val) {
 	let s = as_str(val);
 	if (s == null)
 		return false;
@@ -762,9 +798,9 @@ function ip4addr(val) {
 			return false;
 	}
 	return true;
-}
+};
 
-function ip6_side(s, out) {
+ip6_side = function(s, out) {
 	if (s == "")
 		return true;
 	let i = 0;
@@ -795,9 +831,9 @@ function ip6_side(s, out) {
 			return false;
 	}
 	return true;
-}
+};
 
-function ip6addr(val) {
+ip6addr = function(val) {
 	let s = as_str(val);
 	if (s == null || s == "")
 		return false;
@@ -807,7 +843,7 @@ function ip6addr(val) {
 	if (s == "")
 		return false;
 	let dbl = index(s, "::");
-	if (dbl >= 0 && index(s, "::", dbl + 2) >= 0)
+	if (dbl >= 0 && index_from(s, "::", dbl + 2) >= 0)
 		return false;
 	let left = dbl < 0 ? s : substr(s, 0, dbl);
 	let right = dbl < 0 ? "" : substr(s, dbl + 2);
@@ -819,13 +855,13 @@ function ip6addr(val) {
 	if (dbl < 0)
 		return count == 8;
 	return count < 8;
-}
+};
 
-function ipaddr(val) {
+ipaddr = function(val) {
 	return ip4addr(val) || ip6addr(val);
-}
+};
 
-function dt_port(val) {
+dt_port = function(val) {
 	if (type(val) == "int")
 		return val >= 0 && val <= 65535;
 	if (type(val) == "double") {
@@ -848,9 +884,9 @@ function dt_port(val) {
 		return false;
 	let i = int(n);
 	return (n - i) == 0 && i >= 0 && i <= 65535;
-}
+};
 
-function mac_groups(val, sep) {
+mac_groups = function(val, sep) {
 	let parts = split(val, sep);
 	if (length(parts) != 6)
 		return false;
@@ -859,10 +895,10 @@ function mac_groups(val, sep) {
 			return false;
 	}
 	return true;
-}
+};
 
 // luci.ip.checkmac: six hex bytes, consistent ':' or '-'.
-function macaddr(val) {
+macaddr = function(val) {
 	if (type(val) != "string" || val == "")
 		return false;
 	let colon = index(val, ":") >= 0;
@@ -870,10 +906,10 @@ function macaddr(val) {
 	if (colon == dash)
 		return false;
 	return mac_groups(val, colon ? ":" : "-");
-}
+};
 
 // luci.cbi.datatypes.hostname (strict flag not applied).
-function hostname(val) {
+hostname = function(val) {
 	if (type(val) != "string")
 		return false;
 	if (length(val) == 0 || length(val) >= 254)
@@ -883,9 +919,9 @@ function hostname(val) {
 	if (match(val, /^[A-Za-z0-9_][A-Za-z0-9_%.-]*[A-Za-z0-9]$/) != null && match(val, /[^0-9.]/) != null)
 		return true;
 	return false;
-}
+};
 
-function ip4prefix(val) {
+ip4prefix = function(val) {
 	if (type(val) != "string")
 		return false;
 	let m = match(val, /^([^/]+)\/([0-9]+)$/);
@@ -893,9 +929,9 @@ function ip4prefix(val) {
 		return false;
 	let bits = int(m[2]);
 	return ip4addr(m[1]) && bits == bits && bits >= 0 && bits <= 32 && length(m[2]) < 3;
-}
+};
 
-function ip6prefix(val) {
+ip6prefix = function(val) {
 	if (type(val) != "string")
 		return false;
 	let m = match(val, /^([^/]+)\/([0-9]+)$/);
@@ -903,9 +939,9 @@ function ip6prefix(val) {
 		return false;
 	let bits = int(m[2]);
 	return ip6addr(m[1]) && bits == bits && bits >= 0 && bits <= 128 && length(m[2]) < 4;
-}
+};
 
-function ipmask4(val) {
+ipmask4 = function(val) {
 	if (ip4addr(val) || ip4prefix(val))
 		return true;
 	if (type(val) != "string")
@@ -914,31 +950,31 @@ function ipmask4(val) {
 	if (m == null)
 		return false;
 	return ip4addr(m[1]) && ip4addr(m[2]);
-}
+};
 
-function ipmask6(val) {
+ipmask6 = function(val) {
 	return ip6addr(val) || ip6prefix(val);
-}
+};
 
-function ip4addrport(val) {
+ip4addrport = function(val) {
 	if (type(val) != "string")
 		return false;
 	let m = match(val, /^([^:]+):([^:]+)$/);
 	if (m == null)
 		return false;
 	return ip4addr(m[1]) && dt_port(m[2]);
-}
+};
 
-function ip6addrport(val) {
+ip6addrport = function(val) {
 	if (type(val) != "string")
 		return false;
 	let m = match(val, /^\[([^]]+)\]:([^:]+)$/);
 	if (m == null)
 		return false;
 	return ip6addr(m[1]) && dt_port(m[2]);
-}
+};
 
-function ipaddrport(val) {
+ipaddrport = function(val) {
 	if (ip4addrport(val) || ip6addrport(val))
 		return true;
 	if (type(val) != "string")
@@ -947,13 +983,13 @@ function ipaddrport(val) {
 	if (m == null)
 		return false;
 	return hostname(m[1]) && dt_port(m[2]);
-}
+};
 
-function hostport(val) {
+hostport = function(val) {
 	return ipaddrport(val);
-}
+};
 
-function is_json(str) {
+is_json = function(str) {
 	if (str === null || str === false || type(str) != "string")
 		return false;
 	let v = null;
@@ -964,9 +1000,9 @@ function is_json(str) {
 	}
 	// Lua treats only nil/false as failure. JSON 0 and "" are valid.
 	return v !== null && v !== false;
-}
+};
 
-function is_timehhmm(str) {
+is_timehhmm = function(str) {
 	if (type(str) != "string")
 		return false;
 	let m = match(str, /^([0-9][0-9]?):([0-9][0-9])$/);
@@ -975,13 +1011,13 @@ function is_timehhmm(str) {
 	let hour = int(m[1]);
 	let minute = int(m[2]);
 	return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
-}
+};
 
-function is_uuid(str) {
+is_uuid = function(str) {
 	if (type(str) != "string")
 		return false;
 	return match(str, /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) != null;
-}
+};
 
 export const datatypes = {
 	ip4addr: ip4addr,
@@ -1032,7 +1068,7 @@ export const jsonc = {
 	}
 };
 
-export function get_domain_port_from_url(url) {
+get_domain_port_from_url = function(url) {
 	if (type(url) != "string")
 		return [null, null];
 	let m = match(url, /^(https?):\/\/([A-Za-z0-9._-]+):?([0-9]*)/);
@@ -1049,9 +1085,9 @@ export function get_domain_port_from_url(url) {
 	if (ipaddr(domain) || ip6addr(domain))
 		return [null, null];
 	return [domain, port_n];
-}
+};
 
-function parse_dns_server(dns) {
+parse_dns_server = function(dns) {
 	let address = null;
 	let port = null;
 	let m = match(dns, /^(.*)#([0-9]+)$/);
@@ -1081,9 +1117,9 @@ function parse_dns_server(dns) {
 	if (port == null)
 		port = "53";
 	return [address, port];
-}
+};
 
-export function resolve_domain(domain, dns) {
+resolve_domain = function(domain, dns) {
 	if (!isset(dns) || dns == "")
 		dns = get_cache_var("LOCAL_DNS");
 	if (!isset(dns) || dns == "")
@@ -1118,17 +1154,17 @@ export function resolve_domain(domain, dns) {
 			return [ips, null, 0];
 	}
 	return [null, last_result, last_rc];
-}
+};
 
-export function table_join(t, s) {
+table_join = function(t, s) {
 	if (s == null)
 		s = " ";
 	if (type(t) != "array")
 		return "";
 	return join(s, t) ?? "";
-}
+};
 
-export function curl_base(url, file, args, gid) {
+curl_base = function(url, file, args, gid) {
 	if (args == null)
 		args = [];
 	if (isset(file) && file != "")
@@ -1137,9 +1173,9 @@ export function curl_base(url, file, args, gid) {
 	if (isset(gid))
 		return exec_call_as_gid(cmd, gid);
 	return exec_call(cmd);
-}
+};
 
-export function curl_proxy(url, file, args) {
+curl_proxy = function(url, file, args) {
 	let socks_server = get_cache_var("GLOBAL_SOCKS_server");
 	if (isset(socks_server) && socks_server != "") {
 		if (args == null)
@@ -1149,9 +1185,9 @@ export function curl_proxy(url, file, args) {
 		return curl_base(url, file, tmp_args);
 	}
 	return [null, null];
-}
+};
 
-export function curl_direct(url, file, args) {
+curl_direct = function(url, file, args) {
 	if (get_cache_var("ENABLED_DEFAULT_ACL") != "1" && get_cache_var("ENABLED_ACLS") != "1")
 		return curl_base(url, file, args);
 	let tmp_args = clone(args ?? []);
@@ -1171,25 +1207,25 @@ export function curl_direct(url, file, args) {
 		push(tmp_args, "--resolve " + shellquote(domain + ":" + port + ":" + join(",", ips)));
 	}
 	return curl_base(url, file, tmp_args, DIRECT_GID);
-}
+};
 
-export function curl_logic(url, file, args) {
+curl_logic = function(url, file, args) {
 	let res = curl_proxy(url, file, args);
 	if (res[0] == null || res[0] != 0)
 		res = curl_direct(url, file, args);
 	return res;
-}
+};
 
-export function curl_auto(url, file, args) {
+curl_auto = function(url, file, args) {
 	let local_proxy = uci_get_c("@global[0]", "localhost_proxy");
 	if (!isset(local_proxy))
 		local_proxy = "1";
 	if (local_proxy == "1")
 		return curl_base(url, file, args);
 	return curl_logic(url, file, args);
-}
+};
 
-export function is_exist(arr, value) {
+is_exist = function(arr, value) {
 	if (type(arr) != "array")
 		return false;
 	for (let item in arr) {
@@ -1197,9 +1233,9 @@ export function is_exist(arr, value) {
 			return true;
 	}
 	return false;
-}
+};
 
-export function repeat_exist(arr, value) {
+repeat_exist = function(arr, value) {
 	if (type(value) != "string" || index(value, "-") < 0)
 		return false;
 	if (type(arr) != "array")
@@ -1210,16 +1246,16 @@ export function repeat_exist(arr, value) {
 			count++;
 	}
 	return count > 1;
-}
+};
 
-export function remove(...values) {
+remove = function(...values) {
 	for (let value in values) {
 		if (type(value) == "string" && length(value) > 0 && value != "/")
 			sys_call("rm -rf -- " + value);
 	}
-}
+};
 
-export function is_install(package_name) {
+is_install = function(package_name) {
 	if (type(package_name) == "string" && length(package_name) > 0) {
 		let file_path = "/usr/lib/opkg/info";
 		let file_ext = ".control";
@@ -1230,9 +1266,9 @@ export function is_install(package_name) {
 		return sys_call("[ -s \"" + file_path + "/" + package_name + file_ext + "\" ]") == 0;
 	}
 	return false;
-}
+};
 
-export function get_args(arg) {
+get_args = function(arg) {
 	let out = {};
 	if (type(arg) != "array")
 		return out;
@@ -1243,18 +1279,18 @@ export function get_args(arg) {
 			out[key] = v;
 	}
 	return out;
-}
+};
 
-export function get_function_args(arg) {
+get_function_args = function(arg) {
 	if (type(arg) != "array" || length(arg) <= 1)
 		return null;
 	let param = [];
 	for (let i = 1; i < length(arg); i++)
 		push(param, arg[i]);
 	return get_args(param);
-}
+};
 
-export function strToTable(str) {
+strToTable = function(str) {
 	if (str == null || type(str) != "string")
 		return {};
 	let body = trim(str);
@@ -1266,33 +1302,33 @@ export function strToTable(str) {
 			return v;
 	} catch (e) {}
 	return {};
-}
+};
 
-export function is_normal_node(e) {
+is_normal_node = function(e) {
 	if (e != null && e.type != null && e.protocol != null && (e.protocol == "_balancing" || e.protocol == "_shunt" || e.protocol == "_iface" || e.protocol == "_urltest"))
 		return false;
 	return true;
-}
+};
 
-export function is_special_node(e) {
+is_special_node = function(e) {
 	return is_normal_node(e) == false;
-}
+};
 
-export function is_ip(val) {
+is_ip = function(val) {
 	let s = lc(trim(as_str(val) ?? ""));
 	let m = match(s, /\[([^]]*)\]/);
 	let inner = m != null ? m[1] : s;
 	return ipaddr(inner) ? true : false;
-}
+};
 
-export function is_ipv6(val) {
+is_ipv6 = function(val) {
 	let s = lc(trim(as_str(val) ?? ""));
 	let m = match(s, /\[([^]]*)\]/);
 	let inner = m != null ? m[1] : s;
 	return ip6addr(inner) ? true : false;
-}
+};
 
-export function is_local_ip(ip) {
+is_local_ip = function(ip) {
 	ip = lc(trim(as_str(ip) ?? ""));
 	ip = replace(ip, /^[A-Za-z0-9]+:\/\//, "");
 	ip = replace(ip, /\/.*$/, "");
@@ -1318,18 +1354,18 @@ export function is_local_ip(ip) {
 	if (match(ip, /^fe[89ab]/) != null)
 		return true;
 	return false;
-}
+};
 
-export function is_ipv6addrport(val) {
+is_ipv6addrport = function(val) {
 	if (type(val) != "string")
 		return false;
 	let m = match(val, /^\[([^]]+)\]:([0-9]+)$/);
 	if (m == null)
 		return false;
 	return ip6addr(m[1]) && dt_port(m[2]);
-}
+};
 
-export function get_ipv6_only(val) {
+get_ipv6_only = function(val) {
 	if (type(val) != "string")
 		return "";
 	let m = match(val, /\[([^]]*)\]/);
@@ -1337,9 +1373,9 @@ export function get_ipv6_only(val) {
 	if (ip6addr(inner))
 		return inner;
 	return "";
-}
+};
 
-export function get_ipv6_full(val) {
+get_ipv6_full = function(val) {
 	if (!is_ipv6(val))
 		return "";
 	if (type(val) != "string")
@@ -1347,21 +1383,21 @@ export function get_ipv6_full(val) {
 	if (match(val, /\[.*\]/) == null)
 		return "[" + val + "]";
 	return val;
-}
+};
 
-export function get_ip_type(val) {
+get_ip_type = function(val) {
 	if (is_ipv6(val))
 		return "6";
 	if (ip4addr(val))
 		return "4";
 	return "";
-}
+};
 
-export function is_mac(val) {
+is_mac = function(val) {
 	return macaddr(val) ? true : false;
-}
+};
 
-export function ip_or_mac(val) {
+ip_or_mac = function(val) {
 	if (isset(val)) {
 		if (get_ip_type(val) == "4")
 			return "ip";
@@ -1369,27 +1405,27 @@ export function ip_or_mac(val) {
 			return "mac";
 	}
 	return "";
-}
+};
 
-export function iprange(val) {
+iprange = function(val) {
 	if (isset(val)) {
 		let m = match("" + val, /^([^/]+)-([^/]+)$/);
 		if (m != null && ip4addr(m[1]) && ip4addr(m[2]))
 			return true;
 	}
 	return false;
-}
+};
 
-export function get_domain_from_url(url) {
+get_domain_from_url = function(url) {
 	if (type(url) != "string")
 		return url;
 	let m = match(url, /\/\/([^/]+)/);
 	if (m != null)
 		return m[1];
 	return url;
-}
+};
 
-function core_protocol_name(protocol) {
+core_protocol_name = function(protocol) {
 	if (protocol == "vmess") return "VMess";
 	if (protocol == "vless") return "VLESS";
 	if (protocol == "shadowsocks") return "SS";
@@ -1403,19 +1439,19 @@ function core_protocol_name(protocol) {
 	if (m != null)
 		return uc(m[1]) + m[2];
 	return protocol;
-}
+};
 
-function is_special_protocol(protocol) {
+is_special_protocol = function(protocol) {
 	return protocol == "_balancing" || protocol == "_shunt" || protocol == "_iface" || protocol == "_urltest";
-}
+};
 
-function node_base_type(n) {
+node_base_type = function(n) {
 	if (n.type == "sing-box")
 		return "Sing-Box";
 	return n.type ?? "";
-}
+};
 
-export function get_valid_nodes() {
+get_valid_nodes = function() {
 	let show_node_info = uci_get_c("@global_other[0]", "show_node_info");
 	if (!isset(show_node_info))
 		show_node_info = "0";
@@ -1465,9 +1501,9 @@ export function get_valid_nodes() {
 	for (let i = 0; i < length(other_nodes); i++)
 		push(nodes, other_nodes[i]);
 	return nodes;
-}
+};
 
-export function get_node_list() {
+get_node_list = function() {
 	let node_list = {
 		socks_list: [],
 		normal_list: []
@@ -1506,9 +1542,9 @@ export function get_node_list() {
 		}
 	}
 	return node_list;
-}
+};
 
-export function get_node_remarks(n) {
+get_node_remarks = function(n) {
 	let remarks = "";
 	if (n != null) {
 		let type_name = node_base_type(n);
@@ -1523,9 +1559,9 @@ export function get_node_remarks(n) {
 		}
 	}
 	return remarks;
-}
+};
 
-export function get_full_node_remarks(n) {
+get_full_node_remarks = function(n) {
 	let remarks = get_node_remarks(n);
 	if (length(remarks) > 0 && n != null) {
 		let port = ifnil(n.port, ifnil(n.hysteria_hop, n.hysteria2_hop));
@@ -1535,9 +1571,9 @@ export function get_full_node_remarks(n) {
 		}
 	}
 	return remarks;
-}
+};
 
-export function get_random_normal_node(exclude_id) {
+get_random_normal_node = function(exclude_id) {
 	let lookup = {};
 	if (type(exclude_id) == "array") {
 		for (let v in exclude_id)
@@ -1554,31 +1590,31 @@ export function get_random_normal_node(exclude_id) {
 	if (length(normal) > 0)
 		return normal[rand_int(0, length(normal) - 1)];
 	return null;
-}
+};
 
-export function gen_uuid() {
+gen_uuid = function() {
 	return sys_exec("echo -n $(cat /proc/sys/kernel/random/uuid)");
-}
+};
 
-export function gen_random_char(len) {
+gen_random_char = function(len) {
 	if (!isset(len))
 		len = 8;
 	return sys_exec("echo -n $(head /dev/urandom | tr -dc A-Za-z0-9 | head -c " + len + ")");
-}
+};
 
-export function chmod_755(file) {
+chmod_755 = function(file) {
 	if (isset(file) && file != "") {
 		let st = stat(file);
 		if (!perm_has(st, "rwx", "rx", "rx"))
 			chmod(file, 0755);
 	}
-}
+};
 
-export function get_customed_path(e) {
+get_customed_path = function(e) {
 	return uci_get_c("@global_app[0]", e + "_file");
-}
+};
 
-export function get_app_path(app_name) {
+get_app_path = function(app_name) {
 	let c = comp(app_name);
 	if (c == null)
 		return null;
@@ -1588,9 +1624,9 @@ export function get_app_path(app_name) {
 	if (type(path) == "string" && length(path) > 0)
 		return path;
 	return def_path ?? null;
-}
+};
 
-export function get_bin_version_cache(file, cmd) {
+get_bin_version_cache = function(file, cmd) {
 	if (isset(file) && file != "" && fs_access(file)) {
 		chmod_755(file);
 		let st = stat(file);
@@ -1616,18 +1652,18 @@ export function get_bin_version_cache(file, cmd) {
 		}
 	}
 	return "";
-}
+};
 
-export function get_app_version(app_name, file) {
+get_app_version = function(app_name, file) {
 	if (file == null)
 		file = get_app_path(app_name);
 	let c = comp(app_name);
 	if (c == null || c.cmd_version == null)
 		return "";
 	return get_bin_version_cache(file, c.cmd_version);
-}
+};
 
-export function finded_com(e) {
+finded_com = function(e) {
 	let bin = get_app_path(e);
 	if (!isset(bin) || bin == "")
 		return null;
@@ -1635,21 +1671,21 @@ export function finded_com(e) {
 	if (s == null || s == "")
 		return null;
 	return s;
-}
+};
 
-export function finded(name) {
+finded = function(name) {
 	let bin = "" + name;
 	let s = sys_exec("echo -n $(type -t -p " + shellquote("/bin/" + bin) + " -p " + shellquote("/usr/bin/" + bin) + " " + shellquote(bin) + " | head -n1)");
 	if (s == null)
 		return "";
 	return s;
-}
+};
 
-export function is_finded(name) {
+is_finded = function(name) {
 	return finded(name) != "";
-}
+};
 
-export function clone(org) {
+clone = function(org) {
 	let kind = type(org);
 	if (kind == "array") {
 		let res = [];
@@ -1664,19 +1700,19 @@ export function clone(org) {
 		return res;
 	}
 	return org;
-}
+};
 
-function is_reg(path) {
+is_reg = function(path) {
 	return fs_stat(path, "type") == "reg";
-}
+};
 
-function is_dir(path) {
+is_dir = function(path) {
 	if (type(path) == "string" && length(path) > 1)
 		return fs_stat(path, "type") == "dir";
 	return false;
-}
+};
 
-function get_final_dir(path) {
+get_final_dir = function(path) {
 	if (is_dir(path))
 		return path;
 	if (path == null || path == "" || path == "/" || path == ".")
@@ -1685,9 +1721,9 @@ function get_final_dir(path) {
 	if (parent == path)
 		return "/";
 	return get_final_dir(parent);
-}
+};
 
-function get_free_space(dir) {
+get_free_space = function(dir) {
 	if (dir == null)
 		dir = "/";
 	if (sys_call("df -k " + shellquote(dir) + " >/dev/null 2>&1") != 0)
@@ -1697,9 +1733,9 @@ function get_free_space(dir) {
 	if (n != n)
 		return 0;
 	return n;
-}
+};
 
-function get_file_space(file) {
+get_file_space = function(file) {
 	if (file == null)
 		return 0;
 	if (!fs_access(file))
@@ -1709,9 +1745,9 @@ function get_file_space(file) {
 	if (n != n)
 		return 0;
 	return n;
-}
+};
 
-export function _unpack(t, i) {
+_unpack = function(t, i) {
 	if (type(t) != "array")
 		return null;
 	if (!isset(i))
@@ -1719,9 +1755,9 @@ export function _unpack(t, i) {
 	if (i < 0)
 		i = 0;
 	return slice(t, i);
-}
+};
 
-function exec_argv(cmd, args, writer, timeout_sec) {
+exec_argv = function(cmd, args, writer, timeout_sec) {
 	let argv = [cmd];
 	if (type(args) == "array") {
 		for (let a in args)
@@ -1748,9 +1784,9 @@ function exec_argv(cmd, args, writer, timeout_sec) {
 	if (rc == null)
 		return 255;
 	return rc;
-}
+};
 
-function version_part(value) {
+version_part = function(value) {
 	if (type(value) == "int")
 		return value;
 	if (type(value) == "double")
@@ -1763,9 +1799,9 @@ function version_part(value) {
 	if (rev != null)
 		return int(rev[1]);
 	return 0;
-}
+};
 
-export function compare_versions(ver1, comp_op, ver2) {
+compare_versions = function(ver1, comp_op, ver2) {
 	if (!isset(ver1))
 		ver1 = "";
 	if (!isset(ver2))
@@ -1794,9 +1830,9 @@ export function compare_versions(ver1, comp_op, ver2) {
 			return false;
 	}
 	return !(comp_op == "<" || comp_op == ">");
-}
+};
 
-function release_value(path, key) {
+release_value = function(path, key) {
 	if (!fs_access(path))
 		return null;
 	let text = readfile(path);
@@ -1818,9 +1854,9 @@ function release_value(path, key) {
 		}
 	}
 	return null;
-}
+};
 
-function auto_get_arch() {
+auto_get_arch = function() {
 	let arch = trim(sys_exec("uname -m"));
 	if (OPENWRT_ARCH == null && fs_access("/usr/lib/os-release")) {
 		OPENWRT_ARCH = release_value("/usr/lib/os-release", "OPENWRT_ARCH");
@@ -1852,9 +1888,9 @@ function auto_get_arch() {
 	if (arch == "aarch64" && OPENWRT_BOARD != null && match(OPENWRT_BOARD, /rockchip/) != null)
 		arch = "rockchip";
 	return trim(arch);
-}
+};
 
-export function parseURL(url_str) {
+parseURL = function(url_str) {
 	let res = {};
 	if (type(url_str) != "string")
 		return res;
@@ -1902,9 +1938,9 @@ export function parseURL(url_str) {
 	}
 	res.host = host_port;
 	return res;
-}
+};
 
-export function parseDoH(doh_str) {
+parseDoH = function(doh_str) {
 	doh_str = trim(as_str(doh_str) ?? "");
 	if (doh_str == "")
 		return null;
@@ -1924,7 +1960,7 @@ export function parseDoH(doh_str) {
 	if (isset(ip_part) && ip_part != "" && is_ip(ip_part))
 		res.hostip = ip_part;
 	return res;
-}
+};
 
 let default_file_tree = {
 	x86_64: "amd64",
@@ -1942,14 +1978,14 @@ let default_file_tree = {
 	riscv64: "riscv64"
 };
 
-function re_escape_char(ch) {
+re_escape_char = function(ch) {
 	if (index(".^$*+?()[]{}|\\", ch) >= 0)
 		return "\\" + ch;
 	return ch;
-}
+};
 
 // Asset names are matched with Lua patterns stored in com.uc (after sprintf).
-function lua_pattern_regexp(pat) {
+lua_pattern_regexp = function(pat) {
 	let out = "";
 	let i = 0;
 	let n = length(pat);
@@ -2005,9 +2041,9 @@ function lua_pattern_regexp(pat) {
 	} catch (e) {
 		return null;
 	}
-}
+};
 
-function get_api_json(url) {
+get_api_json = function(url) {
 	let gh_proxy = uci_get_c("@global_app[0]", "gh_proxy_url") ?? "";
 	let res;
 	if (gh_proxy != "") {
@@ -2022,9 +2058,9 @@ function get_api_json(url) {
 	if (parsed == null)
 		return {};
 	return parsed;
-}
+};
 
-function check_path(app_name) {
+check_path = function(app_name) {
 	let path = get_app_path(app_name) ?? "";
 	if (path == "") {
 		return {
@@ -2033,22 +2069,22 @@ function check_path(app_name) {
 		};
 	}
 	return { code: 0, app_path: path };
-}
+};
 
-function unwrap_release(value) {
+unwrap_release = function(value) {
 	if (type(value) == "array" && length(value) > 0)
 		return value[0];
 	return value;
-}
+};
 
-function strip_v_run(s) {
+strip_v_run = function(s) {
 	let m = match(s ?? "", /[^v]+/);
 	if (m == null)
 		return "";
 	return m[0];
-}
+};
 
-export function to_check(arch, app_name) {
+to_check = function(arch, app_name) {
 	let result = check_path(app_name);
 	if (result.code != 0)
 		return result;
@@ -2108,9 +2144,9 @@ export function to_check(arch, app_name) {
 		html_url: payload.html_url,
 		data: asset
 	};
-}
+};
 
-export function to_download(app_name, url, size, task_id, keep_files) {
+to_download = function(app_name, url, size, task_id, keep_files) {
 	let result = app_name == appname ? { code: 0 } : check_path(app_name);
 	if (result.code != 0)
 		return result;
@@ -2150,9 +2186,9 @@ export function to_download(app_name, url, size, task_id, keep_files) {
 	}
 	let c = comp(app_name);
 	return { code: 0, file: tmp_file, zip: c != null ? c.zipped : null };
-}
+};
 
-export function to_download_progress(app_name, task_id, total_size) {
+to_download_progress = function(app_name, task_id, total_size) {
 	if (comp(app_name) == null || type(task_id) != "string" || match(task_id, /^[A-Za-z0-9_-]+$/) == null)
 		return { code: 1, error: translate("Invalid download task.") };
 	total_size = int(total_size);
@@ -2174,9 +2210,9 @@ export function to_download_progress(app_name, task_id, total_size) {
 	if (total_size > 0)
 		ret.percent = min(99, int(downloaded * 100 / total_size));
 	return ret;
-}
+};
 
-export function to_extract(app_name, file, subfix) {
+to_extract = function(app_name, file, subfix) {
 	let result = check_path(app_name);
 	if (result.code != 0)
 		return result;
@@ -2227,9 +2263,9 @@ export function to_extract(app_name, file, subfix) {
 		return { code: 1 };
 	exec_argv("/bin/rm", ["-f", file], null, null);
 	return { code: 0, file: tmp_dir };
-}
+};
 
-export function to_move(app_name, file) {
+to_move = function(app_name, file) {
 	let result = check_path(app_name);
 	if (result.code != 0)
 		return result;
@@ -2280,9 +2316,9 @@ export function to_move(app_name, file) {
 		};
 	}
 	return { code: 0 };
-}
+};
 
-export function get_version() {
+get_version = function() {
 	let version_file = CACHE_PATH + "/passwall_version";
 	sys_call("mkdir -p " + CACHE_PATH);
 	let version = null;
@@ -2298,9 +2334,9 @@ export function get_version() {
 	}
 	version = trim(version ?? "");
 	return replace(version, /-r([0-9]+)$/, "-$1");
-}
+};
 
-export function to_check_self() {
+to_check_self = function() {
 	let c = comp(appname);
 	if (c == null || c.get_url == null)
 		return { code: 1, error: translate("Get remote version info failed.") };
@@ -2357,9 +2393,9 @@ export function to_check_self() {
 		data: main_pkg,
 		i18n: i18n_package
 	};
-}
+};
 
-export function to_install_self(id, force) {
+to_install_self = function(id, force) {
 	if (!isset(id) || match(id, /^[A-Za-z0-9_-]+$/) == null)
 		return { code: 1 };
 	let dir = "/tmp/" + appname + "_luci_update." + id;
@@ -2380,9 +2416,9 @@ export function to_install_self(id, force) {
 	writefile(status, '{"installing":true}');
 	sys_call("nohup " + script + " " + dir + " " + status + " " + manager + " " + (force == "1" ? "1" : "0") + " >/dev/null 2>&1 </dev/null &");
 	return { code: 0 };
-}
+};
 
-export function get_std_domain(domain) {
+get_std_domain = function(domain) {
 	domain = trim(as_str(domain) ?? "");
 	if (domain == "")
 		return "";
@@ -2438,9 +2474,9 @@ export function get_std_domain(domain) {
 		}
 	}
 	return domain;
-}
+};
 
-export function format_go_time(input, default_value) {
+format_go_time = function(input, default_value) {
 	if (isset(input))
 		input = trim(as_str(input) ?? "");
 	let N = 0;
@@ -2474,9 +2510,9 @@ export function format_go_time(input, default_value) {
 	if (s > 0 || result == "")
 		result = result + s + "s";
 	return result;
-}
+};
 
-function match_cond(str, cond) {
+match_cond = function(str, cond) {
 	if (cond == "")
 		return true;
 	if (substr(cond, 0, 1) == "!") {
@@ -2496,9 +2532,9 @@ function match_cond(str, cond) {
 		return length(str) >= length(k) && substr(str, -length(k)) == k;
 	}
 	return index(str, cond) >= 0;
-}
+};
 
-function split_nonempty(expr, sep) {
+split_nonempty = function(expr, sep) {
 	let t = [];
 	let parts = global.split(expr, sep);
 	if (parts == null)
@@ -2509,9 +2545,9 @@ function split_nonempty(expr, sep) {
 			push(t, part);
 	}
 	return t;
-}
+};
 
-export function match_node_rule(name, rule) {
+match_node_rule = function(name, rule) {
 	if (!isset(name))
 		return false;
 	name = "" + name;
@@ -2531,9 +2567,9 @@ export function match_node_rule(name, rule) {
 			return true;
 	}
 	return false;
-}
+};
 
-function match_tokens(str) {
+match_tokens = function(str) {
 	let found = match(str, /[^[:space:]]+/g);
 	if (found == null)
 		return [];
@@ -2545,9 +2581,9 @@ function match_tokens(str) {
 			push(out, item);
 	}
 	return out;
-}
+};
 
-export function get_batch_nodes(node) {
+get_batch_nodes = function(node) {
 	if (length(normal_nodes) == 0) {
 		let valid = get_valid_nodes();
 		for (let e in valid) {
@@ -2573,9 +2609,9 @@ export function get_batch_nodes(node) {
 		}
 	}
 	return nodes;
-}
+};
 
-export function get_socks_backup_nodes(id) {
+get_socks_backup_nodes = function(id) {
 	id = trim(as_str(id) ?? "");
 	if (id == "")
 		return "";
@@ -2604,9 +2640,9 @@ export function get_socks_backup_nodes(id) {
 		}
 	}
 	return join(" ", backup) ?? "";
-}
+};
 
-export function get_core(field, candidates) {
+get_core = function(field, candidates) {
 	if (type(candidates) != "array")
 		return null;
 	let v = uci_get_c("@global_subscribe[0]", field);
@@ -2621,9 +2657,9 @@ export function get_core(field, candidates) {
 			return c[1];
 	}
 	return null;
-}
+};
 
-export function cleanEmptyTables(t) {
+cleanEmptyTables = function(t) {
 	let kind = type(t);
 	if (kind != "array" && kind != "object")
 		return null;
@@ -2659,9 +2695,9 @@ export function cleanEmptyTables(t) {
 	if (left == null || length(left) == 0)
 		return null;
 	return t;
-}
+};
 
-export function fetch_cert_sha256(host, port, sni, timeout, http3) {
+fetch_cert_sha256 = function(host, port, sni, timeout, http3) {
 	if (host === null || host === false)
 		return "";
 	if (port === null || port === false || port === "")
@@ -2695,9 +2731,9 @@ export function fetch_cert_sha256(host, port, sni, timeout, http3) {
 	if (match(lc(fp), /^e3b0c44298fc1c149afbf4c8996fb924/) != null)
 		return "";
 	return uc(fp);
-}
+};
 
-export function sha256_xray_sb(str) {
+sha256_xray_sb = function(str) {
 	if (type(str) != "string")
 		return str;
 	let decoded = base64Decode(str);
@@ -2718,9 +2754,9 @@ export function sha256_xray_sb(str) {
 	if (enc == null)
 		return str;
 	return enc;
-}
+};
 
-export function sha256_sb_xray(str) {
+sha256_sb_xray = function(str) {
 	if (type(str) != "string")
 		return str;
 	let binary = base64Decode(str);
@@ -2735,9 +2771,9 @@ export function sha256_sb_xray(str) {
 	for (let i = 0; i < length(binary); i++)
 		out += sprintf("%02X", ord(binary, i));
 	return out;
-}
+};
 
-export function vps_domain_exclude(domain) {
+vps_domain_exclude = function(domain) {
 	domain = trim(as_str(domain) ?? "");
 	if (domain == "")
 		return true;
@@ -2768,9 +2804,9 @@ export function vps_domain_exclude(domain) {
 		domain = substr(domain, p + 1);
 	}
 	return false;
-}
+};
 
-export function parse_realm_uri(uri) {
+parse_realm_uri = function(uri) {
 	uri = trim(as_str(uri) ?? "");
 	if (uri == "")
 		return null;
@@ -2834,9 +2870,9 @@ export function parse_realm_uri(uri) {
 	}
 	realm.stun_servers = stun_servers;
 	return realm;
-}
+};
 
-export function get_network_devices() {
+get_network_devices = function() {
 	let sysnet = "/sys/class/net/";
 	let iface_to_dev = {};
 	let dev_to_ifaces = {};
@@ -2904,9 +2940,9 @@ export function get_network_devices() {
 		return 0;
 	});
 	return devices;
-}
+};
 
-export function table_remove_duplicates(t) {
+table_remove_duplicates = function(t) {
 	if (t == null || type(t) != "array" || length(t) == 0)
 		return null;
 	let seen = {};
@@ -2918,9 +2954,9 @@ export function table_remove_duplicates(t) {
 		}
 	}
 	return out;
-}
+};
 
-export function gen_wireguard_key() {
+gen_wireguard_key = function() {
 	if (sys_call("command -v wg >/dev/null") == 0) {
 		let private_key = sys_exec("echo -n $(wg genkey)");
 		let public_key = sys_exec("echo -n $(echo \"" + private_key + "\" | wg pubkey)");
@@ -2939,12 +2975,13 @@ export function gen_wireguard_key() {
 		return { private_key: s[0], public_key: s[1] };
 	}
 	return null;
-}
+};
 
-export function get_socks_port_by_cache(node_id) {
+get_socks_port_by_cache = function(node_id) {
 	return get_cache_var(sprintf("node_%s_socks_port", node_id));
-}
+};
 
-export function set_socks_port_to_cache(node_id, v) {
+set_socks_port_to_cache = function(node_id, v) {
 	set_cache_var(sprintf("node_%s_socks_port", node_id), v);
-}
+};
+export { shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };

@@ -1,18 +1,19 @@
 'use strict';
 
 import * as api from 'passwall.api';
+let ltruth, lor, gen_config, print_result, main;
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function lor(a, b) {
+lor = function(a, b) {
 	if (a == null || a === false)
 		return b;
 	return a;
-}
+};
 
-export function gen_config(var) {
+gen_config = function(var) {
 	let node_id = var["node"];
 	if (node_id == null || node_id === false) {
 		print("node 不能为空\n");
@@ -37,19 +38,19 @@ export function gen_config(var) {
 	};
 
 	return api.jsonc.stringify(config, 1);
-}
+};
 
-function print_result(result) {
+print_result = function(result) {
 	if (result == null)
 		print("nil\n");
 	else if (type(result) == "string")
 		print(result, "\n");
 	else
 		print(api.jsonc.stringify(result, 1), "\n");
-}
+};
 
 // argv[0] = gen_config; argv[1] = JSON object string.
-export function main(argv) {
+main = function(argv) {
 	if (argv == null || length(argv) < 1 || argv[0] == null || argv[0] === false)
 		return;
 	let func = null;
@@ -61,4 +62,5 @@ export function main(argv) {
 	if (length(argv) > 1 && argv[1] != null)
 		parsed = api.jsonc.parse(argv[1]);
 	print_result(func(parsed));
-}
+};
+export { gen_config, main };

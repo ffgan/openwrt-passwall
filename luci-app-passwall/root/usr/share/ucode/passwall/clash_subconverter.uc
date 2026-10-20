@@ -4,38 +4,39 @@
 // Replaces lyaml with a YAML subset parser sufficient for Clash `proxies:` documents.
 
 import * as api from 'passwall.api';
+let luaOr, enc, b64, jsonStringify, host_format, build_alpn, get_first, nonemptyObj, build_common, toNumber, pushParam, finishLink, encode_vless, encode_trojan, omitNulls, encode_vmess, encode_ss, encode_hysteria, encode_hysteria2, encode_tuic, encode_anytls, encode_ssr, encode_snell, encode_node, chAt, stripInlineComment, parsePlain, utf8chr, parseQuotedText, flowDepth, parseFlow, unquoteKey, splitKey, parseYaml, parseClashNode, format_size, parse_clash_sub_info;
 
 let domain_redir = {};
 
-function luaOr(a, b) {
+luaOr = function(a, b) {
 	if (a !== null && a !== false)
 		return a;
 	return b;
-}
+};
 
-function enc(v) {
+enc = function(v) {
 	if (v === null || v === false)
 		return api.UrlEncode("");
 	if (type(v) != "string")
 		v = "" + v;
 	return api.UrlEncode(v);
-}
+};
 
-function b64(v) {
+b64 = function(v) {
 	if (v === null || v === false)
 		return "";
 	if (type(v) != "string")
 		v = "" + v;
 	let out = api.base64Encode(v);
 	return out === null ? "" : out;
-}
+};
 
-function jsonStringify(v) {
+jsonStringify = function(v) {
 	let out = api.jsonc.stringify(v);
 	return out === null ? "" : out;
-}
+};
 
-function host_format(host) {
+host_format = function(host) {
 	if (host === null || host === false)
 		return "";
 	let str = host;
@@ -45,9 +46,9 @@ function host_format(host) {
 	if (api.datatypes.ip6addr(str))
 		return "[" + str + "]";
 	return "" + host;
-}
+};
 
-function build_alpn(alpn) {
+build_alpn = function(alpn) {
 	if (alpn === null || alpn === false)
 		return null;
 
@@ -71,19 +72,19 @@ function build_alpn(alpn) {
 	if (length(t) == 0)
 		return null;
 	return join(",", t);
-}
+};
 
-function get_first(v) {
+get_first = function(v) {
 	if (type(v) == "array")
 		return length(v) > 0 ? v[0] : null;
 	return v;
-}
+};
 
-function nonemptyObj(o) {
+nonemptyObj = function(o) {
 	return type(o) == "object" && length(o) > 0;
-}
+};
 
-function build_common(node) {
+build_common = function(node) {
 	let o = {};
 
 	o.server = host_format(node.server);
@@ -233,9 +234,9 @@ function build_common(node) {
 	}
 
 	return o;
-}
+};
 
-function toNumber(v) {
+toNumber = function(v) {
 	if (type(v) == "int" || type(v) == "double")
 		return v == v ? v : null;
 	if (type(v) != "string" || v == "")
@@ -244,24 +245,24 @@ function toNumber(v) {
 		return null;
 	let n = +v;
 	return n == n ? n : null;
-}
+};
 
-function pushParam(p, key, value, encode) {
+pushParam = function(p, key, value, encode) {
 	if (value === null || value === false)
 		return;
 	if (encode)
 		push(p, key + "=" + enc(value));
 	else
 		push(p, key + "=" + value);
-}
+};
 
-function finishLink(link, p, name) {
+finishLink = function(link, p, name) {
 	if (length(p) > 0)
 		link = link + "?" + join("&", p);
 	return link + "#" + enc(luaOr(name, ""));
-}
+};
 
-function encode_vless(node) {
+encode_vless = function(node) {
 	let o = build_common(node);
 	let link = "vless://" + node.uuid + "@" + o.server + ":" + o.port;
 	let p = [];
@@ -290,9 +291,9 @@ function encode_vless(node) {
 	pushParam(p, "extra", o.transport.extra, true);
 
 	return [0, finishLink(link, p, o.name)];
-}
+};
 
-function encode_trojan(node) {
+encode_trojan = function(node) {
 	let o = build_common(node);
 	let link = "trojan://" + node.password + "@" + o.server + ":" + o.port;
 	let p = [];
@@ -314,9 +315,9 @@ function encode_trojan(node) {
 	pushParam(p, "serviceName", o.transport.serviceName, true);
 
 	return [0, finishLink(link, p, o.name)];
-}
+};
 
-function omitNulls(obj) {
+omitNulls = function(obj) {
 	let ks = keys(obj);
 	if (ks === null)
 		return obj;
@@ -325,9 +326,9 @@ function omitNulls(obj) {
 			delete obj[k];
 	}
 	return obj;
-}
+};
 
-function encode_vmess(node) {
+encode_vmess = function(node) {
 	let o = build_common(node);
 	let obj = {
 		v: "2",
@@ -356,9 +357,9 @@ function encode_vmess(node) {
 		obj.path = luaOr(o.transport.serviceName, "");
 
 	return [0, "vmess://" + b64(jsonStringify(omitNulls(obj)))];
-}
+};
 
-function encode_ss(node) {
+encode_ss = function(node) {
 	let ss_method = {
 		"none": 1, "aes-128-gcm": 1, "aes-192-gcm": 1, "aes-256-gcm": 1,
 		"chacha20-ietf-poly1305": 1, "xchacha20-ietf-poly1305": 1,
@@ -424,11 +425,11 @@ function encode_ss(node) {
 	}
 
 	return [0, finishLink(link, p, node.name)];
-}
+};
 
 // The Lua source defined this encoder twice; the first body is Hysteria v1
 // and is what encode_node calls as encode_hysteria.
-function encode_hysteria(node) {
+encode_hysteria = function(node) {
 	let link = "hysteria://" + host_format(node.server) + ":" + luaOr(node.port, "");
 	let p = [];
 
@@ -445,9 +446,9 @@ function encode_hysteria(node) {
 		push(p, "alpn=" + enc(build_alpn(node.alpn)));
 
 	return [0, finishLink(link, p, node.name)];
-}
+};
 
-function encode_hysteria2(node) {
+encode_hysteria2 = function(node) {
 	let link = "hysteria2://" + luaOr(node.password, "") + "@" + host_format(node.server) + ":" + luaOr(node.port, "");
 	let p = [];
 
@@ -464,9 +465,9 @@ function encode_hysteria2(node) {
 	pushParam(p, "pinSHA256", node["fingerprint"], true);
 
 	return [0, finishLink(link, p, node.name)];
-}
+};
 
-function encode_tuic(node) {
+encode_tuic = function(node) {
 	let link = "tuic://" + node.uuid + ":" + node.password + "@" + host_format(node.server) + ":" + node.port;
 	let p = [];
 
@@ -484,9 +485,9 @@ function encode_tuic(node) {
 	pushParam(p, "pcs", node["fingerprint"], true);
 
 	return [0, finishLink(link, p, node.name)];
-}
+};
 
-function encode_anytls(node) {
+encode_anytls = function(node) {
 	let err_msg = null;
 	if (node["shadow-tls-opts"])
 		err_msg = "ShadowTLS";
@@ -513,9 +514,9 @@ function encode_anytls(node) {
 	push(p, "insecure=" + (o.tls.insecure ? "1" : "0"));
 
 	return [0, finishLink(link, p, node.name)];
-}
+};
 
-function encode_ssr(node) {
+encode_ssr = function(node) {
 	let link = host_format(node.server) + ":" + node.port + ":" + luaOr(node.protocol, "") + ":" +
 		luaOr(node.cipher, "") + ":" + luaOr(node.obfs, "") + ":" + b64(node.password);
 	let p = [];
@@ -529,9 +530,9 @@ function encode_ssr(node) {
 	if (length(p) > 0)
 		link = link + "?" + join("&", p);
 	return [0, "ssr://" + b64(link)];
-}
+};
 
-function encode_snell(node) {
+encode_snell = function(node) {
 	let err_msg = null;
 	let obfs = node["obfs-opts"];
 	if (obfs && obfs.mode != "http" && obfs.mode != "none")
@@ -561,9 +562,9 @@ function encode_snell(node) {
 	push(p, "reuse=" + (node.reuse ? "1" : "0"));
 
 	return [0, finishLink(link, p, node.name)];
-}
+};
 
-function encode_node(node) {
+encode_node = function(node) {
 	if (type(node) != "object" || node === null)
 		return null;
 	if ((node.type === null || node.type === false) || (node.name === null || node.name === false))
@@ -594,15 +595,15 @@ function encode_node(node) {
 		return encode_snell(node);
 	api.log("订阅转换 → 丢弃不支持的节点：" + node.name + "，节点类型：" + t);
 	return null;
-}
+};
 
 // --- YAML subset -----------------------------------------------------------
 
-function chAt(s, i) {
+chAt = function(s, i) {
 	return substr(s, i, 1);
-}
+};
 
-function stripInlineComment(s) {
+stripInlineComment = function(s) {
 	let q = null;
 	let esc = false;
 	let out = "";
@@ -637,9 +638,9 @@ function stripInlineComment(s) {
 		out = out + c;
 	}
 	return trim(out);
-}
+};
 
-function parsePlain(s) {
+parsePlain = function(s) {
 	if (s === null)
 		return null;
 	s = trim(s);
@@ -660,13 +661,13 @@ function parsePlain(s) {
 		return n == n ? n : s;
 	}
 	return s;
-}
+};
 
-function utf8chr(cp) {
+utf8chr = function(cp) {
 	return chr(cp);
-}
+};
 
-function parseQuotedText(s, allowTail) {
+parseQuotedText = function(s, allowTail) {
 	if (length(s) == 0)
 		die("yaml quote");
 	let q = chAt(s, 0);
@@ -745,9 +746,9 @@ function parseQuotedText(s, allowTail) {
 			die("yaml quote tail");
 	}
 	return out;
-}
+};
 
-function flowDepth(s) {
+flowDepth = function(s) {
 	let d = 0;
 	let q = null;
 	let esc = false;
@@ -778,14 +779,12 @@ function flowDepth(s) {
 			d--;
 	}
 	return d;
-}
+};
 
-function parseFlow(s) {
+parseFlow = function(s) {
 	let p = 0;
 
-	function parseFlowVal;
-	function parseFlowSeq;
-	function parseFlowMap;
+	let parseFlowVal, parseFlowSeq, parseFlowMap;
 
 	function skipWs() {
 		while (p < length(s)) {
@@ -796,7 +795,7 @@ function parseFlow(s) {
 		}
 	}
 
-	function parseFlowVal() {
+	parseFlowVal = function() {
 		skipWs();
 		let c = chAt(s, p);
 		if (c == "[")
@@ -846,9 +845,9 @@ function parseFlow(s) {
 			p++;
 		}
 		return parsePlain(substr(s, start, p - start));
-	}
+	};
 
-	function parseFlowSeq() {
+	parseFlowSeq = function() {
 		p++;
 		let arr = [];
 		skipWs();
@@ -875,9 +874,9 @@ function parseFlow(s) {
 			die("yaml flow seq");
 		}
 		return arr;
-	}
+	};
 
-	function parseFlowMap() {
+	parseFlowMap = function() {
 		p++;
 		let obj = {};
 		skipWs();
@@ -947,19 +946,19 @@ function parseFlow(s) {
 			die("yaml flow map");
 		}
 		return obj;
-	}
+	};
 
 	return parseFlowVal();
-}
+};
 
-function unquoteKey(key) {
+unquoteKey = function(key) {
 	key = trim(key);
 	if (length(key) >= 2 && (chAt(key, 0) == "\"" || chAt(key, 0) == "'"))
 		return parseQuotedText(key, false);
 	return key;
-}
+};
 
-function splitKey(text) {
+splitKey = function(text) {
 	let q = null;
 	let esc = false;
 	for (let k = 0; k < length(text); k++) {
@@ -997,9 +996,9 @@ function splitKey(text) {
 		}
 	}
 	return null;
-}
+};
 
-function parseYaml(src) {
+parseYaml = function(src) {
 	if (type(src) != "string")
 		die("yaml type");
 	if (substr(src, 0, 3) == "\xEF\xBB\xBF")
@@ -1011,14 +1010,7 @@ function parseYaml(src) {
 	let i = 0;
 	let anchors = {};
 
-	function parseBlock;
-	function parseMap;
-	function parseSeq;
-	function parseRest;
-	function parseBlockScalar;
-	function collectFlow;
-	function literalParts;
-	function foldParts;
+	let parseBlock, parseMap, parseSeq, parseRest, parseBlockScalar, collectFlow, literalParts, foldParts;
 
 	function indentOf(line) {
 		let k = 0;
@@ -1077,7 +1069,7 @@ function parseYaml(src) {
 		return val;
 	}
 
-	function collectFlow(first) {
+	collectFlow = function(first) {
 		let chunk = first;
 		while (flowDepth(chunk) > 0) {
 			if (i >= n)
@@ -1086,9 +1078,9 @@ function parseYaml(src) {
 			i++;
 		}
 		return chunk;
-	}
+	};
 
-	function parseBlockScalar(header, parentIndent) {
+	parseBlockScalar = function(header, parentIndent) {
 		let spec = trim(header);
 		let style = chAt(spec, 0);
 		spec = stripInlineComment(substr(spec, 1));
@@ -1142,9 +1134,9 @@ function parseYaml(src) {
 		if (style == ">")
 			return foldParts(parts, chomp);
 		return literalParts(parts, chomp);
-	}
+	};
 
-	function literalParts(parts, chomp) {
+	literalParts = function(parts, chomp) {
 		let s = join("\n", parts);
 		if (chomp == "strip")
 			return replace(s, /\n+$/, "");
@@ -1155,9 +1147,9 @@ function parseYaml(src) {
 		}
 		s = replace(s, /\n+$/, "");
 		return s == "" ? "" : s + "\n";
-	}
+	};
 
-	function foldParts(parts, chomp) {
+	foldParts = function(parts, chomp) {
 		let out = "";
 		let buf = [];
 		function flushBuf() {
@@ -1189,9 +1181,9 @@ function parseYaml(src) {
 		}
 		out = replace(out, /\n+$/, "");
 		return out == "" ? "" : out + "\n";
-	}
+	};
 
-	function parseRest(rest, parentIndent) {
+	parseRest = function(rest, parentIndent) {
 		rest = stripTag(rest);
 		rest = stripInlineComment(rest);
 		let anchorPair = takeAnchor(rest);
@@ -1223,9 +1215,9 @@ function parseYaml(src) {
 		if (head == "\"" || head == "'")
 			return remember(anchor, parseQuotedText(stripInlineComment(rest) == rest ? rest : rest, false));
 		return remember(anchor, parsePlain(stripInlineComment(rest)));
-	}
+	};
 
-	function parseMap(indent) {
+	parseMap = function(indent) {
 		let obj = {};
 		while (true) {
 			let p = peek();
@@ -1240,9 +1232,9 @@ function parseYaml(src) {
 			obj[kr[0]] = parseRest(kr[1], indent);
 		}
 		return obj;
-	}
+	};
 
-	function parseSeq(indent) {
+	parseSeq = function(indent) {
 		let arr = [];
 		while (true) {
 			let p = peek();
@@ -1277,9 +1269,9 @@ function parseYaml(src) {
 				push(arr, remember(anchor, parseRest(rest, indent)));
 		}
 		return arr;
-	}
+	};
 
-	function parseBlock(minIndent) {
+	parseBlock = function(minIndent) {
 		let p = peek();
 		if (p === null || p.indent < minIndent)
 			return null;
@@ -1289,13 +1281,13 @@ function parseYaml(src) {
 			return parseMap(p.indent);
 		i = p.index + 1;
 		return parseRest(p.text, p.indent);
-	}
+	};
 
 	let doc = parseBlock(0);
 	return doc;
-}
+};
 
-export function parseClashNode(raw, remark) {
+parseClashNode = function(raw, remark) {
 	if (raw === null || raw === false)
 		return "";
 
@@ -1336,9 +1328,9 @@ export function parseClashNode(raw, remark) {
 	}
 
 	return length(links) > 0 ? join("\n", links) : "";
-}
+};
 
-function format_size(bytes) {
+format_size = function(bytes) {
 	let units = ["B", "KB", "MB", "GB", "TB", "PB"];
 	let i = 0;
 	bytes = +bytes;
@@ -1351,9 +1343,9 @@ function format_size(bytes) {
 	if (bytes >= 10)
 		return sprintf("%.1f%s", bytes, units[i]);
 	return sprintf("%.2f%s", bytes, units[i]);
-}
+};
 
-export function parse_clash_sub_info(headers) {
+parse_clash_sub_info = function(headers) {
 	if (type(headers) != "string")
 		return null;
 	let m = match(headers, /[Ss]ubscription-userinfo:[ \t]*([^\r\n]+)/);
@@ -1395,4 +1387,5 @@ export function parse_clash_sub_info(headers) {
 		rem_traffic: format_size(remain),
 		expired_date: expired_date
 	};
-}
+};
+export { parseClashNode, parse_clash_sub_info };

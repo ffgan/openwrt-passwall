@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as api from 'passwall.api';
 import { parseClashNode, parse_clash_sub_info } from 'passwall.clash_subconverter';
+let luaOr, present, nonempty, luaNot, uci_get, uci_set, uci_del, uci_foreach, uci_save, str, log, flush_log_buffer, splitLit, at, last, parseQuery, slashQ, headTail, hostPort, cutHash, tlsAllow, asList, setFinalmask, normNet, setXhttpExtra, finishRemarks, singboxTransportBlocked, split_filter_keywords, prepare_keyword_filter, match_filter_keywords, is_filter_keyword, formatDate, get_subscribe_info, set_ss_implementation, applyWsHttp, fillCommonTransport, applySecurity, parseSSR, parseVmess, isURLEncodedPassword, parseShadowTLSParams, parseSS, parseTrojan, parseVless, parseHysteria, parseHysteria2, parseTuic, parseAnytls, parseNaive, parseSnell, processData, invokeCurl, splitCurlResult, passwallUaVersion, curl, groupAll, sameGroup, truncate_nodes, select_node, update_subscribe_info, listOf, new_node_id, update_node, blankLine, parse_link, nodeOrSocks, is_ip_port, build_config, init_state, execute, log_traceback, acquire_lock, release_lock, main;
 
 let cli = [];
 let restart_required = false;
@@ -29,57 +30,57 @@ let curl_http_code = null;
 let curl_header = null;
 let update_lock = null;
 
-function luaOr(a, b) {
+luaOr = function(a, b) {
 	if (a !== null && a !== false)
 		return a;
 	return b;
-}
+};
 
-function present(v) {
+present = function(v) {
 	return v !== null && v !== false;
-}
+};
 
-function nonempty(v) {
+nonempty = function(v) {
 	return v !== null && v !== false && v !== "";
-}
+};
 
-function luaNot(v) {
+luaNot = function(v) {
 	return v === null || v === false;
-}
+};
 
-function uci_get(section, option) {
+uci_get = function(section, option) {
 	return api.uci_get_c(section, option);
-}
+};
 
-function uci_set(section, option, value) {
+uci_set = function(section, option, value) {
 	if (type(value) == "int" || type(value) == "double")
 		value = "" + value;
 	else if (type(value) == "bool")
 		value = value ? "1" : "0";
 	return api.uci_set_c(section, option, value);
-}
+};
 
-function uci_del(section, option) {
+uci_del = function(section, option) {
 	return api.uci_del_c(section, option);
-}
+};
 
-function uci_foreach(stype, fn) {
+uci_foreach = function(stype, fn) {
 	return api.uci_foreach_c(stype, fn);
-}
+};
 
-function uci_save(commit, apply) {
+uci_save = function(commit, apply) {
 	return api.uci_save_c(commit, apply);
-}
+};
 
-function str(v) {
+str = function(v) {
 	if (v === null || v === false)
 		return "";
 	if (type(v) == "string")
 		return v;
 	return "" + v;
-}
+};
 
-function log(...args) {
+log = function(...args) {
 	let parts = [];
 	for (let a in args)
 		push(parts, str(a));
@@ -92,37 +93,37 @@ function log(...args) {
 	} else {
 		api.log(...args);
 	}
-}
+};
 
-function flush_log_buffer() {
+flush_log_buffer = function() {
 	let buffered = log_buffer;
 	log_buffer = null;
 	if (type(buffered) == "array") {
 		for (let msg in buffered)
 			log(msg);
 	}
-}
+};
 
-function splitLit(full, sep) {
+splitLit = function(full, sep) {
 	if (type(full) != "string")
 		return [];
 	let parts = api.split(full, sep);
 	return type(parts) == "array" ? parts : [];
-}
+};
 
-function at(arr, i) {
+at = function(arr, i) {
 	if (type(arr) != "array" || i < 0 || i >= length(arr))
 		return null;
 	return arr[i];
-}
+};
 
-function last(arr, back) {
+last = function(arr, back) {
 	if (type(arr) != "array" || length(arr) == 0)
 		return null;
 	return arr[length(arr) - 1 - back];
-}
+};
 
-function parseQuery(q, lowerKeys, decodeVal, decodeKey) {
+parseQuery = function(q, lowerKeys, decodeVal, decodeKey) {
 	let params = {};
 	if (type(q) != "string" || q === "")
 		return params;
@@ -143,20 +144,20 @@ function parseQuery(q, lowerKeys, decodeVal, decodeKey) {
 		}
 	}
 	return params;
-}
+};
 
-function slashQ(s) {
+slashQ = function(s) {
 	if (type(s) != "string")
 		return "";
 	return replace(s, /\/\?/g, "?");
-}
+};
 
-function headTail(s, sep) {
+headTail = function(s, sep) {
 	let parts = splitLit(s, sep);
 	return [at(parts, 0) ?? "", length(parts) > 1 ? at(parts, 1) : null];
-}
+};
 
-function hostPort(host_port, defaultPort) {
+hostPort = function(host_port, defaultPort) {
 	if (type(host_port) != "string")
 		die("bad host");
 	let address = host_port;
@@ -170,28 +171,28 @@ function hostPort(host_port, defaultPort) {
 			address = at(sp, 0);
 	}
 	return [address, port];
-}
+};
 
-function cutHash(content) {
+cutHash = function(content) {
 	let idx = index(content, "#");
 	if (idx < 0)
 		return [content, ""];
 	return [substr(content, 0, idx), api.UrlDecode(substr(content, idx + 1))];
-}
+};
 
-function tlsAllow(insecure, subAllow) {
+tlsAllow = function(insecure, subAllow) {
 	if (insecure === "1" || insecure === "0")
 		return insecure;
 	return subAllow ? "1" : "0";
-}
+};
 
-function asList(v) {
+asList = function(v) {
 	if (nonempty(v))
 		return [v];
 	return null;
-}
+};
 
-function setFinalmask(result, fm) {
+setFinalmask = function(result, fm) {
 	if (nonempty(fm)) {
 		result.use_finalmask = "1";
 		result.finalmask = api.base64Encode(fm);
@@ -199,18 +200,18 @@ function setFinalmask(result, fm) {
 		result.use_finalmask = null;
 		result.finalmask = null;
 	}
-}
+};
 
-function normNet(result, net) {
+normNet = function(result, net) {
 	net = lc(net);
 	if (result.type == "sing-box" && net == "raw")
 		return "tcp";
 	if (result.type == "Xray" && net == "tcp")
 		return "raw";
 	return net;
-}
+};
 
-function setXhttpExtra(result, extra) {
+setXhttpExtra = function(result, extra) {
 	result.use_xhttp_extra = nonempty(extra) ? "1" : null;
 	result.xhttp_extra = nonempty(extra) ? api.base64Encode(extra) : null;
 	if (!nonempty(extra))
@@ -230,9 +231,9 @@ function setXhttpExtra(result, extra) {
 		address = Data.downloadSettings.address;
 	if (nonempty(address))
 		result.download_address = replace(replace("" + address, /^\[/, ""), /\]$/, "");
-}
+};
 
-function finishRemarks(result) {
+finishRemarks = function(result) {
 	if (!present(result.remarks) || result.remarks === "") {
 		if (present(result.address) && present(result.port))
 			result.remarks = str(result.address) + ":" + str(result.port);
@@ -240,17 +241,17 @@ function finishRemarks(result) {
 			result.remarks = "NULL";
 	}
 	return result;
-}
+};
 
-function singboxTransportBlocked(result, szType) {
+singboxTransportBlocked = function(result, szType) {
 	if (result.type == "sing-box" && (result.transport == "mkcp" || result.transport == "xhttp")) {
 		log("跳过节点：" + result.remarks + "，因 Sing-Box 不支持 " + szType + " 协议的 " + result.transport + " 传输方式，需更换 Xray。");
 		return true;
 	}
 	return false;
-}
+};
 
-function split_filter_keywords(list) {
+split_filter_keywords = function(list) {
 	let keywords = [];
 	let seen = {};
 	if (type(list) == "string")
@@ -272,9 +273,9 @@ function split_filter_keywords(list) {
 		}
 	}
 	return keywords;
-}
+};
 
-function prepare_keyword_filter(sub_cfg) {
+prepare_keyword_filter = function(sub_cfg) {
 	let mode = sub_cfg ? sub_cfg.filter_keyword_mode : null;
 	if (mode === "0" || mode === "1" || mode === "2" || mode === "3" || mode === "4") {
 		return {
@@ -284,9 +285,9 @@ function prepare_keyword_filter(sub_cfg) {
 		};
 	}
 	return DEFAULT_FILTER_KEYWORD;
-}
+};
 
-function match_filter_keywords(value, keywords) {
+match_filter_keywords = function(value, keywords) {
 	if (type(value) != "string")
 		return false;
 	for (let keyword in keywords) {
@@ -294,9 +295,9 @@ function match_filter_keywords(value, keywords) {
 			return true;
 	}
 	return false;
-}
+};
 
-function is_filter_keyword(filter, value) {
+is_filter_keyword = function(filter, value) {
 	if (filter.mode === "1")
 		return match_filter_keywords(value, filter.discard_list);
 	if (filter.mode === "2")
@@ -306,16 +307,16 @@ function is_filter_keyword(filter, value) {
 	if (filter.mode === "4")
 		return match_filter_keywords(value, filter.discard_list) || !match_filter_keywords(value, filter.keep_list);
 	return false;
-}
+};
 
-function formatDate(s) {
+formatDate = function(s) {
 	let m = match(s, /([0-9]{4})[-/]?([0-9]{1,2})[-/]?([0-9]{1,2})/);
 	if (m)
 		return m[1] + "." + m[2] + "." + m[3];
 	return s;
-}
+};
 
-function get_subscribe_info(cfgid, value) {
+get_subscribe_info = function(cfgid, value) {
 	if (type(cfgid) != "string" || cfgid === "" || type(value) != "string")
 		return;
 	let info = subscribe_info[cfgid];
@@ -340,9 +341,9 @@ function get_subscribe_info(cfgid, value) {
 		subscribe_info[cfgid].expired_date = formatDate(expired_date);
 	if (rem_traffic !== null)
 		subscribe_info[cfgid].rem_traffic = rem_traffic;
-}
+};
 
-function set_ss_implementation(ss_type, result) {
+set_ss_implementation = function(ss_type, result) {
 	if (ss_type == "shadowsocks-rust" && has_ss_rust) {
 		result.type = "SS-Rust";
 	} else if (ss_type == "xray" && has_xray) {
@@ -357,9 +358,9 @@ function set_ss_implementation(ss_type, result) {
 		return null;
 	}
 	return result;
-}
+};
 
-function applyWsHttp(result, net, host, path, headerType, opt) {
+applyWsHttp = function(result, net, host, path, headerType, opt) {
 	if (net == "ws") {
 		result.ws_host = host;
 		result.ws_path = path;
@@ -385,9 +386,9 @@ function applyWsHttp(result, net, host, path, headerType, opt) {
 			result.http_path = path;
 		}
 	}
-}
+};
 
-function fillCommonTransport(result, net, p, opt) {
+fillCommonTransport = function(result, net, p, opt) {
 	let host = p.host;
 	let path = p.path;
 	let headerType = luaOr(p.headerType, "none");
@@ -448,9 +449,9 @@ function fillCommonTransport(result, net, p, opt) {
 		result.httpupgrade_host = host;
 		result.httpupgrade_path = path;
 	}
-}
+};
 
-function applySecurity(result, params, subAllow, opt) {
+applySecurity = function(result, params, subAllow, opt) {
 	result.tls = "0";
 	if (params.security == "tls" || params.security == "reality") {
 		result.tls = "1";
@@ -486,9 +487,9 @@ function applySecurity(result, params, subAllow, opt) {
 	if (opt && opt.insecureExtra)
 		insecure = luaOr(insecure, params.allow_insecure);
 	result.tls_allowInsecure = tlsAllow(insecure, subAllow);
-}
+};
 
-function parseSSR(content, result) {
+parseSSR = function(content, result) {
 	if (!has_ssr) {
 		log("跳过 SSR 节点，因未安装 SSR 核心程序 shadowsocksr-libev。");
 		return null;
@@ -512,9 +513,9 @@ function parseSSR(content, result) {
 	result.protocol_param = api.base64Decode(params.protoparam);
 	result.remarks = api.base64Decode(params.remarks);
 	return result;
-}
+};
 
-function parseVmess(content, result, subAllow) {
+parseVmess = function(content, result, subAllow) {
 	if (result.type === null) {
 		// type is chosen by the caller before entry
 	}
@@ -672,9 +673,9 @@ function parseVmess(content, result, subAllow) {
 		return null;
 	}
 	return result;
-}
+};
 
-function isURLEncodedPassword(pwd) {
+isURLEncodedPassword = function(pwd) {
 	if (type(pwd) != "string" || match(pwd, /%[0-9A-Fa-f][0-9A-Fa-f]/) === null)
 		return false;
 	try {
@@ -683,9 +684,9 @@ function isURLEncodedPassword(pwd) {
 	} catch (e) {
 		return false;
 	}
-}
+};
 
-function parseShadowTLSParams(b64str, out) {
+parseShadowTLSParams = function(b64str, out) {
 	let data = null;
 	try {
 		data = api.jsonc.parse(api.base64Decode(b64str));
@@ -708,9 +709,9 @@ function parseShadowTLSParams(b64str, out) {
 			push(t, k + "=" + str(v));
 	}
 	return join(";", t);
-}
+};
 
-function parseSS(content, result, subAllow, subSsType) {
+parseSS = function(content, result, subAllow, subSsType) {
 	result = set_ss_implementation(subSsType, result);
 	if (result === null)
 		return null;
@@ -905,9 +906,9 @@ function parseSS(content, result, subAllow, subSsType) {
 		}
 	}
 	return result;
-}
+};
 
-function parseTrojan(content, result, subAllow) {
+parseTrojan = function(content, result, subAllow) {
 	let cut = cutHash(content);
 	content = cut[0];
 	result.remarks = cut[1];
@@ -970,9 +971,9 @@ function parseTrojan(content, result, subAllow) {
 	if (singboxTransportBlocked(result, "trojan"))
 		return null;
 	return result;
-}
+};
 
-function parseVless(content, result, subAllow) {
+parseVless = function(content, result, subAllow) {
 	result.protocol = "vless";
 	let cut = cutHash(content);
 	content = cut[0];
@@ -1023,9 +1024,9 @@ function parseVless(content, result, subAllow) {
 	if (singboxTransportBlocked(result, "vless"))
 		return null;
 	return result;
-}
+};
 
-function parseHysteria(content, result, subAllow, subUp, subDown) {
+parseHysteria = function(content, result, subAllow, subUp, subDown) {
 	let cut = cutHash(content);
 	content = cut[0];
 	result.remarks = cut[1];
@@ -1047,9 +1048,9 @@ function parseHysteria(content, result, subAllow, subUp, subDown) {
 	result.hysteria_down_mbps = luaOr(params.downmbps, subDown);
 	result.hysteria_hop = params.mport;
 	return result;
-}
+};
 
-function parseHysteria2(content, result, subAllow, subCfg, subUp, subDown, subHy2Type) {
+parseHysteria2 = function(content, result, subAllow, subCfg, subUp, subDown, subHy2Type) {
 	let cut = cutHash(content);
 	content = cut[0];
 	result.remarks = cut[1];
@@ -1097,9 +1098,9 @@ function parseHysteria2(content, result, subAllow, subCfg, subUp, subDown, subHy
 	let insecure = luaOr(params.allowinsecure, params.insecure);
 	result.tls_allowInsecure = tlsAllow(insecure, subAllow);
 	return result;
-}
+};
 
-function parseTuic(content, result, subAllow) {
+parseTuic = function(content, result, subAllow) {
 	let cut = cutHash(content);
 	content = cut[0];
 	result.remarks = cut[1];
@@ -1133,9 +1134,9 @@ function parseTuic(content, result, subAllow) {
 	let insecure = luaOr(luaOr(params.allowinsecure, params.insecure), params.allow_insecure);
 	result.tls_allowInsecure = tlsAllow(insecure, subAllow);
 	return result;
-}
+};
 
-function parseAnytls(content, result, subAllow) {
+parseAnytls = function(content, result, subAllow) {
 	let cut = cutHash(content);
 	content = cut[0];
 	result.remarks = cut[1];
@@ -1177,9 +1178,9 @@ function parseAnytls(content, result, subAllow) {
 	let insecure = luaOr(params.allowinsecure, params.insecure);
 	result.tls_allowInsecure = tlsAllow(insecure, subAllow);
 	return result;
-}
+};
 
-function parseNaive(content, result, szType) {
+parseNaive = function(content, result, szType) {
 	let cut = cutHash(content);
 	content = cut[0];
 	result.remarks = cut[1];
@@ -1216,9 +1217,9 @@ function parseNaive(content, result, szType) {
 		result.naive_congestion_control = luaOr(params.congestion_control, "bbr");
 	}
 	return result;
-}
+};
 
-function parseSnell(content, result) {
+parseSnell = function(content, result) {
 	let cut = cutHash(content);
 	content = cut[0];
 	result.remarks = cut[1];
@@ -1247,9 +1248,9 @@ function parseSnell(content, result) {
 	}
 	result.snell_reuse = params.reuse === "1" ? "1" : "0";
 	return result;
-}
+};
 
-function processData(szType, content, add_mode, group, sub_cfg) {
+processData = function(szType, content, add_mode, group, sub_cfg) {
 	let subAllow = DEFAULT_ALLOWINSECURE;
 	let subSs = DEFAULT_SS_TYPE;
 	let subTrojan = DEFAULT_TROJAN_TYPE;
@@ -1388,9 +1389,9 @@ function processData(szType, content, add_mode, group, sub_cfg) {
 	if (parsed === null)
 		return null;
 	return finishRemarks(parsed);
-}
+};
 
-function invokeCurl(mode, url, file, args) {
+invokeCurl = function(mode, url, file, args) {
 	let fn = null;
 	if (mode == "direct")
 		fn = api.curl_direct;
@@ -1406,18 +1407,18 @@ function invokeCurl(mode, url, file, args) {
 	if (type(ret) == "object" && ret !== null)
 		return [luaOr(ret.code, ret.return_code), luaOr(luaOr(ret.result, ret.stdout), ret.body)];
 	return [ret, null];
-}
+};
 
-function splitCurlResult(result) {
+splitCurlResult = function(result) {
 	let m = match(result, /([0-9]+)[ \t]*$/);
 	if (m === null)
 		return [null, null];
 	let body = substr(result, 0, length(result) - length(m[0]));
 	body = replace(body, /[ \t\r\n]+$/, "");
 	return [body, m[1]];
-}
+};
 
-function passwallUaVersion() {
+passwallUaVersion = function() {
 	let ver = "";
 	if (api.get_version)
 		ver = api.get_version();
@@ -1427,9 +1428,9 @@ function passwallUaVersion() {
 		ver = "";
 	let m = match(ver, /^([^-]+)/);
 	return m ? m[1] : ver;
-}
+};
 
-function curl(url, file, ua, mode) {
+curl = function(url, file, ua, mode) {
 	if (!present(url) || url === "")
 		return [22, 404, null];
 	let curl_args = [
@@ -1461,19 +1462,19 @@ function curl(url, file, ua, mode) {
 		curl_header = replace(curl_header, /\r/g, "");
 	api.remove(cookie_file);
 	return [return_code, curl_http_code, curl_header];
-}
+};
 
-function groupAll(group) {
+groupAll = function(group) {
 	return group === null || group === false;
-}
+};
 
-function sameGroup(group, value) {
+sameGroup = function(group, value) {
 	if (groupAll(group))
 		return true;
 	return lc(str(group)) == lc(str(value));
-}
+};
 
-function truncate_nodes(group) {
+truncate_nodes = function(group) {
 	for (let config in CONFIG) {
 		if (config === null)
 			continue;
@@ -1510,9 +1511,9 @@ function truncate_nodes(group) {
 			uci_del(o[".name"], "md5");
 	});
 	uci_save(true);
-}
+};
 
-function select_node(nodes, config, parentConfig) {
+select_node = function(nodes, config, parentConfig) {
 	if (config.currentNode) {
 		let server = null;
 		if (present(config.currentNode.Socks))
@@ -1609,9 +1610,9 @@ function select_node(nodes, config, parentConfig) {
 	} else if (!present(parentConfig)) {
 		config.set(config, "");
 	}
-}
+};
 
-function update_subscribe_info() {
+update_subscribe_info = function() {
 	let changed = {};
 	for (let cfgid, info in subscribe_info) {
 		if (type(info) != "object" || info === null)
@@ -1628,9 +1629,9 @@ function update_subscribe_info() {
 		}
 	}
 	return changed;
-}
+};
 
-function listOf(v) {
+listOf = function(v) {
 	if (v === null || v === false)
 		return [];
 	if (type(v) == "string")
@@ -1644,9 +1645,9 @@ function listOf(v) {
 		return out;
 	}
 	return [];
-}
+};
 
-function new_node_id() {
+new_node_id = function() {
 	let name = api.gen_random_char();
 	if (api.uci && api.uci.section) {
 		let made = api.uci.section(api.c_config, "nodes", name);
@@ -1654,9 +1655,9 @@ function new_node_id() {
 			return made;
 	}
 	return name;
-}
+};
 
-function update_node(manual) {
+update_node = function(manual) {
 	if (length(nodeResult) == 0) {
 		log("没有可用的节点信息更新。");
 		return false;
@@ -1767,13 +1768,13 @@ function update_node(manual) {
 		}
 	}
 	return true;
-}
+};
 
-function blankLine(v) {
+blankLine = function(v) {
 	return type(v) == "string" && match(v, /^[[:space:]]*$/) !== null;
-}
+};
 
-function parse_link(raw, add_mode, group, sub_cfg) {
+parse_link = function(raw, add_mode, group, sub_cfg) {
 	if (present(raw) && length(raw) > 0) {
 		let cfgid = sub_cfg ? sub_cfg[".name"] : null;
 		let keyword_filter = add_mode == "2" ? prepare_keyword_filter(sub_cfg) : null;
@@ -1861,9 +1862,9 @@ function parse_link(raw, add_mode, group, sub_cfg) {
 	if (add_mode == "2")
 		log("获取到的【" + group + "】订阅内容为空，可能是订阅地址无效，或是网络问题，请诊断！");
 	return [];
-}
+};
 
-function nodeOrSocks(id) {
+nodeOrSocks = function(id) {
 	if (!present(id))
 		return null;
 	let section = uci_get(id);
@@ -1872,9 +1873,9 @@ function nodeOrSocks(id) {
 	if (section[".type"] == "socks")
 		return { Socks: id };
 	return section;
-}
+};
 
-function is_ip_port(str) {
+is_ip_port = function(str) {
 	if (type(str) != "string")
 		return false;
 	let m = match(str, /^([0-9.]+):([0-9]+)$/);
@@ -1884,9 +1885,9 @@ function is_ip_port(str) {
 	if (port != port || port > 65535)
 		return false;
 	return !luaNot(api.datatypes.ipaddr(m[1]));
-}
+};
 
-function build_config() {
+build_config = function() {
 	CONFIG = [];
 	let szType = "@global[0]";
 	let option = "node";
@@ -2183,9 +2184,9 @@ function build_config() {
 			CONFIG[k] = null;
 		}
 	}
-}
+};
 
-function init_state() {
+init_state = function() {
 	restart_required = false;
 	nodeResult = [];
 	subscribe_info = {};
@@ -2227,9 +2228,9 @@ function init_state() {
 		}
 	}
 	build_config();
-}
+};
 
-function execute() {
+execute = function() {
 	let subscribe_list = [];
 	let fail_list = [];
 	if (cli[1] != "all") {
@@ -2323,9 +2324,9 @@ function execute() {
 				log(sprintf("刷新订阅【%s】账户用量与到期时间信息。", luaOr(value.remark, "")));
 		}
 	}
-}
+};
 
-function log_traceback() {
+log_traceback = function() {
 	try {
 		let debugmod = require("debug");
 		if (debugmod && debugmod.traceback) {
@@ -2335,9 +2336,9 @@ function log_traceback() {
 		}
 	} catch (e) {
 	}
-}
+};
 
-function acquire_lock(argv) {
+acquire_lock = function(argv) {
 	let prefix = api.LOCK_PREFIX;
 	if (type(prefix) != "string" || prefix === "")
 		prefix = "/var/lock/" + luaOr(api.c_config, "passwall");
@@ -2370,16 +2371,16 @@ function acquire_lock(argv) {
 	fh.write("s");
 	fh.seek(0);
 	return fh;
-}
+};
 
-function release_lock() {
+release_lock = function() {
 	if (update_lock !== null) {
 		update_lock.close();
 		update_lock = null;
 	}
-}
+};
 
-export function main(argv) {
+main = function(argv) {
 	if (argv === null || type(argv) != "array" || length(argv) == 0 || argv[0] === null || argv[0] === false)
 		exit(0);
 	cli = argv;
@@ -2417,4 +2418,5 @@ export function main(argv) {
 		let action = (length(argv) > 2 && argv[2] === "cron") ? " cron" : "";
 		api.sys.call("/etc/init.d/passwall restart" + action + " > /dev/null 2>&1 &");
 	}
-}
+};
+export { main };

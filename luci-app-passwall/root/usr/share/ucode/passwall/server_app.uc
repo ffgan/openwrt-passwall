@@ -2,17 +2,22 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+import { gen_config_server as ss_gen_config_server } from 'passwall.util_shadowsocks';
+import { gen_config_server as xray_gen_config_server } from 'passwall.util_xray';
+import { gen_config_server as singbox_gen_config_server } from 'passwall.util_singbox';
+import { gen_config_server as hy2_gen_config_server } from 'passwall.util_hysteria2';
+let ltruth, tonumber, log, cmd, ln_run, remove_firewall_rules, nonempty, start, lor_src, stop, main;
 
 let CONFIG = api.s_config;
 let CONFIG_PATH = api.S_TMP_PATH;
 let LOG_APP_FILE = "/tmp/log/" + CONFIG + ".log";
 let TMP_BIN_PATH = CONFIG_PATH + "/bin";
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function tonumber(v) {
+tonumber = function(v) {
 	if (type(v) == "int")
 		return v;
 	if (type(v) == "double")
@@ -25,9 +30,9 @@ function tonumber(v) {
 	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
 		return s * 1;
 	return int(s);
-}
+};
 
-function log(...args) {
+log = function(...args) {
 	let fh = fs.open(LOG_APP_FILE, "a");
 	if (fh == null)
 		return;
@@ -42,21 +47,21 @@ function log(...args) {
 	let str = sprintf("%04d-%02d-%02d %02d:%02d:%02d: ", t.year, t.mon, t.mday, t.hour, t.min, t.sec) + join(" ", parts);
 	fh.write(str + "\n");
 	fh.close();
-}
+};
 
-function cmd(command) {
+cmd = function(command) {
 	api.sys.call(command);
-}
+};
 
-function ln_run(s, d, command, output) {
+ln_run = function(s, d, command, output) {
 	if (output == null || output === false)
 		output = "/dev/null";
 	d = TMP_BIN_PATH + "/" + d;
 	cmd(sprintf('[ ! -f "%s" ] && ln -s %s %s 2>/dev/null', d, s, d));
 	return sprintf("%s >%s 2>&1 &", d + " " + command, output);
-}
+};
 
-function remove_firewall_rules(defer_commit) {
+remove_firewall_rules = function(defer_commit) {
 	let uci = api.uci;
 	let to_delete = [];
 	uci.foreach("firewall", "rule", (rule) => {
@@ -72,17 +77,17 @@ function remove_firewall_rules(defer_commit) {
 		return true;
 	}
 	return false;
-}
+};
 
-function nonempty(obj) {
+nonempty = function(obj) {
 	if (obj == null)
 		return false;
 	if (type(obj) != "object" && type(obj) != "array")
 		return false;
 	return length(obj) > 0;
-}
+};
 
-export function start() {
+start = function() {
 	let enabled_raw = api.uci_get_s("@global[0]", "enable");
 	if (enabled_raw == null || enabled_raw === false)
 		enabled_raw = 0;
@@ -132,7 +137,7 @@ export function start() {
 				if (server.custom === "1" && ltruth(server.config_str))
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
 				else
-					config = import("passwall.util_shadowsocks").gen_config_server(server);
+					config = ss_gen_config_server(server);
 				let udp_param = "";
 				let udp_forward = tonumber(server.udp_forward);
 				if (udp_forward == null)
@@ -145,7 +150,7 @@ export function start() {
 				if (server.custom === "1" && ltruth(server.config_str))
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
 				else
-					config = import("passwall.util_shadowsocks").gen_config_server(server);
+					config = ss_gen_config_server(server);
 				bin = ln_run("/usr/bin/ssserver", "ssserver", "-c " + config_file, log_path);
 			} else if (server_type == "Xray") {
 				if (server.custom === "1" && ltruth(server.config_str)) {
@@ -156,7 +161,7 @@ export function start() {
 						config.log.loglevel = server.loglevel;
 					}
 				} else {
-					config = import("passwall.util_xray").gen_config_server(server);
+					config = xray_gen_config_server(server);
 				}
 				bin = ln_run(api.get_app_path("xray"), "xray", "run -c " + config_file, log_path);
 			} else if (server_type == "sing-box") {
@@ -171,14 +176,14 @@ export function start() {
 						config.log.output = log_path;
 					}
 				} else {
-					config = import("passwall.util_sing-box").gen_config_server(server);
+					config = singbox_gen_config_server(server);
 				}
 				bin = ln_run(api.get_app_path("sing-box"), "sing-box", "run -c " + config_file, log_path);
 			} else if (server_type == "Hysteria2") {
 				if (server.custom === "1" && ltruth(server.config_str))
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
 				else
-					config = import("passwall.util_hysteria2").gen_config_server(server);
+					config = hy2_gen_config_server(server);
 				bin = ln_run(api.get_app_path("hysteria"), "hysteria", "-c " + config_file + " server", log_path);
 			}
 
@@ -208,22 +213,22 @@ export function start() {
 	});
 	if (firewall_num > 0 || fw_changed)
 		api.uci_save(uci, "firewall", true, true);
-}
+};
 
-function lor_src(v) {
+lor_src = function(v) {
 	if (v == null || v === false)
 		return "wan";
 	return v;
-}
+};
 
-export function stop() {
+stop = function() {
 	cmd(sprintf("/bin/busybox top -bn1 | grep -v 'grep' | grep '%s/' | awk '{print $1}' | xargs kill -9 >/dev/null 2>&1", CONFIG_PATH));
 	remove_firewall_rules();
 	api.remove(CONFIG_PATH, LOG_APP_FILE);
-}
+};
 
 // argv[0] = start | stop.
-export function main(argv) {
+main = function(argv) {
 	if (argv == null || length(argv) < 1)
 		return;
 	let action = argv[0];
@@ -231,4 +236,5 @@ export function main(argv) {
 		start();
 	else if (action == "stop")
 		stop();
-}
+};
+export { start, stop, main };

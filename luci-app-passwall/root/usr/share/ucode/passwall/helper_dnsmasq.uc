@@ -2,14 +2,15 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+let ltruth, lua_quote, exec_pair, read_lines, file_size, gmatch, tinsert, backup_servers, restore_servers, stretch, restart, logic_restart, copy_instance, geosite_dat, foreach_geosite, tail_after_colon, add_rule, dispatch, main;
 
 let seen_pairs = [];
 
-function ltruth(v) {
+ltruth = function(v) {
 	return v != null && v !== false;
-}
+};
 
-function lua_quote(s) {
+lua_quote = function(s) {
 	if (s == null || s === false)
 		s = "";
 	else
@@ -30,18 +31,18 @@ function lua_quote(s) {
 			out += c;
 	}
 	return out + "\"";
-}
+};
 
-function exec_pair(cmd) {
+exec_pair = function(cmd) {
 	let ret = api.exec_call(cmd);
 	if (type(ret) == "array")
 		return [ret[0], ret[1]];
 	if (type(ret) == "object" && ret != null)
 		return [ret.code ?? ret[0], ret.out ?? ret.stdout ?? ret[1]];
 	return [ret, ""];
-}
+};
 
-function read_lines(path) {
+read_lines = function(path) {
 	let data = api.fs.readfile(path);
 	if (data == null)
 		return null;
@@ -52,18 +53,18 @@ function read_lines(path) {
 	if (data == "")
 		return [""];
 	return split(data, "\n");
-}
+};
 
-function file_size(path) {
+file_size = function(path) {
 	let st = api.fs.stat(path, "size");
 	if (st == null)
 		return null;
 	if (type(st) == "object")
 		return st.size ?? null;
 	return st;
-}
+};
 
-function gmatch(s, pattern) {
+gmatch = function(s, pattern) {
 	if (s == null || s === false)
 		return [];
 	let found = match("" + s, pattern);
@@ -73,9 +74,9 @@ function gmatch(s, pattern) {
 	for (let m in found)
 		push(out, m[0]);
 	return out;
-}
+};
 
-function tinsert(table_name, val) {
+tinsert = function(table_name, val) {
 	if (table_name == null || type(table_name) != "array")
 		return false;
 	let lookup = null;
@@ -94,17 +95,17 @@ function tinsert(table_name, val) {
 	push(table_name, val);
 	lookup[val] = true;
 	return true;
-}
+};
 
-function backup_servers() {
+backup_servers = function() {
 	let DNSMASQ_DNS = api.uci_get("dhcp", "@dnsmasq[0]", "server");
 	if (type(DNSMASQ_DNS) == "array" && length(DNSMASQ_DNS) > 0) {
 		api.uci_set_c("@global[0]", "dnsmasq_servers", DNSMASQ_DNS);
 		api.uci_save_c(true);
 	}
-}
+};
 
-function restore_servers() {
+restore_servers = function() {
 	let dns_table = [];
 	let DNSMASQ_DNS = api.uci_get("dhcp", "@dnsmasq[0]", "server");
 	if (type(DNSMASQ_DNS) == "array" && length(DNSMASQ_DNS) > 0) {
@@ -122,9 +123,9 @@ function restore_servers() {
 		api.uci_set("dhcp", "@dnsmasq[0]", "server", dns_table);
 		api.uci_save(null, "dhcp", true);
 	}
-}
+};
 
-export function stretch() {
+stretch = function() {
 	let dnsmasq_server = api.uci_get("dhcp", "@dnsmasq[0]", "server");
 	let dnsmasq_noresolv = api.uci_get("dhcp", "@dnsmasq[0]", "noresolv");
 	let flag = false;
@@ -143,16 +144,16 @@ export function stretch() {
 		api.uci_set("dhcp", "@dnsmasq[0]", "resolvfile", RESOLVFILE);
 		api.uci_save(null, "dhcp", true);
 	}
-}
+};
 
-export function restart(var) {
+restart = function(var) {
 	let LOG = var["-LOG"];
 	api.sys.call("/etc/init.d/dnsmasq restart >/dev/null 2>&1");
 	if (LOG == "1")
 		api.log("重启 dnsmasq 服务");
-}
+};
 
-export function logic_restart(var) {
+logic_restart = function(var) {
 	let LOG = var["-LOG"];
 	let DEFAULT_DNS = api.get_cache_var("DEFAULT_DNS");
 	if (ltruth(DEFAULT_DNS)) {
@@ -174,9 +175,9 @@ export function logic_restart(var) {
 	}
 	if (LOG == "1")
 		api.log("重启 dnsmasq 服务");
-}
+};
 
-export function copy_instance(var) {
+copy_instance = function(var) {
 	let LISTEN_PORT = var["-LISTEN_PORT"];
 	let TMP_DNSMASQ_PATH = var["-TMP_DNSMASQ_PATH"];
 	let conf_lines = [];
@@ -234,17 +235,17 @@ export function copy_instance(var) {
 		api.fs.writefile(DNSMASQ_CONF, prev + join("\n", conf_lines) + "\n");
 	}
 	return null;
-}
+};
 
-function geosite_dat() {
+geosite_dat = function() {
 	let geosite_path = api.uci_get_c("@global_rules[0]", "v2ray_location_asset");
 	if (geosite_path == null || geosite_path === false)
 		geosite_path = "/usr/share/v2ray/";
 	let m = match(geosite_path, /^(.*)\//);
 	return (m != null ? m[1] : geosite_path) + "/geosite.dat";
-}
+};
 
-function foreach_geosite(list_arg, callback) {
+foreach_geosite = function(list_arg, callback) {
 	let geosite_path = geosite_dat();
 	if (!api.fs.access(geosite_path))
 		return [1, "File geosite.dat not found"];
@@ -262,16 +263,16 @@ function foreach_geosite(list_arg, callback) {
 			callback(m[0]);
 	}
 	return [0, null];
-}
+};
 
-function tail_after_colon(line) {
+tail_after_colon = function(line) {
 	let m = match(line, /:([^:]+)$/);
 	if (m == null)
 		return null;
 	return m[1];
-}
+};
 
-export function add_rule(var) {
+add_rule = function(var) {
 	let FLAG = var["-FLAG"];
 	let TMP_DNSMASQ_PATH = var["-TMP_DNSMASQ_PATH"];
 	let DNSMASQ_CONF_FILE = var["-DNSMASQ_CONF_FILE"];
@@ -395,7 +396,9 @@ export function add_rule(var) {
 		while (pos >= 0) {
 			if (excluded_domain[substr(domain, pos + 1)])
 				return true;
-			pos = index(domain, ".", pos + 1);
+			let rest = substr(domain, pos + 1);
+			let rel = index(rest, ".");
+			pos = rel < 0 ? -1 : rel + pos + 1;
 		}
 		return false;
 	}
@@ -812,9 +815,9 @@ export function add_rule(var) {
 
 	if (USE_CHINADNS_NG == "0")
 		log("  - PassWall必须依赖于Dnsmasq，如果你自行配置了错误的DNS流程，将会导致域名(直连/代理)分流失效！！！");
-}
+};
 
-function dispatch(name) {
+dispatch = function(name) {
 	if (name == "stretch")
 		return stretch;
 	if (name == "restart")
@@ -826,15 +829,16 @@ function dispatch(name) {
 	if (name == "add_rule")
 		return add_rule;
 	return null;
-}
+};
 
 // argv[0] = stretch | restart | logic_restart | copy_instance | add_rule
 // argv[1...] = -FLAG value pairs, parsed by api.get_function_args (argv[0] is skipped).
-export function main(argv) {
+main = function(argv) {
 	if (argv == null || length(argv) < 1 || argv[0] == null || argv[0] === false)
 		return;
 	let func = dispatch(argv[0]);
 	if (func == null)
 		return;
 	func(api.get_function_args(argv));
-}
+};
+export { stretch, restart, logic_restart, copy_instance, add_rule, main };
