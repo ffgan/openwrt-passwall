@@ -90,13 +90,13 @@ eval_unset_val() {
 	done
 }
 
-lua_api() {
+pw_api() {
 	local func=${1}
 	[ -z "${func}" ] && {
 		echo "nil"
 		return
 	}
-	echo $(lua -e "local api = require 'luci.passwall.api' print(api.${func})")
+	ucode "$APP_PATH/api_call.uc" "$func"
 }
 
 eval_cache_var() {
@@ -227,7 +227,7 @@ parse_doh() {
 	local __url=${__doh%%,*}
 	local __bootstrap=${__doh#*,}
 	[ "$__bootstrap" = "$__doh" ] && __bootstrap=""
-	local __host_port=$(lua_api "get_domain_from_url(\"${__url}\")")
+	local __host_port=$(pw_api "get_domain_from_url(\"${__url}\")")
 	local __host __port
 	if echo "${__host_port}" | grep -q '^\[.*\]:[0-9]\+$'; then
 		__host=${__host_port%%]:*}]
@@ -241,7 +241,7 @@ parse_doh() {
 	fi
 	__host=${__host#[}
 	__host=${__host%]}
-	if [ "$(lua_api "is_ip(\"${__host}\")")" = "true" ]; then
+	if [ "$(pw_api "is_ip(\"${__host}\")")" = "true" ]; then
 		__bootstrap=${__host}
 	fi
 	__bootstrap=${__bootstrap#[}

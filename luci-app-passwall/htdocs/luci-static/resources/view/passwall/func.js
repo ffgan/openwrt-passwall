@@ -61,7 +61,7 @@ function getOption(config, section, opt) {
 	const id = `cbid.${config}.${section}.${opt}`;
 	obj = document.getElementsByName(id)[0] || document.getElementById(id);
 	if (obj) {
-		//lua luci combobox
+		// LuCI combobox
 		const combobox = document.getElementById('cbi.combobox.' + id);
 		if (combobox) {
 			obj.combobox = combobox;

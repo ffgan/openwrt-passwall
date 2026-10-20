@@ -12,7 +12,7 @@
 
 当前 OpenWrt 的推荐组合是 **firewall4 + nftables**。25.12 起包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。
 
-检测到 fw4 且 Dnsmasq 带 nftset 时，透明代理使用 nftables。编译选项 “Iptables Transparent Proxy” 面向仍在使用旧防火墙的系统，勾选后会一并启用 `dnsmasq-full` 的 ipset 支持。Web 界面使用 LuCI 的 Lua CBI，并依赖 `luci-compat`。
+检测到 fw4 且 Dnsmasq 带 nftset 时，透明代理使用 nftables。编译选项 “Iptables Transparent Proxy” 面向仍在使用旧防火墙的系统，勾选后会一并启用 `dnsmasq-full` 的 ipset 支持。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。
 
 ## 📌如何能编译到最新代码？
 

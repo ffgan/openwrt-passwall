@@ -41,8 +41,8 @@ LUCI_MAINTAINER:=Openwrt-Passwall Organization
 PKG_MAINTAINER:=$(LUCI_MAINTAINER)
 LUCI_DEPENDS:=+coreutils +coreutils-base64 +coreutils-nohup +coreutils-timeout +curl \
 	+chinadns-ng +dns2socks +dnsmasq-full +ip-full \
-	+lua +luci-compat +luci-lib-jsonc \
-	+microsocks +resolveip +tcping +lyaml
+	+ucode +ucode-mod-digest +ucode-mod-fs +ucode-mod-math +ucode-mod-uci \
+	+microsocks +resolveip +tcping
 
 define Package/$(PKG_NAME)/config
 menu "Configuration"
