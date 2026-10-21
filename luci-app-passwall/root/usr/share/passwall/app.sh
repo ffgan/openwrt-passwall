@@ -1399,7 +1399,7 @@ start_dns() {
 		set_cache_var "ACL_default_dns_port" "${GLOBAL_DNSMASQ_PORT}"
 		DNS_REDIRECT_PORT=${GLOBAL_DNSMASQ_PORT}
 		#dhcp.leases to hosts
-		$APP_PATH/lease2hosts.sh > /dev/null 2>&1 &
+		ucode $UCODE_BIN/lease2hosts.uc > /dev/null 2>&1 &
 	fi
 }
 
@@ -1629,7 +1629,7 @@ acl_app() {
 							ln_run "$(first_type dnsmasq)" "dnsmasq_${sid}" "/dev/null" -C ${dnsmasq_conf} -x ${acl_path}/dnsmasq.pid
 							set_cache_var "ACL_${sid}_dns_port" "${dnsmasq_port}"
 							#dhcp.leases to hosts
-							$APP_PATH/lease2hosts.sh > /dev/null 2>&1 &
+							ucode $UCODE_BIN/lease2hosts.uc > /dev/null 2>&1 &
 						}
 						local _redir_port=$(get_cache_var "acl_node_${node}_redir_port")
 						local _socks_port=$(get_cache_var "acl_node_${node}_socks_port")

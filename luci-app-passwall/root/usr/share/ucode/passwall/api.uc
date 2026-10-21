@@ -2421,8 +2421,8 @@ to_install_self = function(id, force) {
 	mkdir_p(status_dir);
 	exec_argv("/bin/mv", ["/tmp/" + appname + "_download." + id + "1", dir + "/luci-app-" + appname + extension], null, null);
 	exec_argv("/bin/mv", ["/tmp/" + appname + "_download." + id + "2", dir + "/luci-i18n-" + appname + "-zh-cn" + extension], null, null);
-	let script = dir + "/luci_update.sh";
-	if (exec_argv("/bin/cp", ["/usr/share/" + appname + "/luci_update.sh", script], null, null) != 0) {
+	let script = dir + "/luci_update.uc";
+	if (exec_argv("/bin/cp", ["/usr/libexec/" + appname + "/luci_update.uc", script], null, null) != 0) {
 		remove(dir);
 		return { code: 1 };
 	}
