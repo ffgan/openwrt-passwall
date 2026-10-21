@@ -4,9 +4,14 @@ START=99
 STOP=15
 
 ROOT="${IPKG_INSTROOT:-}"
-. "$ROOT/usr/share/passwall/utils.sh"
-APP_FILE=${APP_PATH}/app.sh
-LOCK_FILE=${LOCK_PATH}/${CONFIG}.lock
+CONFIG=passwall
+APP_FILE="$ROOT/usr/libexec/passwall/app.uc"
+LOCK_PATH=/var/lock
+LOCK_FILE=${LOCK_PATH}/passwall.lock
+
+echolog() {
+	/usr/bin/ucode "$ROOT/usr/libexec/passwall/utils.uc" log "$*"
+}
 
 set_lock() {
 	mkdir -p "$LOCK_PATH" || return 1
@@ -42,13 +47,13 @@ boot() {
 
 start() {
 	set_lock || { echolog "脚本已经在运行，不重复运行，退出."; return 0; }
-	"$APP_FILE" start "$2" 9>&-
+	/usr/bin/ucode "$APP_FILE" start "$2" 9>&-
 	unset_lock
 }
 
 stop() {
 	set_lock_wait || { echolog "无法取得停止锁，退出."; return 1; }
-	"$APP_FILE" stop "$2" 9>&-
+	/usr/bin/ucode "$APP_FILE" stop "$2" 9>&-
 	unset_lock
 }
 
@@ -72,8 +77,8 @@ restart() {
 		unset_lock
 		return 1
 	fi
-	"$APP_FILE" stop "$action" 9>&-
-	"$APP_FILE" start "$action" 9>&-
+	/usr/bin/ucode "$APP_FILE" stop "$action" 9>&-
+	/usr/bin/ucode "$APP_FILE" start "$action" 9>&-
 	unset_lock
 }
 

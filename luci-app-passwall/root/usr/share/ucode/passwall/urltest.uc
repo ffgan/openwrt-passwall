@@ -130,7 +130,7 @@ url_test_node = function(node_id) {
 		flag = "url_test_" + replace(node_id, /[^A-Za-z0-9_]/g, "_") + "_" + api.rand_int(10000, 99999);
 		command_ok([
 			"/usr/bin/env", "NO_REC_PROCESS=1",
-			"/usr/share/passwall/app.sh", "run_socks",
+			"/usr/bin/ucode", "/usr/libexec/passwall/app.uc", "run_socks",
 			"flag=" + flag,
 			"node=" + node_id,
 			"bind=127.0.0.1",

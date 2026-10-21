@@ -1,6 +1,7 @@
 'use strict';
 
 import * as api from 'passwall.api';
+import * as utils from 'passwall.utils';
 let truthy, lua_or, nonempty, lua_tostring, is_table, to_number, tonumber_or, trim_s, nl_to_real, contains, has_prefix, split_matches, linsert, file_lines, try_parse_b64_json, strip_nulls, drop_private_keys, http_paths, gecko_packet_size, hop_interval, hysteria_idle, hysteria_keepalive, mb_window, tolerance_ratio, expected_count, probe_every, kcp_settings, mkcp_udp, hysteria_obfs, hysteria_realm, client_quic, server_quic, client_finalmask, server_finalmask, xhttp_extra, masque_headers, shadowsocks_method, vless_flow, csv_tokens, noise_rand, noise_delay, get_domain_excluded, get_log_level, need_stream_settings, client_stream_settings, apply_alpn, register_domain_resolver, decode_wireguard_reserved, gen_outbound, server_users, server_stream_settings, gen_config_server, collect_rule_items, geosite_dat_path, gen_config, gen_proto_config, print_result, dispatch, main;
 
 const xray_min_version = "26.7.11";
@@ -777,9 +778,12 @@ gen_outbound = function(flag, node, tag, proxy_table) {
 						let config_file = sprintf("nodesocks_%s_%s.json", node_id, new_port);
 						if (truthy(tag) && truthy(node_id) && !(type(tag) == "string" && index(tag, node_id) >= 0))
 							config_file = sprintf("nodesocks_%s_%s_%s.json", tag, node_id, new_port);
-						let arg = sprintf("flag=%s node=%s bind=%s socks_port=%s config_file=%s relay_port=%s",
-							new_port, node_id, "127.0.0.1", new_port, config_file, relay_port);
-						api.sys.call(sprintf('/usr/share/passwall/app.sh run_socks "%s"> /dev/null', arg));
+						utils.run([
+							"/usr/bin/ucode", "/usr/libexec/passwall/app.uc", "run_socks",
+							"flag=" + new_port, "node=" + node_id, "bind=127.0.0.1",
+							"socks_port=" + new_port, "config_file=" + config_file,
+							"relay_port=" + relay_port
+						], true);
 						if (relay_port == "")
 							api.set_socks_port_to_cache(node_id, new_port);
 					}

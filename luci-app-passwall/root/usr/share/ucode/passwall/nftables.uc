@@ -67,7 +67,7 @@ function words(data) {
 	return out;
 }
 
-/* app.sh writes POSIX single-quoted assignments. Decode that deliberately
+/* passwall.app writes POSIX single-quoted assignments. Decode that deliberately
  * small format without evaluating it. */
 function load_env() {
 	let data = read(TMP + "/nft.env");

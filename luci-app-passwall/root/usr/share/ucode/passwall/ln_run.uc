@@ -62,7 +62,7 @@ main = function(argv) {
 	if (index(file, "/") >= 0 && access(file, "x") != true)
 		api.log("  - " + file + " 没有执行权限，无法启动：" + file);
 
-	let recorded = api.shellquote(file);
+	let recorded = "ulimit -n 65535 2>/dev/null; exec " + api.shellquote(file);
 	for (let arg in args)
 		recorded += " " + api.shellquote(arg);
 	recorded += " >" + api.shellquote(output) + " 2>&1";

@@ -172,6 +172,13 @@ sh_call = function(cmd) {
 	return int(trim_s(out));
 };
 
+function argv_call(argv) {
+	if (type(global.system) == 'function')
+		return global.system(argv) ?? 1;
+	let fp = popen(argv, 'r');
+	return fp == null ? 1 : (fp.close() ?? 1);
+}
+
 popen_read = function(cmd) {
 	let fp = popen(cmd, 'r');
 	if (!fp)
@@ -775,13 +782,9 @@ gen_client_config = function(req) {
 	if (id == null)
 		id = '';
 	let config_file = tmp_path() + '/config_' + id;
-	sh_call('/usr/share/passwall/app.sh run_socks ' +
-		q('flag=config_' + id) + ' ' +
-		q('node=' + id) + ' ' +
-		q('bind=127.0.0.1') + ' ' +
-		q('socks_port=1080') + ' ' +
-		q('config_file=' + config_file) + ' ' +
-		q('no_run=1'));
+	argv_call([ '/usr/bin/ucode', '/usr/libexec/passwall/app.uc', 'run_socks',
+		'flag=config_' + id, 'node=' + id, 'bind=127.0.0.1',
+		'socks_port=1080', 'config_file=' + config_file, 'no_run=1' ]);
 	if (exists(config_file)) {
 		let text = read_text(config_file);
 		rm_rf(config_file);
