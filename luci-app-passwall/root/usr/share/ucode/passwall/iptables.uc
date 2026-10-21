@@ -499,7 +499,10 @@ function load_acl_source(sid, s, source, global_cfg) {
 		}
 	}
 	function targets(family, proto, mode, p, drop) {
-		let base = family == 6 ? (proto == 'tcp' ? base6tcp : base6udp) : (proto == 'tcp' ? base4tcp : base4udp);
+		let base = drop
+			? [family == 6 ? ip6t : ipt, '-t', 'mangle', '-w', '-A', 'PSW',
+			   ...comment(remarks), ...src.args, '-p', proto]
+			: (family == 6 ? (proto == 'tcp' ? base6tcp : base6udp) : (proto == 'tcp' ? base4tcp : base4udp));
 		let target = drop ? ['-j','MARK','--set-mark','88'] :
 			(proto == 'tcp' && !tproxy ? redirect(p) : ['-j','PSW_RULE']);
 		list_targets(base, family, proto,
@@ -730,8 +733,7 @@ function force_proxy_dns(proto) {
 			xt(4,'nat',['-I','PSW_OUTPUT','-p','tcp','-d',host,'--dport',port,...redirect(env.REDIR_PORT)],true);
 		} else {
 			xt(family,'mangle',['-I','PSW_OUTPUT','-p',proto,'-d',host,'--dport',port,'-j','PSW_RULE'],true);
-			let local_rule = ['-I','PSW',...comment('本机'),'-p',proto,'-i','lo','-d',host];
-			if (proto == 'tcp') push(local_rule, '--dport', port);
+			let local_rule = ['-I','PSW',...comment('本机'),'-p',proto,'-i','lo','-d',host,'--dport',port];
 			push(local_rule, ...redirect(env.REDIR_PORT,true));
 			xt(family,'mangle',local_rule,true);
 		}
@@ -890,7 +892,7 @@ function flush_include() {
 }
 
 function save_rules(family, table) {
-	let binary=family==6?'ip6tables-save':'iptables-save';
+	let binary=(family==6?ip6t:ipt)+'-save';
 	let out=output([binary,'-t',table]), kept=[];
 	for (let line in split(out,'\n')) {
 		if (index(line,'PSW')<0 || index(line,'PSW_DIRECT')>=0 || match(line,/-j PSW$/)!=null ||
@@ -975,7 +977,7 @@ function main(argv) {
 	if (action=='insert_rule_after') return insert_rule_after(argv[1],argv[2],argv[3],argv[4],argv[5]);
 	if (action=='get_ipt_bin') { print(get_ipt_bin() + '\n'); return 0; }
 	if (action=='get_ip6t_bin') { print(get_ip6t_bin() + '\n'); return 0; }
-	return 1;
+	return 0;
 }
 
 export {
