@@ -70,10 +70,19 @@ export function clean_log() {
 }
 
 export function pkg_installed(pkg) {
-	if (pkg == null || pkg == '')
+	if (type(pkg) != 'string' || pkg == '' || match(pkg, /[^A-Za-z0-9+_.-]/) != null)
 		return false;
-	if ((fs.stat('/lib/apk/db/installed')?.size ?? 0) > 0)
-		return (fs.stat('/lib/apk/packages/' + pkg + '.list')?.size ?? 0) > 0;
+	// Packages that ship no files have no .list. P:<name> in the apk
+	// database still records them. Fall back to opkg only when apk is absent.
+	if ((fs.stat('/lib/apk/db/installed')?.size ?? 0) > 0) {
+		if ((fs.stat('/lib/apk/packages/' + pkg + '.list')?.size ?? 0) > 0)
+			return true;
+		let needle = 'P:' + pkg;
+		for (let line in split(fs.readfile('/lib/apk/db/installed') ?? '', '\n'))
+			if (line == needle)
+				return true;
+		return false;
+	}
 	return (fs.stat('/usr/lib/opkg/info/' + pkg + '.control')?.size ?? 0) > 0;
 }
 
