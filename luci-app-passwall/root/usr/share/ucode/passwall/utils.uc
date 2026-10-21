@@ -146,7 +146,7 @@ export function first_type(primary, fallback) {
 			continue;
 		if (substr(name, 0, 1) == '/' && fs.access(name, 'x'))
 			return name;
-		for (let path in ['/bin/' + name, '/usr/bin/' + name, TMP_BIN_PATH + '/' + name])
+		for (let path in ['/bin/' + name, '/sbin/' + name, '/usr/bin/' + name, '/usr/sbin/' + name, TMP_BIN_PATH + '/' + name])
 			if (fs.access(path, 'x'))
 				return path;
 	}

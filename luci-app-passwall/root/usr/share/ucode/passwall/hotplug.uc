@@ -25,7 +25,7 @@ export function iface(action, device, interface) {
 		if (table == 'nftables')
 			return utils.run(['/usr/libexec/passwall/nftables.uc', 'update_wan_sets'], true);
 		if (table == 'iptables')
-			return utils.run(['/bin/sh', '/usr/share/passwall/iptables.sh', 'update_wan_sets'], true);
+			return utils.run(['/usr/bin/ucode', '/usr/libexec/passwall/iptables.uc', 'update_wan_sets'], true);
 		return 0;
 	}
 	api.log('network: passwall restart when ' + (interface ?? '') + ' ifup');

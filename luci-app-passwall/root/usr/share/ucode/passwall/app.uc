@@ -1214,7 +1214,7 @@ function legacy_iptables(action, values) {
 	for (let key, value in values ?? {})
 		if (type(value) == 'string' || type(value) == 'int')
 			push(argv, key + '=' + value);
-	push(argv, '/bin/sh', '/usr/share/passwall/iptables.sh', action);
+	push(argv, '/usr/bin/ucode', LIBEXEC + '/iptables.uc', action);
 	return command(argv, action == 'stop');
 }
 
@@ -1253,6 +1253,7 @@ export function start(mode) {
 		command([LIBEXEC + '/nftables.uc', 'start'], false);
 	} else if (state.USE_TABLES != '') {
 		/* Explicitly isolated legacy compatibility action. */
+		if (state.ENABLED_ACLS == '1') acl_app();
 		legacy_iptables('start', state);
 	}
 	utils.set_cache_var('USE_TABLES', state.USE_TABLES);
