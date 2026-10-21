@@ -1273,7 +1273,7 @@ export function stop(mode, internal) {
 	}
 	kill_matching('passwall/monitor.', []);
 	kill_matching('sleep.*(6s|9s|58s)', []);
-	kill_matching('passwall/', [/app\.uc/, /subscribe\.uc/, /rule_update\.uc/, /tasks\.uc/, /server_app\.uc/, /ujail/]);
+	kill_matching('passwall/', [/app\.uc/, /service\.uc/, /subscribe\.uc/, /rule_update\.uc/, /tasks\.uc/, /server_app\.uc/, /ujail/]);
 	stop_crontab(mode);
 	unlink_tree(cache.GLOBAL_DNSMASQ_CONF ?? '');
 	unlink_tree(cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');

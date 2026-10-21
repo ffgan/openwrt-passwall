@@ -799,7 +799,7 @@ function add_output_rules(tproxy) {
 		}
 		let ipv6 = index(address, ":") >= 0;
 		let direct_set = ipv6 ? "psw_lan6" : "psw_lan";
-		if (run(["nft", "get", "element", "inet", "passwall", direct_set, "{", address, "}"], true) == 0)
+		if (quiet_status(["nft", "get", "element", "inet", "passwall", direct_set, "{", address, "}"]) == 0)
 			continue;
 		if (e("TCP_PROXY_DNS") == "1") {
 			if (ipv6) {
