@@ -5,6 +5,7 @@
 CONFIG=passwall
 DIRECT_GID=9911
 APP_PATH=/usr/share/${CONFIG}
+UCODE_BIN=/usr/libexec/${CONFIG}
 TMP_PATH=/tmp/etc/${CONFIG}
 TMP_PATH2=${TMP_PATH}_tmp
 LOCK_PATH=/var/lock
@@ -36,6 +37,20 @@ IPv4_REGEX="((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[0
 echolog() {
 	local d="$(date "+%Y-%m-%d %H:%M:%S")"
 	echo -e "$d: $*" >>$LOG_FILE
+}
+
+# OpenWrt 25.12+ records installed packages in the apk database.
+# A .list file exists only when the package ships files; P:<name> is the
+# record for every installed package. Older releases still use opkg.
+pkg_installed() {
+	local pkg="$1"
+	[ -n "$pkg" ] || return 1
+	if [ -s /lib/apk/db/installed ]; then
+		[ -s "/lib/apk/packages/${pkg}.list" ] && return 0
+		awk -v p="$pkg" '$0 == ("P:" p) { found = 1 } END { exit !found }' /lib/apk/db/installed
+	else
+		[ -s "/usr/lib/opkg/info/${pkg}.control" ]
+	fi
 }
 
 clean_log() {
@@ -84,7 +99,7 @@ pw_api() {
 		echo "nil"
 		return
 	}
-	ucode "$APP_PATH/api_call.uc" "$func"
+	ucode "$UCODE_BIN/api_call.uc" "$func"
 }
 
 eval_cache_var() {
@@ -462,42 +477,7 @@ get_process_start_time() {
 }
 
 ln_run() {
-	local file_func=${1}
-	local ln_name=${2}
-	local output=${3}
-
-	shift 3;
-	case "$ln_name" in
-		dnsmasq*) set -- -k "$@" ;;
-		haproxy) set -- -db "$@" ;;
-	esac
-	if [  "${file_func%%/*}" != "${file_func}" ]; then
-		[ ! -L "${file_func}" ] && {
-			ln -s "${file_func}" "${TMP_BIN_PATH}/${ln_name}" >/dev/null 2>&1
-			file_func="${TMP_BIN_PATH}/${ln_name}"
-		}
-		[ -x "${file_func}" ] || echolog "  - $(readlink ${file_func}) 没有执行权限，无法启动：${file_func} $*"
-	fi
-	#echo "${file_func} $*" >&2
-	[ -n "${file_func}" ] || {
-		echolog "  - 找不到 ${ln_name}，无法启动..."
-		return 1
-	}
-
-	"$file_func" "$@" >"$output" 2>&1 &
-	local pid=$!
-
-	[ "$NO_REC_PROCESS" = "1" ] && return
-	local process_file=$(mktemp "$TMP_SCRIPT_FUNC_PATH/XXXXXX")
-	local arg
-	{
-		printf '%s\n' "$pid" "$(get_process_start_time "$pid")"
-		printf '%s' "$(shell_quote "$file_func")"
-		for arg in "$@"; do
-			printf ' %s' "$(shell_quote "$arg")"
-		done
-		printf ' >%s 2>&1\n' "$(shell_quote "$output")"
-	} > "$process_file"
+	ucode "$UCODE_BIN/ln_run.uc" "$@"
 }
 
 kill_all() {

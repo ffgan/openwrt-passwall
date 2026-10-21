@@ -3,6 +3,7 @@
 import * as api from 'passwall.api';
 import * as com from 'passwall.com';
 import { main as subscribe_main } from 'passwall.subscribe';
+import { url_test_node } from 'passwall.urltest';
 import { main } from 'passwall.rule_update';
 import { popen, open, readfile, writefile, access } from 'fs';
 let app_name, cfg_name, tmp_path, s_tmp_path, form_raw, trim_s, join, split_csv, split_lines, q, nonce, sh_exec, sh_call, popen_read, exists, read_text, write_text, write_bytes, rm_rf, move_file, rm_dir, b64encode, b64decode, log_msg, json_ok, json_err, as_json, text_out, log_alert, num, as_list, uci_value, random_id, cache_get, cache_set, found_com, found_bin, app_version, sh_set, sh_del, sh_get, sh_commit, del_c, save_c, revert_config, add_named, section_obj, sections_of, com_order, com_info, safe_task_id, is_ip, tail_file, mark_ipv6, list_grouped, apply_data, set_c, set_s, parse_timing, apply_timing, cmp_ge, short_version, page_url, geo_base, get_rules, show_menu, hide_menu, capabilities, link_add_node, socks_change, gen_client_config, get_now_use_node, get_redir_log, get_socks_log, get_chinadns_log, get_smartdns_log, get_log, clear_log, index_status, haproxy_status, socks_status, connect_status, ping_node, urltest_node, update_config, add_node, set_node, copy_node, clear_all_nodes, delete_select_nodes, get_node, reassign_group, save_node_list_opt, update_rules, rollback_rules, server_update_config, server_status, server_log, server_get_log, server_clear_log, do_app_check, do_app_update, do_com_check, do_com_update, do_com_version, read_rulelist, create_backup, restore_backup, reset_config, geo_view, subscribe_del_node, subscribe_del_all, subscribe_manual, subscribe_manual_all, flush_set, fetch_certsha256, get_shunt_rules, add_shunt_rule, delete_select_shunt_rules, gen_wireguard_keypair, make_check, make_update, make_version, com_update_args, app_update_args;
@@ -987,7 +988,7 @@ urltest_node = function(req) {
 	let id = form_raw(req, 'id');
 	if (id == null)
 		id = '';
-	let result = sh_exec('/usr/share/passwall/test.sh url_test_node ' + q(id));
+	let result = url_test_node(id);
 	apply_timing(e, result, false);
 	return e;
 };

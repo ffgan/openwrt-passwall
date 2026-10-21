@@ -1,14 +1,5 @@
 #!/bin/sh
 
-if [ -e "/etc/config/ucitrack" ]; then
-	uci -q batch <<-EOF
- 		delete ucitrack.@passwall[-1]
-		add ucitrack passwall
-		set ucitrack.@passwall[-1].init=passwall
-		commit ucitrack
-EOF
-fi
-
 uci -q batch <<-EOF
 	delete firewall.passwall
 	set firewall.passwall=include
@@ -46,7 +37,8 @@ do
 	[ -f "/etc/passwall/rules/$file" ] || cp "/usr/share/passwall/rules/$file" "/etc/passwall/rules/$file"
 done
 
-chmod +x /usr/share/passwall/*.sh /usr/share/passwall/*.uc 2>/dev/null || chmod +x /usr/share/passwall/*.sh
+chmod +x /usr/share/passwall/*.sh
+chmod +x /usr/libexec/passwall/*.uc
 
 [ "$(uci -q get passwall.@global_xray[0].sniffing)" == "1" ] && [ "$(uci -q get passwall.@global_xray[0].route_only)" != "1" ] && uci -q set passwall.@global_xray[0].sniffing_override_dest=1
 uci -q delete passwall.@global_xray[0].sniffing

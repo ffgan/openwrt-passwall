@@ -1,6 +1,9 @@
 #!/bin/sh
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
+# app.sh launches this file from `sh -c`, where $0 is the shell rather than
+# the script. The firewall include must still record this path.
+DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
+[ -f "$DIR/nftables.sh" ] && [ -f "$DIR/utils.sh" ] || DIR=/usr/share/passwall
 MY_PATH=$DIR/nftables.sh
 UTILS_PATH=$DIR/utils.sh
 NFTABLE_NAME="inet passwall"
@@ -247,7 +250,7 @@ get_jump_nft() {
 load_acl() {
 	{ [ "$ENABLED_ACLS" = "1" ] || { [ "$ENABLED_DEFAULT_ACL" = "1" ] && [ "$CLIENT_PROXY" = "1" ]; }; } && echolog "  - 访问控制："
 	[ "$ENABLED_ACLS" = 1 ] && {
-		acl_app
+		command -v acl_app >/dev/null 2>&1 && acl_app
 		for sid in $(ls -F ${TMP_ACL_PATH} | grep '/$' | awk -F '/' '{print $1}' | grep -v 'default'); do
 			eval "$(uci -q show "${CONFIG}.${sid}" | cut -d'.' -sf 3-)"
 
