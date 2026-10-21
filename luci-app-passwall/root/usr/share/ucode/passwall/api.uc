@@ -560,34 +560,70 @@ sh_uci_add_list = function(config, section, option, val, commit_flag) {
 		sh_uci_commit(config);
 };
 
-// Lua sourced passwall2 here; the shell helpers live in passwall.
 del_cache_var = function(key) {
-	sys_call(". /usr/share/passwall/utils.sh ; del_cache_var " + shellquote("" + key));
+	let path = TMP_PATH + "/var";
+	let kept = [];
+	for (let line in global.split(readfile(path) ?? "", "\n")) {
+		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=/);
+		if (line != "" && (m == null || m[1] != ("" + key)))
+			push(kept, line);
+	}
+	if (length(kept))
+		writefile(path, join("\n", kept) + "\n");
+	else
+		unlink(path);
 };
 
 set_cache_var = function(key, val) {
-	sys_call(". /usr/share/passwall/utils.sh ; set_cache_var " + shellquote("" + key) + " " + shellquote("" + val));
+	del_cache_var(key);
+	if (val == null || ("" + val) == "")
+		return;
+	mkdir_p(TMP_PATH);
+	let fh = open(TMP_PATH + "/var", "a");
+	if (fh != null) {
+		fh.write(key + "=" + shellquote("" + val) + "\n");
+		fh.close();
+	}
 };
 
 get_cache_var = function(key) {
-	let val = sys_exec(". /usr/share/passwall/utils.sh ; echo -n $(get_cache_var " + shellquote("" + key) + ")");
-	if (val == null || val == "")
-		return null;
-	return val;
+	for (let line in global.split(readfile(TMP_PATH + "/var") ?? "", "\n")) {
+		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+		if (m == null || m[1] != ("" + key))
+			continue;
+		let val = m[2];
+		if (length(val) >= 2 && substr(val, 0, 1) == "'" && substr(val, -1) == "'")
+			val = replace(substr(val, 1, length(val) - 2), /'\\''/g, "'");
+		return val == "" ? null : val;
+	}
+	return null;
 };
 
 get_new_port = function(start_port, protocol) {
-	if (!isset(start_port) || match(trim("" + start_port), /^-?[0-9]+$/) == null)
-		start_port = "auto";
-	else
-		start_port = "" + int(start_port);
+	let automatic = !isset(start_port) || trim("" + start_port) == "auto";
+	let port = automatic ? int(get_cache_var("last_get_new_port_auto") ?? "2000") + 1 : int(start_port);
+	if (port != port || port < 1025 || port > 49151)
+		port = 2001;
 	if (protocol != "tcp" && protocol != "udp")
 		protocol = "tcp,udp";
-	let out = sys_exec(". /usr/share/passwall/utils.sh ; echo -n $(get_new_port " + shellquote("" + start_port) + " " + shellquote(protocol) + ")");
-	let n = int(trim(out));
-	if (n != n)
-		return null;
-	return n;
+	let start = port;
+	while (true) {
+		let flag = protocol == "tcp" ? "-tln" : (protocol == "udp" ? "-uln" : "-tuln");
+		let ph = popen(["netstat", flag], "r");
+		let sockets = ph == null ? "" : read_all(ph);
+		if (ph != null) ph.close();
+		let busy = match(sockets, regexp(":" + port + "[[:space:]]")) != null;
+		if (!busy && (!automatic || get_cache_var("get_port_" + port) == null))
+			break;
+		port = port < 49151 ? port + 1 : 1025;
+		if (port == start)
+			return null;
+	}
+	if (automatic) {
+		set_cache_var("get_port_" + port, "1");
+		set_cache_var("last_get_new_port_auto", port);
+	}
+	return port;
 };
 
 exec_call = function(cmd) {
@@ -2338,6 +2374,8 @@ get_version = function() {
 	} else {
 		// OpenWrt 25.12 replaced opkg. `apk info` lists names only, so read
 		// the version from `apk query` and fall back to the installed database.
+		// Prefer that database whenever it is present so a leftover opkg
+		// status file cannot report a stale version.
 		let apk_size = fs_stat("/lib/apk/db/installed", "size");
 		if (apk_size != null && apk_size > 0) {
 			version = trim(sys_exec("apk query --installed --format json --fields name,version luci-app-passwall 2>/dev/null | jsonfilter -e '$[0].version' 2>/dev/null"));
