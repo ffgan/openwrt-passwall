@@ -12,6 +12,9 @@ const LIBEXEC = "/usr/libexec/passwall/nftables.uc";
 
 let env = {};
 let pending = [];
+// ucode 2026.01.16 does not hoist functions. Names used before their
+// definition have to be declared up front.
+let wan_addresses, add_icmp_rules, flush_table;
 
 function run(argv, quiet) {
 	let rc;
@@ -30,6 +33,30 @@ function run(argv, quiet) {
 
 function output(argv) {
 	let p = api.command_pipe(argv, "r");
+	if (p == null)
+		return "";
+	let data = p.read("all") ?? "";
+	p.close();
+	return data;
+}
+
+function shell_join(argv) {
+	let parts = [];
+	for (let arg in argv)
+		push(parts, api.shellquote(arg));
+	return join(" ", parts);
+}
+
+function quiet_status(argv) {
+	let p = api.command_pipe(shell_join(argv) + " >/dev/null 2>&1", "r");
+	if (p == null)
+		return 255;
+	let rc = p.close();
+	return rc == null ? 255 : rc;
+}
+
+function quiet_output(argv) {
+	let p = api.command_pipe(shell_join(argv) + " 2>/dev/null", "r");
 	if (p == null)
 		return "";
 	let data = p.read("all") ?? "";
@@ -134,12 +161,12 @@ function nft_output(argv) {
 }
 
 function table_exists() {
-	return run(["nft", "list", "table", "inet", "passwall"], true) == 0;
+	return quiet_status(["nft", "list", "table", "inet", "passwall"]) == 0;
 }
 
 function set_exists(name) {
 	nft_flush(true);
-	return run(["nft", "list", "set", "inet", "passwall", name], true) == 0;
+	return quiet_status(["nft", "list", "set", "inet", "passwall", name]) == 0;
 }
 
 function ensure_table() {
@@ -843,7 +870,7 @@ function setup_icmp() {
 	}
 }
 
-function add_icmp_rules() {
+add_icmp_rules = function() {
 	let accept4 = cfg("@global_forwarding[0]", "accept_icmp", "0") == "1";
 	let accept6 = cfg("@global_forwarding[0]", "accept_icmpv6", "0") == "1";
 	if (accept4) {
@@ -864,7 +891,7 @@ function add_icmp_rules() {
 		if (e("TCP_PROXY_MODE") != "disable") nft("add rule " + TABLE + " PSW_ICMP_REDIRECT meta l4proto icmpv6 counter redirect");
 		nft("add rule " + TABLE + " PSW_ICMP_REDIRECT meta l4proto icmpv6 counter return");
 	}
-}
+};
 
 function base_rules(tproxy) {
 	chain("PSW_DIVERT");
@@ -956,13 +983,13 @@ function add_routes() {
 }
 
 function delete_routes() {
-	run(["ip", "rule", "del", "fwmark", MARK], true);
-	run(["ip", "route", "del", "local", "0.0.0.0/0", "dev", "lo", "table", "999"], true);
-	run(["ip", "-6", "rule", "del", "fwmark", MARK], true);
-	run(["ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", "999"], true);
+	quiet_status(["ip", "rule", "del", "fwmark", MARK]);
+	quiet_status(["ip", "route", "del", "local", "0.0.0.0/0", "dev", "lo", "table", "999"]);
+	quiet_status(["ip", "-6", "rule", "del", "fwmark", MARK]);
+	quiet_status(["ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", "999"]);
 }
 
-function wan_addresses(family) {
+wan_addresses = function(family) {
 	let out = [];
 	let data = output(["ubus", "call", "network.interface", "dump"]);
 	let decoded;
@@ -978,7 +1005,7 @@ function wan_addresses(family) {
 		}
 	}
 	return out;
-}
+};
 
 function update_wan_sets(do_log) {
 	if (!table_exists())
@@ -1040,7 +1067,7 @@ function filter_direct_node_list() {
 }
 
 function mwan3_stop() {
-	let listing = output(["nft", "-a", "list", "chain", "ip", "mangle", "mwan3_hook"]);
+	let listing = quiet_output(["nft", "-a", "list", "chain", "ip", "mangle", "mwan3_hook"]);
 	for (let line in split(listing, "\n")) {
 		if (index(line, MARK) < 0 && index(line, "passwall") < 0)
 			continue;
@@ -1052,7 +1079,7 @@ function mwan3_stop() {
 }
 
 function mwan3_start() {
-	if (run(["nft", "list", "chain", "ip", "mangle", "mwan3_hook"], true) != 0)
+	if (quiet_status(["nft", "list", "chain", "ip", "mangle", "mwan3_hook"]) != 0)
 		return 0;
 	mwan3_stop();
 	let rc = run(["nft", "insert", "rule", "ip", "mangle", "mwan3_hook", "ct", "mark", MARK, "counter", "return", "comment", "passwall"], true);
@@ -1103,10 +1130,10 @@ function flush_nftset() {
 	}
 }
 
-function flush_table() {
-	run(["nft", "flush", "table", "inet", "passwall"], true);
-	run(["nft", "delete", "table", "inet", "passwall"], true);
-}
+flush_table = function() {
+	quiet_status(["nft", "flush", "table", "inet", "passwall"]);
+	quiet_status(["nft", "delete", "table", "inet", "passwall"]);
+};
 
 function flush_include() {
 	write(include_path(), "#!/bin/sh\n");
