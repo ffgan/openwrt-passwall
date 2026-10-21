@@ -1767,7 +1767,7 @@ start() {
 	if [ "$USE_TABLES" = "nftables" ]; then
 		[ "$ENABLED_ACLS" = 1 ] && acl_app
 		write_nft_env
-		ucode $UCODE_BIN/nftables.uc start
+		$UCODE_BIN/nftables.uc start
 	elif [ -n "$USE_TABLES" ]; then
 		source $APP_PATH/${USE_TABLES}.sh start
 	fi
@@ -1804,7 +1804,7 @@ stop() {
 	clean_log
 	eval_cache_var
 	if [ "$USE_TABLES" = "nftables" ]; then
-		ucode $UCODE_BIN/nftables.uc stop
+		$UCODE_BIN/nftables.uc stop
 	elif [ -n "$USE_TABLES" ]; then
 		source $APP_PATH/${USE_TABLES}.sh stop
 	fi
