@@ -3,7 +3,7 @@
 		"description": "Grant UCI, file and ubus access for luci-app-passwall",
 		"read": {
 			"ubus": {
-				"file": [ "list", "read", "stat", "exec" ],
+				"file": [ "list", "read", "stat" ],
 				"luci": [ "getFeatures" ],
 				"luci-rpc": [ "getNetworkDevices", "getHostHints", "getDHCPLeases" ],
 				"luci.passwall": [ "*" ],
@@ -22,11 +22,6 @@
 				"/tmp/etc/passwall_server/": [ "list", "read" ],
 				"/usr/lib/smartdns_ui.so": [ "stat" ],
 				"/usr/lib/smartdns/smartdns_ui.so": [ "stat" ],
-				"/bin/sh": [ "exec" ],
-				"/usr/bin/ucode": [ "exec" ],
-				"/usr/bin/curl": [ "exec" ],
-				"/bin/ping": [ "exec" ],
-				"/usr/bin/tcping": [ "exec" ],
 				"/usr/sbin/haproxy": [ "stat" ]
 			}
 		},

@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall
 PKG_VERSION:=26.10.16
-PKG_RELEASE:=10
+PKG_RELEASE:=11
 PKG_PO_VERSION:=$(PKG_VERSION)
 PKG_LICENSE:=GPL-3.0-only
 
