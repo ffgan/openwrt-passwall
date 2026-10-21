@@ -15,6 +15,11 @@ function default_device(family) {
 	return m?.[2] ?? '';
 }
 
+export function restart(interface) {
+	api.log('network: passwall restart when ' + (interface ?? '') + ' ifup');
+	return utils.run(['/etc/init.d/passwall', 'restart'], true);
+}
+
 export function iface(action, device, interface) {
 	if ((action != 'ifup' && action != 'ifupdate') || !device || !active())
 		return 0;
@@ -28,8 +33,11 @@ export function iface(action, device, interface) {
 			return utils.run(['/usr/bin/ucode', '/usr/libexec/passwall/iptables.uc', 'update_wan_sets'], true);
 		return 0;
 	}
-	api.log('network: passwall restart when ' + (interface ?? '') + ' ifup');
-	return utils.run(['/etc/init.d/passwall', 'restart'], true);
+	api.fs.mkdirr('/var/lock');
+	return utils.run([
+		'flock', '-xn', '/var/lock/passwall_ifup.lock',
+		'/usr/bin/ucode', '/usr/libexec/passwall/hotplug.uc', 'restart', interface ?? ''
+	], true);
 }
 
 export function ntp(offset) {

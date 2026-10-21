@@ -350,7 +350,19 @@ export function add_ip2route(host, iface) {
 		return 1;
 	}
 	let status = interface_status(iface);
-	let gateway = status.route?.[0]?.nexthop ?? '';
+	let gateway = '';
+	for (let route in status.route ?? []) {
+		let target = route.target ?? '';
+		let mask = route.mask;
+		if (route.nexthop && (
+			target == 'default' ||
+			target == '0.0.0.0/0' ||
+			(target == '0.0.0.0' && (mask == null || int(mask) == 0))
+		)) {
+			gateway = route.nexthop;
+			break;
+		}
+	}
 	let device = status.l3_device ?? status.device ?? iface;
 	let remarks = host == ip ? host : host + '(' + ip + ')';
 	if (gateway != '' && run(['route', 'add', '-host', ip, 'gw', gateway, 'dev', device], true) == 0) {
