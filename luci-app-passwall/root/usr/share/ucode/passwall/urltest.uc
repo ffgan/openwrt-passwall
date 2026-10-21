@@ -81,7 +81,7 @@ cleanup_socks = function(flag) {
 	if (listed != null) {
 		let lines = split_lines(listed.out);
 		for (let line in lines) {
-			if (match(line, /test\.sh/) != null)
+			if (match(line, /urltest\.uc/) != null)
 				continue;
 			let pid = match(line, /^[ \t]*([0-9]+)/);
 			if (pid != null)

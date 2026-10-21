@@ -1123,7 +1123,7 @@ export function clean_crontab() {
 	clean_cron_lines();
 	let listed = command_output(['busybox', 'pgrep', '-af', 'passwall/']);
 	for (let line in split(listed, '\n')) {
-		if (match(line, /tasks\.(sh|uc)/) == null) continue;
+		if (match(line, /tasks\.uc/) == null) continue;
 		let pid = match(line, /^([0-9]+)/)?.[1];
 		if (pid) command(['kill', '-9', pid], true);
 	}
@@ -1311,7 +1311,7 @@ export function stop(mode, internal) {
 	}
 	kill_matching('passwall/monitor.', []);
 	kill_matching('sleep.*(6s|9s|58s)', []);
-	kill_matching('passwall/', [/app\.(sh|uc)/, /subscribe\.(lua|uc)/, /rule_update\.(lua|uc)/, /tasks\.(sh|uc)/, /server_app\.(lua|uc)/, /ujail/]);
+	kill_matching('passwall/', [/app\.uc/, /subscribe\.(lua|uc)/, /rule_update\.(lua|uc)/, /tasks\.uc/, /server_app\.(lua|uc)/, /ujail/]);
 	stop_crontab(mode);
 	unlink_tree(cache.GLOBAL_DNSMASQ_CONF ?? '');
 	unlink_tree(cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');
