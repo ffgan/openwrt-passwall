@@ -884,7 +884,7 @@ start_socks() {
 				NO_REC_PROCESS=$no_rec $APP_PATH/app.sh run_socks flag=$id node=$node bind=$bind socks_port=$port config_file=$config_file http_port=$http_port http_config_file=$http_config_file log_file=$log_file
 				set_cache_var "${id}" "$node"
 				#自动切换逻辑
-				[ "$enable_autoswitch" = "1" ] && { $APP_PATH/socks_auto_switch.sh ${id} > /dev/null 2>&1 & }
+				[ "$enable_autoswitch" = "1" ] && { ucode $UCODE_BIN/socks_auto_switch.uc ${id} > /dev/null 2>&1 & }
 			done
 		}
 	}
@@ -940,7 +940,7 @@ clean_crontab() {
 	sed -i "/$(echo "ucode ${APP_PATH}/subscribe.uc start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "lua ${APP_PATH}/subscribe.lua start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 
-	busybox pgrep -af "${CONFIG}/" | awk '/tasks\.sh/{print $1}' | xargs kill -9 >/dev/null 2>&1
+	busybox pgrep -af "${CONFIG}/" | awk '/tasks\.(sh|uc)/{print $1}' | xargs kill -9 >/dev/null 2>&1
 	rm -f ${LOCK_PATH}/${CONFIG}_tasks.lock
 }
 
@@ -951,7 +951,7 @@ start_crontab() {
 
 	if [ "$ENABLED_DEFAULT_ACL" = "1" ] || [ "$ENABLED_ACLS" = "1" ]; then
 		local start_daemon=$(config_n_get @global_delay[0] start_daemon 0)
-		[ "$start_daemon" = "1" ] && { $APP_PATH/monitor.sh > /dev/null 2>&1 & }
+		[ "$start_daemon" = "1" ] && { ucode $UCODE_BIN/monitor.uc > /dev/null 2>&1 & }
 	fi
 
 	if [ "$1" = "cron" ]; then
@@ -1053,7 +1053,7 @@ start_crontab() {
 	# ===== loop =====
 	if [ "$ENABLED_DEFAULT_ACL" = "1" ] || [ "$ENABLED_ACLS" = "1" ]; then
 		if [ "$update_loop" = "1" ]; then
-			$APP_PATH/tasks.sh > /dev/null 2>&1 &
+			ucode $UCODE_BIN/tasks.uc > /dev/null 2>&1 &
 			echolog "自动更新：启动循环更新进程。"
 		fi
 	else
@@ -1789,9 +1789,9 @@ stop() {
 			kill -9 "$pid" >/dev/null 2>&1
 		fi
 	done
-	busybox pgrep -af "${CONFIG}/monitor\.sh" | xargs -r kill -9 >/dev/null 2>&1
+	busybox pgrep -af "${CONFIG}/monitor\." | xargs -r kill -9 >/dev/null 2>&1
 	busybox pgrep -f "sleep.*(6s|9s|58s)" | xargs -r kill -9 >/dev/null 2>&1
-	busybox pgrep -af "${CONFIG}/" | awk '! /app\.sh|subscribe\.(lua|uc)|rule_update\.(lua|uc)|tasks\.sh|server_app\.(lua|uc)|ujail/{print $1}' | xargs -r kill -9 >/dev/null 2>&1
+	busybox pgrep -af "${CONFIG}/" | awk '! /app\.sh|subscribe\.(lua|uc)|rule_update\.(lua|uc)|tasks\.(sh|uc)|server_app\.(lua|uc)|ujail/{print $1}' | xargs -r kill -9 >/dev/null 2>&1
 	unset V2RAY_LOCATION_ASSET
 	unset XRAY_LOCATION_ASSET
 	unset SS_SYSTEM_DNS_RESOLVER_FORCE_BUILTIN
