@@ -35,7 +35,7 @@ del_cache_var() { _pw_utils del_cache_var "$1"; }
 set_cache_var() { _pw_utils set_cache_var "$1" "$2"; }
 get_cache_var() { _pw_utils get_cache_var "$1"; }
 first_type() { _pw_utils first_type "$1" "$2"; }
-get_enabled_anonymous_secs() { uci -q show "$CONFIG" | sed -n "s/^$CONFIG\.\([^.=]*\)=${1}$/\1/p"; }
+get_enabled_anonymous_secs() { _pw_utils get_enabled_anonymous_secs "$1"; }
 get_geoip() { _pw_utils get_geoip "$1" "$2"; }
 get_host_ip() { _pw_utils get_host_ip "$1" "$2" "$3"; }
 get_node_host_ip() { _pw_utils get_node_host_ip "$1"; }
@@ -51,12 +51,12 @@ get_ip_port_from() {
 	eval "$2=\$host; $3=\$port"
 }
 parse_doh() {
-	local value url bootstrap hp host port
-	value=$(printf %s "$1" | tr -d ' \t\r\n')
-	url=${value%%,*}; bootstrap=${value#*,}; [ "$bootstrap" = "$value" ] && bootstrap=
-	hp=$(pw_api "get_domain_from_url(\"$url\")")
-	get_ip_port_from "$hp" host port
-	[ -n "$port" ] || port=443
+	local value url bootstrap host port
+	value=$1
+	url=$(_pw_utils parse_doh "$value" url)
+	host=$(_pw_utils parse_doh "$value" host)
+	port=$(_pw_utils parse_doh "$value" port)
+	bootstrap=$(_pw_utils parse_doh "$value" bootstrap)
 	eval "$2=\$url; $3=\$host; $4=\$port; $5=\$bootstrap"
 }
 host_from_url() { _pw_utils host_from_url "$1"; }

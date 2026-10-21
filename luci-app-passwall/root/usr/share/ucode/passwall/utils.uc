@@ -141,14 +141,30 @@ export function get_cache_var(key) {
 
 export function first_type(primary, fallback) {
 	let names = [primary, fallback];
+	let dirs = [], seen = {};
+	let path_env = type(global.getenv) == 'function' ? global.getenv('PATH') : null;
+	for (let dir in split(path_env ?? '', ':')) {
+		dir = replace(dir, /\/+$/, '');
+		if (dir != '' && !seen[dir]) {
+			seen[dir] = true;
+			push(dirs, dir);
+		}
+	}
+	for (let dir in ['/bin', '/sbin', '/usr/bin', '/usr/sbin', TMP_BIN_PATH])
+		if (!seen[dir]) {
+			seen[dir] = true;
+			push(dirs, dir);
+		}
 	for (let name in names) {
 		if (name == null || name == '')
 			continue;
-		if (substr(name, 0, 1) == '/' && fs.access(name, 'x'))
+		if (index(name, '/') >= 0 && fs.access(name, 'x'))
 			return name;
-		for (let path in ['/bin/' + name, '/sbin/' + name, '/usr/bin/' + name, '/usr/sbin/' + name, TMP_BIN_PATH + '/' + name])
+		for (let dir in dirs) {
+			let path = dir + '/' + name;
 			if (fs.access(path, 'x'))
 				return path;
+		}
 	}
 	return '';
 }
