@@ -142,12 +142,8 @@ function migrate_client() {
 	cur.set('uhttpd', 'main', 'max_requests', '50');
 	cur.commit('uhttpd');
 
-	if (fs.access('/sbin/fw3', 'x'))
-		cur.set('firewall', 'passwall', 'reload', '1');
-	else {
-		cur.delete('firewall', 'passwall', 'reload');
-		cur.delete('firewall', 'passwall', 'fw4_compatible');
-	}
+	cur.set('firewall', 'passwall', 'fw4_compatible', '1');
+	cur.delete('firewall', 'passwall', 'reload');
 	cur.commit('firewall');
 
 	if ((fs.stat('/etc/config/passwall')?.size ?? 0) == 0) {
@@ -170,6 +166,7 @@ function migrate_client() {
 
 	if (cur.get(CLIENT_CONFIG, '@global_haproxy[0]', 'health_check_type') == 'passwall_logic')
 		cur.set(CLIENT_CONFIG, '@global_haproxy[0]', 'health_check_type', 'script_logic');
+	cur.delete(CLIENT_CONFIG, '@global_forwarding[0]', 'prefer_nft');
 
 	for (let s in sections(cur, CLIENT_CONFIG, 'socks')) {
 		let sid = s['.name'];

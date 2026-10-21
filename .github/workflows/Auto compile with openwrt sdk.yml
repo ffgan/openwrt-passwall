@@ -82,11 +82,6 @@ jobs:
           echo "* 将文件上传到您的设备，使用 Shell 命令进行安装。" >>release.txt
           echo "  Upload files to your device, install it with shell command." >>release.txt
           echo "" >>release.txt
-          echo "ipk" >>release.txt
-          echo "\`\`\`" >>release.txt
-          echo "opkg install /path/to/package.ipk" >>release.txt
-          echo "\`\`\`" >>release.txt
-          echo "apk" >>release.txt
           echo "\`\`\`" >>release.txt
           echo "apk add --allow-untrusted /path/to/package.apk" >>release.txt
           echo "\`\`\`" >>release.txt

@@ -161,11 +161,6 @@ return view.extend({
 			return el;
 		};
 
-		o = s.option(form.ListValue, 'prefer_nft', _('Prefer firewall tools'));
-		o.default = '1';
-		o.value('0', 'Iptables');
-		o.value('1', 'Nftables');
-
 		if (hasProxy) {
 			o = s.option(form.ListValue, 'tcp_proxy_way', _('TCP Proxy Way'));
 			o.default = 'redirect';

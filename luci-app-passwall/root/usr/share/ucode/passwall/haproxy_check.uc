@@ -33,7 +33,7 @@ bracket_host = function(host) {
 // HAProxy external-check appends proxy address, proxy port, server address, server port.
 main = function(argv) {
 	let busy = read_cmd(["busybox", "pgrep", "-af", "passwall/"]);
-	if (busy != null && match(busy.out, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc|iptables\.uc|subscribe\.uc/) != null)
+	if (busy != null && match(busy.out, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc|subscribe\.uc/) != null)
 		exit(0);
 
 	let server = bracket_host(argv[2] ?? "");

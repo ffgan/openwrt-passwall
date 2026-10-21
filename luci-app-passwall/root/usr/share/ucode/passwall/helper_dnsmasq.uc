@@ -291,7 +291,7 @@ add_rule = function(var) {
 	let DEFAULT_PROXY_MODE = var["-DEFAULT_PROXY_MODE"];
 	let NO_PROXY_IPV6 = var["-NO_PROXY_IPV6"];
 	let NO_LOGIC_LOG = var["-NO_LOGIC_LOG"];
-	let NFTFLAG = var["-NFTFLAG"];
+	let NFTFLAG = "1";
 	let CACHE_PATH = api.CACHE_PATH;
 	let CACHE_FLAG = "dnsmasq_" + FLAG;
 	let CACHE_DNS_PATH = CACHE_PATH + "/" + CACHE_FLAG;
@@ -747,7 +747,7 @@ add_rule = function(var) {
 			let address_lines = [];
 			let server_lines = [];
 			let ipset_lines = [];
-			let set_name = (NFTFLAG == "1") ? "nftset" : "ipset";
+			let set_name = "nftset";
 			for (let key, value in list1) {
 				if (value.address != null && value.address !== false) {
 					let domain = "." + key;

@@ -1042,13 +1042,12 @@ function filter_direct_node_list() {
 function mwan3_stop() {
 	let listing = output(["nft", "-a", "list", "chain", "ip", "mangle", "mwan3_hook"]);
 	for (let line in split(listing, "\n")) {
-		if (index(line, MARK) < 0)
+		if (index(line, MARK) < 0 && index(line, "passwall") < 0)
 			continue;
 		let m = match(line, /# handle ([0-9]+)/);
 		if (m != null)
 			run(["nft", "delete", "rule", "ip", "mangle", "mwan3_hook", "handle", m[1]], true);
 	}
-	while (run(["iptables", "-w", "5", "-t", "mangle", "-D", "mwan3_hook", "-m", "connmark", "--mark", MARK + "/0xffffffff", "-j", "RETURN"], true) == 0) {}
 	return 0;
 }
 
@@ -1056,7 +1055,7 @@ function mwan3_start() {
 	if (run(["nft", "list", "chain", "ip", "mangle", "mwan3_hook"], true) != 0)
 		return 0;
 	mwan3_stop();
-	let rc = run(["iptables", "-w", "5", "-t", "mangle", "-I", "mwan3_hook", "1", "-m", "connmark", "--mark", MARK + "/0xffffffff", "-j", "RETURN"], true);
+	let rc = run(["nft", "insert", "rule", "ip", "mangle", "mwan3_hook", "ct", "mark", MARK, "counter", "return", "comment", "passwall"], true);
 	if (rc != 0)
 		run(["logger", "-t", "passwall", "mwan3: failed to add " + MARK + " exemption rule to mangle/mwan3_hook"], true);
 	return rc;

@@ -15,7 +15,6 @@ PKG_PO_VERSION:=$(PKG_VERSION)
 PKG_LICENSE:=GPL-3.0-only
 
 PKG_CONFIG_DEPENDS:= \
-	CONFIG_PACKAGE_$(PKG_NAME)_Iptables_Transparent_Proxy \
 	CONFIG_PACKAGE_$(PKG_NAME)_Nftables_Transparent_Proxy \
 	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Geoview \
 	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Haproxy \
@@ -34,7 +33,7 @@ PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Xray_Plugin
 
 LUCI_TITLE:=LuCI support for PassWall
-LUCI_DESCRIPTION:=LuCI interface for PassWall. Transparent proxy follows firewall4 and nftables; iptables/ipset remain available for the legacy firewall.
+LUCI_DESCRIPTION:=LuCI interface for PassWall on OpenWrt 25.12 and later. Transparent proxy uses firewall4 and nftables.
 LUCI_PKGARCH:=all
 LUCI_URL:=https://github.com/Openwrt-Passwall/openwrt-passwall
 LUCI_MAINTAINER:=Openwrt-Passwall Organization
@@ -48,21 +47,6 @@ define Package/$(PKG_NAME)/config
 menu "Configuration"
 	depends on PACKAGE_$(PKG_NAME)
 
-config PACKAGE_$(PKG_NAME)_Iptables_Transparent_Proxy
-	bool "Iptables Transparent Proxy"
-	select PACKAGE_ipset
-	select PACKAGE_ipt2socks
-	select PACKAGE_iptables-zz-legacy
-	select PACKAGE_ip6tables-zz-legacy if IPV6
-	select PACKAGE_dnsmasq_full_ipset
-	select PACKAGE_iptables-mod-conntrack-extra
-	select PACKAGE_iptables-mod-extra
-	select PACKAGE_iptables-mod-iprange
-	select PACKAGE_iptables-mod-socket
-	select PACKAGE_iptables-mod-tproxy
-	select PACKAGE_kmod-ipt-nat
-	default y if ! PACKAGE_firewall4
-
 config PACKAGE_$(PKG_NAME)_Nftables_Transparent_Proxy
 	bool "Nftables Transparent Proxy"
 	select PACKAGE_ipt2socks
@@ -73,7 +57,7 @@ config PACKAGE_$(PKG_NAME)_Nftables_Transparent_Proxy
 	select PACKAGE_kmod-nft-nat
 	select PACKAGE_kmod-nf-reject
 	select PACKAGE_kmod-nf-reject6
-	default y if PACKAGE_firewall4
+	default y
 
 config PACKAGE_$(PKG_NAME)_INCLUDE_Geoview
 	bool "Include Geoview"

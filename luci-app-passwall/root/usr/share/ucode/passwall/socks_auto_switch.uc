@@ -104,7 +104,7 @@ curl_code = function(url, tries, timeout, proxy, repeat) {
 check_process = function() {
 	while (true) {
 		let got = read_cmd(["busybox", "pgrep", "-af", "passwall/"]);
-		if (got == null || match(got.out, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc|iptables\.uc|subscribe\.uc/) == null)
+		if (got == null || match(got.out, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc|subscribe\.uc/) == null)
 			return;
 		command_rc(["sleep", "6s"]);
 	}

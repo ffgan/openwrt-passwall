@@ -181,7 +181,7 @@ main = function(argv) {
 	let DEFAULT_TAG = vmap["-DEFAULT_TAG"];
 	let NO_LOGIC_LOG = vmap["-NO_LOGIC_LOG"];
 	let NODE = vmap["-NODE"];
-	let NFTFLAG = vmap["-NFTFLAG"];
+	let NFTFLAG = "1";
 	let FILTER_HTTPS = vmap["-FILTER_HTTPS"];
 	let LOG_FILE = vmap["-LOG_FILE"];
 

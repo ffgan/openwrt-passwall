@@ -18,7 +18,7 @@ function default_device(family) {
 export function restart(interface) {
 	api.log('network: passwall restart when ' + (interface ?? '') + ' ifup');
 	return utils.run(['/etc/init.d/passwall', 'restart'], true);
-}
+};
 
 export function iface(action, device, interface) {
 	if ((action != 'ifup' && action != 'ifupdate') || !device || !active())
@@ -26,19 +26,16 @@ export function iface(action, device, interface) {
 	if (default_device('ip4') != device && default_device('ip6') != device)
 		return 0;
 	if (action == 'ifupdate') {
-		let table = utils.get_cache_var('USE_TABLES');
-		if (table == 'nftables')
-			return utils.run(['/usr/libexec/passwall/nftables.uc', 'update_wan_sets'], true);
-		if (table == 'iptables')
-			return utils.run(['/usr/bin/ucode', '/usr/libexec/passwall/iptables.uc', 'update_wan_sets'], true);
-		return 0;
+		if (utils.get_cache_var('USE_TABLES') != 'nftables')
+			return 0;
+		return utils.run(['/usr/libexec/passwall/nftables.uc', 'update_wan_sets'], true);
 	}
 	api.fs.mkdirr('/var/lock');
 	return utils.run([
 		'flock', '-xn', '/var/lock/passwall_ifup.lock',
 		'/usr/bin/ucode', '/usr/libexec/passwall/hotplug.uc', 'restart', interface ?? ''
 	], true);
-}
+};
 
 export function ntp(offset) {
 	offset = int(split('' + (offset ?? 0), '.')[0]);
@@ -48,4 +45,4 @@ export function ntp(offset) {
 	fs.writefile('/var/lock/passwall_ntp.lock', 'locked\n');
 	api.log('network: passwall restart after NTP time step (' + offset + 's)');
 	return utils.run(['/etc/init.d/passwall', 'restart'], true);
-}
+};

@@ -114,46 +114,24 @@ function launch_core(file, name, logfile, args, env) {
 }
 
 export function check_run_environment() {
-	let prefer_nft = cfg('@global_forwarding[0]', 'prefer_nft', '1');
 	let info = command_output(['dnsmasq', '-v']);
 	let ver = match(info, /[Vv]ersion\s+([0-9.]+)/)?.[1] ?? '';
-	let dns_ipset = match(info, /(^|[[:space:]])ipset([[:space:]]|$)/) != null;
 	let dns_nftset = match(info, /(^|[[:space:]])nftset([[:space:]]|$)/) != null;
-	let has_ipt = utils.first_type('iptables-legacy', 'iptables') != '';
-	let has_ipset = utils.first_type('ipset') != '';
 	let has_fw4 = utils.first_type('fw4') != '';
-	let table = '';
-	if (prefer_nft == '1') {
-		if (dns_nftset && has_fw4)
-			table = 'nftables';
-		else if (has_ipset && has_ipt && dns_ipset) {
-			table = 'iptables';
-			api.log('警告：nftables (fw4) 应用环境不完整，切换至 iptables。(has_fw4:' + (+has_fw4) + '/dnsmasq_nftset:' + (+dns_nftset) + ')');
-		}
-	} else {
-		if (has_ipset && has_ipt && dns_ipset)
-			table = 'iptables';
-		else if (dns_nftset && has_fw4) {
-			table = 'nftables';
-			api.log('警告：iptables (fw3) 应用环境不完整，切换至 nftables。');
-		}
-	}
-	if (table == '') {
-		api.log('警告：不满足任何透明代理系统环境。');
+	state.nftflag = '1';
+	if (!(dns_nftset && has_fw4)) {
+		api.log('警告：透明代理需要 firewall4，以及带 nftset 的 Dnsmasq。(has_fw4:' + (+has_fw4) + '/dnsmasq_nftset:' + (+dns_nftset) + ')');
+		state.USE_TABLES = '';
 		return '';
 	}
-	let deps = table == 'iptables'
-		? ['iptables-mod-tproxy', 'iptables-mod-socket', 'iptables-mod-iprange', 'iptables-mod-conntrack-extra', 'iptables-mod-extra', 'kmod-ipt-nat']
-		: ['kmod-nft-socket', 'kmod-nft-tproxy', 'kmod-nft-nat', 'kmod-nf-reject', 'kmod-nf-reject6'];
-	for (let dep in deps)
+	for (let dep in ['kmod-nft-socket', 'kmod-nft-tproxy', 'kmod-nft-nat', 'kmod-nf-reject', 'kmod-nf-reject6'])
 		if (!utils.pkg_installed(dep))
-			api.log('警告：' + table + ' 透明代理缺失基础依赖 ' + dep + '！');
-	if (table == 'nftables' && utils.check_ver(ver, '2.92') == 1)
+			api.log('警告：nftables 透明代理缺失基础依赖 ' + dep + '！');
+	if (utils.check_ver(ver, '2.92') == 1)
 		api.log('提示：Dnsmasq (' + ver + ') 低于 2.92，建议升级以增强稳定性。');
-	state.nftflag = table == 'nftables' ? '1' : '0';
-	state.USE_TABLES = table;
-	return table;
-}
+	state.USE_TABLES = 'nftables';
+	return 'nftables';
+};
 
 export function run_ipt2socks(raw) {
 	let o = type(raw) == 'object' && type(raw) != 'array' ? raw : option_args(raw);
@@ -164,7 +142,7 @@ export function run_ipt2socks(raw) {
 	if (o.tcp_tproxy == null || o.tcp_tproxy == '')
 		push(args, '-R');
 	return launch_core(utils.first_type('ipt2socks'), 'ipt2socks_' + (o.flag ?? '') + '_TCP_UDP', o.log_file || '/dev/null', args);
-}
+};
 
 function dns_fields(o, target) {
 	let local = o.direct_dns_udp_server ?? o.direct_dns_tcp_server ?? state.LOCAL_DNS;
@@ -253,11 +231,11 @@ function run_core(kind, raw) {
 
 export function run_singbox(raw) {
 	return run_core('sing-box', raw);
-}
+};
 
 export function run_xray(raw) {
 	return run_core('xray', raw);
-}
+};
 
 export function run_dns2socks(raw) {
 	let o = type(raw) == 'object' && type(raw) != 'array' ? raw : option_args(raw);
@@ -269,7 +247,7 @@ export function run_dns2socks(raw) {
 		push(args, '/d');
 	push(args, socks, utils.format_dns(o.dns, 53), o.listen_address + ':' + o.listen_port);
 	return launch_core(utils.first_type('dns2socks'), 'dns2socks' + (o.flag ? '_' + o.flag : ''), o.log_file || '/dev/null', args);
-}
+};
 
 export function run_chinadns_ng(raw) {
 	let o = type(raw) == 'object' && type(raw) != 'array' ? raw : option_args(raw);
@@ -289,7 +267,7 @@ export function run_chinadns_ng(raw) {
 		push(args, '-' + substr(key, 1), val ?? '');
 	helper_output('helper_chinadns_add.uc', args, conf);
 	return launch_core(utils.first_type('chinadns-ng'), 'chinadns-ng', logfile, ['-C', conf]);
-}
+};
 
 function normalize_file(path) {
 	if (!path)
@@ -404,7 +382,7 @@ export function run_socks(raw) {
 	if (!o.no_run && host != '127.0.0.1' && type_name != 'sing-box' && type_name != 'xray')
 		append(TMP + '/direct_node_list', o.node + '\n');
 	return 0;
-}
+};
 
 function get_direct_dns_mode() {
 	return state.ENABLED_DEFAULT_ACL == '1' && state.DNS_SHUNT == 'smartdns'
@@ -436,7 +414,7 @@ export function get_local_dns() {
 	state.ISP_DNS6 = join(' ', v6);
 	state.DEFAULT_DNS = length(defaults) ? join(',', defaults) : join(',', v4);
 	state.LOCAL_DNS = split(state.DEFAULT_DNS || '223.5.5.5', ',')[0];
-}
+};
 
 export function get_config() {
 	get_local_dns();
@@ -516,7 +494,7 @@ export function get_config() {
 	}
 	utils.set_cache_var('LOCAL_DNS', state.LOCAL_DNS);
 	return state;
-}
+};
 
 export function start_socks() {
 	if (state.SOCKS_ENABLED != '1')
@@ -537,7 +515,7 @@ export function start_socks() {
 			launch_core('/usr/bin/ucode', 'socks_auto_switch_' + id, '/dev/null', [LIBEXEC + '/socks_auto_switch.uc', id],
 			            { NO_REC_PROCESS: '1' });
 	});
-}
+};
 
 export function socks_node_switch(raw) {
 	let o = type(raw) == 'object' && type(raw) != 'array' ? raw : option_args(raw);
@@ -571,7 +549,7 @@ export function socks_node_switch(raw) {
 	if (!utils.check_port_exists(s.port, 'tcp')) return 1;
 	utils.set_cache_var(o.flag, o.new_node);
 	return 0;
-}
+};
 
 function direct_dns_options() {
 	let mode = get_direct_dns_mode();
@@ -703,7 +681,7 @@ export function start_global() {
 	utils.set_cache_var('ACL_GLOBAL_redir_port', state.REDIR_PORT);
 	if (type_name != 'sing-box' && type_name != 'xray') append(TMP + '/direct_node_list', node + '\n');
 	return 0;
-}
+};
 
 function helper_args(object) {
 	let args = [];
@@ -863,7 +841,7 @@ export function start_dns() {
 		launch_core('/usr/bin/ucode', 'lease2hosts', '/dev/null', [LIBEXEC + '/lease2hosts.uc'], { NO_REC_PROCESS: '1' });
 	}
 	return 0;
-}
+};
 
 export function start_haproxy() {
 	if (cfg('@global_haproxy[0]', 'balancing_enable', '0') != '1') return;
@@ -876,7 +854,7 @@ export function start_haproxy() {
 	let path = TMP + '/haproxy';
 	command(['/usr/bin/ucode', LIBEXEC + '/haproxy.uc', '-path', path, '-conf', 'config.cfg'], true);
 	launch_core(executable, 'haproxy', '/dev/null', ['-f', path + '/config.cfg']);
-}
+};
 
 function source_lines(section) {
 	let out = [];
@@ -1104,7 +1082,7 @@ export function acl_app() {
 		state.ENABLED_ACLS = '0';
 		utils.set_cache_var('ENABLED_ACLS', '0');
 	}
-}
+};
 
 function clean_cron_lines() {
 	let path = '/etc/crontabs/root';
@@ -1128,7 +1106,7 @@ export function clean_crontab() {
 		if (pid) command(['kill', '-9', pid], true);
 	}
 	fs.unlink('/var/lock/passwall_tasks.lock');
-}
+};
 
 function cron_time(week, value) {
 	let parts = split(value ?? '', ':');
@@ -1189,13 +1167,13 @@ export function start_crontab(mode) {
 	} else if (state.ENABLED_DEFAULT_ACL != '1' && state.ENABLED_ACLS != '1')
 		api.log('运行于非代理模式，仅允许服务启停的定时任务。');
 	if (fs.access('/etc/init.d/cron', 'x')) command(['/etc/init.d/cron', 'restart'], true);
-}
+};
 
 export function stop_crontab(mode) {
 	if (mode == 'cron') return;
 	clean_crontab();
 	if (fs.access('/etc/init.d/cron', 'x')) command(['/etc/init.d/cron', 'restart'], true);
-}
+};
 
 export function write_nft_env() {
 	let names = ['NODE','ENABLED','ENABLED_DEFAULT_ACL','ENABLED_ACLS','CLIENT_PROXY','TCP_NO_REDIR_PORTS',
@@ -1207,16 +1185,7 @@ export function write_nft_env() {
 	let lines = [];
 	for (let name in names) push(lines, name + '=' + api.shellquote(state[name] ?? ''));
 	fs.writefile(TMP + '/nft.env', join('\n', lines) + '\n');
-}
-
-function legacy_iptables(action, values) {
-	let argv = ['/usr/bin/env'];
-	for (let key, value in values ?? {})
-		if (type(value) == 'string' || type(value) == 'int')
-			push(argv, key + '=' + value);
-	push(argv, '/usr/bin/ucode', LIBEXEC + '/iptables.uc', action);
-	return command(argv, action == 'stop');
-}
+};
 
 export function start(mode) {
 	let residues = command_output(['busybox', 'pgrep', '-f', TMP + '/bin']);
@@ -1251,10 +1220,6 @@ export function start(mode) {
 		if (state.ENABLED_ACLS == '1') acl_app();
 		write_nft_env();
 		command([LIBEXEC + '/nftables.uc', 'start'], false);
-	} else if (state.USE_TABLES != '') {
-		/* Explicitly isolated legacy compatibility action. */
-		if (state.ENABLED_ACLS == '1') acl_app();
-		legacy_iptables('start', state);
 	}
 	utils.set_cache_var('USE_TABLES', state.USE_TABLES);
 	if (state.ENABLED_DEFAULT_ACL == '1' || state.ENABLED_ACLS == '1') {
@@ -1281,7 +1246,7 @@ export function start(mode) {
 		}
 	}
 	return 0;
-}
+};
 
 function kill_matching(pattern, excludes) {
 	let got = command_output(['busybox', 'pgrep', '-af', pattern]);
@@ -1298,11 +1263,8 @@ function kill_matching(pattern, excludes) {
 export function stop(mode, internal) {
 	utils.clean_log();
 	let cache = utils.cache_all();
-	let table = cache.USE_TABLES ?? '';
-	if (table == 'nftables')
+	if ((cache.USE_TABLES ?? '') == 'nftables')
 		command([LIBEXEC + '/nftables.uc', 'stop'], true);
-	else if (table != '')
-		legacy_iptables('stop', cache);
 	utils.delete_ip2route();
 	for (let path in split(command_output(['find', TMP, '-type', 'f', '-name', '*_plugin.pid']), '\n')) {
 		if (!path) continue;
@@ -1311,7 +1273,7 @@ export function stop(mode, internal) {
 	}
 	kill_matching('passwall/monitor.', []);
 	kill_matching('sleep.*(6s|9s|58s)', []);
-	kill_matching('passwall/', [/app\.uc/, /subscribe\.(lua|uc)/, /rule_update\.(lua|uc)/, /tasks\.uc/, /server_app\.(lua|uc)/, /ujail/]);
+	kill_matching('passwall/', [/app\.uc/, /subscribe\.uc/, /rule_update\.uc/, /tasks\.uc/, /server_app\.uc/, /ujail/]);
 	stop_crontab(mode);
 	unlink_tree(cache.GLOBAL_DNSMASQ_CONF ?? '');
 	unlink_tree(cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');
@@ -1332,7 +1294,7 @@ export function stop(mode, internal) {
 	unlink_tree(TMP);
 	api.log('清空并关闭相关程序和缓存完成。');
 	return 0;
-}
+};
 
 export function main(argv) {
 	let action = argv[0] ?? '';
@@ -1344,4 +1306,4 @@ export function main(argv) {
 	if (action == 'start') return start(args[0]);
 	if (action == 'stop') return stop(args[0]);
 	return 1;
-}
+};

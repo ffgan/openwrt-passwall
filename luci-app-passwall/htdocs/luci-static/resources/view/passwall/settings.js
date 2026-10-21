@@ -1308,12 +1308,10 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
-		var rebootTitle = caps.prefer_nft ? _('Clear NFTSET on Reboot') : _('Clear IPSET on Reboot');
-		var clearTitle = caps.prefer_nft ? _('Clear NFTSET') : _('Clear IPSET');
-		o = s.taboption('DNS', form.Flag, 'flush_set_on_reboot', rebootTitle, _('Clear IPSET/NFTSET on service reboot. This may increase reboot time.'));
+		o = s.taboption('DNS', form.Flag, 'flush_set_on_reboot', _('Clear NFTSET on Reboot'), _('Clear NFTSET on service reboot. This may increase reboot time.'));
 		o.default = '0';
 
-		o = s.taboption('DNS', form.DummyValue, 'clear_ipset', clearTitle, _('Try this feature if the rule modification does not take effect.'));
+		o = s.taboption('DNS', form.DummyValue, 'clear_nftset', _('Clear NFTSET'), _('Try this feature if the rule modification does not take effect.'));
 		o.renderWidget = function() {
 			return E('button', {
 				'class': 'cbi-button cbi-button-remove',

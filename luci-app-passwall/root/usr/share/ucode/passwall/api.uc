@@ -1295,21 +1295,18 @@ remove = function(...values) {
 };
 
 is_install = function(package_name) {
-	if (type(package_name) != "string" || length(package_name) == 0)
+	if (type(package_name) != "string" || match(package_name, /^[A-Za-z0-9+_.-]+$/) == null)
 		return false;
-	if (match(package_name, /[^A-Za-z0-9+_.-]/) != null)
+	let list_size = fs_stat("/lib/apk/packages/" + package_name + ".list", "size");
+	if (list_size != null && list_size > 0)
+		return true;
+	let db = readfile("/lib/apk/db/installed");
+	if (type(db) != "string" || db == "")
 		return false;
-	// apk is the package manager from OpenWrt 25.12 onward. Prefer its
-	// database whenever it is present so a leftover opkg directory cannot
-	// hide an apk-installed dependency. Packages that ship no files have no
-	// .list; P:<name> in the installed database still records them.
-	let apk_size = fs_stat("/lib/apk/db/installed", "size");
-	if (apk_size != null && apk_size > 0) {
-		if (sys_call("[ -s " + shellquote("/lib/apk/packages/" + package_name + ".list") + " ]") == 0)
+	for (let line in split(db, "\n"))
+		if (line == "P:" + package_name)
 			return true;
-		return sys_call("awk -v p=" + shellquote(package_name) + " '$0==(\"P:\" p) { found=1 } END { exit !found }' /lib/apk/db/installed") == 0;
-	}
-	return sys_call("[ -s " + shellquote("/usr/lib/opkg/info/" + package_name + ".control") + " ]") == 0;
+	return false;
 };
 
 get_args = function(arg) {
@@ -2372,18 +2369,26 @@ get_version = function() {
 	if (fs_access(version_file)) {
 		version = readfile(version_file);
 	} else {
-		// OpenWrt 25.12 replaced opkg. `apk info` lists names only, so read
-		// the version from `apk query` and fall back to the installed database.
-		// Prefer that database whenever it is present so a leftover opkg
-		// status file cannot report a stale version.
-		let apk_size = fs_stat("/lib/apk/db/installed", "size");
-		if (apk_size != null && apk_size > 0) {
-			version = trim(sys_exec("apk query --installed --format json --fields name,version luci-app-passwall 2>/dev/null | jsonfilter -e '$[0].version' 2>/dev/null"));
-			if (version == "")
-				version = trim(sys_exec("awk '$0==\"P:luci-app-passwall\"{f=1;next} f&&/^V:/{sub(/^V:/,\"\"); print; exit} f&&NF==0{exit}' /lib/apk/db/installed 2>/dev/null"));
-		} else {
-			version = trim(sys_exec("opkg list-installed luci-app-passwall 2>/dev/null | awk '{print $3; exit}'"));
+		version = "";
+		let db = readfile("/lib/apk/db/installed");
+		if (type(db) == "string" && db != "") {
+			let armed = false;
+			for (let line in split(db, "\n")) {
+				if (line == "P:luci-app-passwall") {
+					armed = true;
+					continue;
+				}
+				if (!armed)
+					continue;
+				if (substr(line, 0, 2) == "V:") {
+					version = substr(line, 2);
+					break;
+				}
+				if (line == "")
+					break;
+			}
 		}
+		version = trim(version);
 		if (version != "")
 			writefile(version_file, version);
 	}
@@ -2401,20 +2406,8 @@ to_check_self = function() {
 	let local_version = get_version();
 	let remote_version = replace(release.tag_name, /^v/, "");
 	let has_update = compare_versions(local_version, "<", remote_version);
-	let prefix;
-	let extension;
-	if (sys_call("command -v apk >/dev/null 2>&1") == 0) {
-		prefix = "25.12+_";
-		extension = ".apk";
-	} else {
-		if (sys_call("command -v uname >/dev/null 2>&1") != 0)
-			return { code: 1 };
-		let kernel_m = match(trim(sys_exec("uname -r 2>/dev/null")), /^([0-9]+\.[0-9]+)/);
-		if (kernel_m == null)
-			return { code: 1 };
-		prefix = compare_versions(kernel_m[1], "<", "5.11") ? "22.03-_" : "23.05-24.10_";
-		extension = ".ipk";
-	}
+	let prefix = "25.12+_";
+	let extension = ".apk";
 	let main_pkg = null;
 	let i18n_package = null;
 	let main_re = regexp("^luci-app-" + appname + "[_-][0-9]");
@@ -2454,8 +2447,8 @@ to_install_self = function(id, force) {
 	if (!isset(id) || match(id, /^[A-Za-z0-9_-]+$/) == null)
 		return { code: 1 };
 	let dir = "/tmp/" + appname + "_luci_update." + id;
-	let manager = sys_call("command -v apk >/dev/null 2>&1") == 0 ? "apk" : "opkg";
-	let extension = manager == "apk" ? ".apk" : ".ipk";
+	let manager = "apk";
+	let extension = ".apk";
 	let status_dir = "/www/luci-static/resources/" + appname + "-update";
 	let status = status_dir + "/" + id + ".json";
 	mkdir_p(dir);
