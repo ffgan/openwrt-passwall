@@ -97,6 +97,19 @@ function replace_exact_references(cur, old_value, new_value) {
 				continue;
 			if (type(s[key]) == 'string' && s[key] == old_value)
 				cur.set(CLIENT_CONFIG, s['.name'], key, new_value);
+			else if (type(s[key]) == 'array') {
+				let values = [], changed = false;
+				for (let value in s[key]) {
+					if (value == old_value) {
+						push(values, new_value);
+						changed = true;
+					}
+					else
+						push(values, value);
+				}
+				if (changed)
+					cur.set(CLIENT_CONFIG, s['.name'], key, values);
+			}
 		}
 	}
 }
