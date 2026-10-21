@@ -10,6 +10,8 @@ const CLIENT_LOCK = LOCK_DIR + '/passwall.lock';
 const UPDATE_LOCK = LOCK_DIR + '/passwall_sub_rule.lock';
 const READY_LOCK = LOCK_DIR + '/passwall_ready.lock';
 const uci = cursor();
+// ucode 2026.01.16 does not hoist functions.
+let client_locked;
 
 function ensure_lock_dir() {
 	return fs.stat(LOCK_DIR)?.type == 'directory' || fs.mkdir(LOCK_DIR);
@@ -72,7 +74,7 @@ function wait_for_updates() {
 	return 1;
 }
 
-function client_locked(action, args) {
+client_locked = function(action, args) {
 	let mode = args[0] ?? '';
 	if (action == 'start') {
 		invoke_app(false, 'start', mode);
@@ -92,7 +94,7 @@ function client_locked(action, args) {
 		return 0;
 	}
 	return 1;
-}
+};
 
 function client(action, args) {
 	if (action == 'boot') {

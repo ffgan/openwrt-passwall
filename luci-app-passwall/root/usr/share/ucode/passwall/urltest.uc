@@ -1,12 +1,12 @@
 'use strict';
 
 import * as api from 'passwall.api';
-import { popen, readfile, unlink, lsdir } from 'fs';
+import { readfile, unlink, lsdir } from 'fs';
 
 let read_cmd, command_ok, bracket_host, curl_probe, split_lines, cleanup_socks, url_test_node;
 
 read_cmd = function(argv) {
-	let ph = popen(argv, "r");
+	let ph = api.command_pipe(argv, "r");
 	if (ph == null)
 		return null;
 	let out = "";

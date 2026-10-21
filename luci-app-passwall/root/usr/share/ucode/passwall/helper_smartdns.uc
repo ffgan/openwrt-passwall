@@ -218,7 +218,7 @@ main = function(argv) {
 	let DEFAULT_PROXY_MODE = vmap["-DEFAULT_PROXY_MODE"];
 	let NO_PROXY_IPV6 = vmap["-NO_PROXY_IPV6"];
 	let NO_LOGIC_LOG = vmap["-NO_LOGIC_LOG"];
-	let NFTFLAG = vmap["-NFTFLAG"];
+	let NFTFLAG = "1";
 	let SUBNET = vmap["-SUBNET"];
 	let LISTEN_PORT = vmap["-LISTEN_PORT"];
 	let DNS_REDIRECT = vmap["-DNS_REDIRECT"] == "1";
@@ -427,7 +427,7 @@ main = function(argv) {
 	}
 
 	let setflag = (NFTFLAG == "1") ? "inet#passwall#" : "";
-	let set_type = (NFTFLAG == "1") ? "-nftset" : "-ipset";
+	let set_type = "-nftset";
 
 	for (let i = 1; i <= 10; i++)
 		push(config_lines, "#--" + i);

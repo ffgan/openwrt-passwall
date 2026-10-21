@@ -1,13 +1,13 @@
 'use strict';
 
 import * as api from 'passwall.api';
-import { popen, writefile, access } from 'fs';
+import { writefile, access } from 'fs';
 import { start_time_of } from 'passwall.monitor';
 
 let read_cmd, command_rc, is_link, main;
 
 read_cmd = function(argv) {
-	let ph = popen(argv, "r");
+	let ph = api.command_pipe(argv, "r");
 	if (ph == null)
 		return null;
 	let out = "";

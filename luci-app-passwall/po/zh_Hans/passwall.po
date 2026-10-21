@@ -223,6 +223,9 @@ msgstr "清空 IPSET"
 msgid "Clear NFTSET"
 msgstr "清空 NFTSET"
 
+msgid "Clear NFTSET on service reboot. This may increase reboot time."
+msgstr "重启服务时清空 NFTSET，可能会延长重启时间。"
+
 msgid "Try this feature if the rule modification does not take effect."
 msgstr "如果修改规则后没有生效，请尝试此功能。"
 
@@ -1339,9 +1342,6 @@ msgstr "身份认证"
 
 msgid "This username already exists."
 msgstr "该用户名已存在。"
-
-msgid "Prefer firewall tools"
-msgstr "首选防火墙工具"
 
 msgid "IPv6 TProxy"
 msgstr "IPv6 透明代理(TProxy)"

@@ -750,7 +750,7 @@ capabilities = function() {
 		e.singbox_ge['1.15.0'] = cmp_ge(ver, '1.15.0');
 	}
 	e.lsmod = argv_output([ '/sbin/lsmod' ]).output;
-	e.prefer_nft = api.uci_get_c('@global_forwarding[0]', 'prefer_nft') == '1';
+	e.prefer_nft = true;
 	e.nodes = [];
 	if (type(api.get_valid_nodes) == 'function')
 		e.nodes = api.get_valid_nodes() || [];

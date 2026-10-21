@@ -1,7 +1,7 @@
 'use strict';
 
 import * as api from 'passwall.api';
-import { popen, readfile, writefile, stat, unlink, lsdir } from 'fs';
+import { readfile, writefile, stat, unlink, lsdir } from 'fs';
 
 let command_rc, fields, split_lines, valid_name, static_hosts, dnsmasq_hosts, odhcpd_hosts, unique_text, hup_pidfile, walk_pids, publish, run;
 
@@ -10,7 +10,7 @@ command_rc = function(argv) {
 		let rc = global.system(argv);
 		return rc == null ? 255 : rc;
 	}
-	let ph = popen(argv, "r");
+	let ph = api.command_pipe(argv, "r");
 	if (ph == null)
 		return 255;
 	let rc = ph.close();

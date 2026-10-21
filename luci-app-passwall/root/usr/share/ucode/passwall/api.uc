@@ -6,7 +6,7 @@ import { readfile, writefile, stat, unlink, mkdir, lsdir, popen, error, open, ac
 import { cursor } from 'uci';
 import { md5 } from 'digest';
 import * as com from 'passwall.com';
-let isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
+let isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, command_pipe, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
 
 export let appname = "passwall";
 export let c_config = "passwall";
@@ -120,6 +120,20 @@ shellquote = function(s) {
 	else
 		s = "" + s;
 	return "'" + replace(s, "'", "'\\''") + "'";
+};
+
+// OpenWrt 25.12 ucode accepts only a shell string. An argv array makes popen return null.
+command_pipe = function(argv, mode) {
+	let cmd = argv;
+	if (type(argv) == "array") {
+		let parts = [];
+		for (let arg in argv)
+			push(parts, shellquote(arg));
+		cmd = join(" ", parts);
+	}
+	if (mode == null || mode == "")
+		mode = "r";
+	return popen(cmd, mode);
 };
 
 trim = function(s) {
@@ -609,7 +623,7 @@ get_new_port = function(start_port, protocol) {
 	let start = port;
 	while (true) {
 		let flag = protocol == "tcp" ? "-tln" : (protocol == "udp" ? "-uln" : "-tuln");
-		let ph = popen(["netstat", flag], "r");
+		let ph = command_pipe(["netstat", flag], "r");
 		let sockets = ph == null ? "" : read_all(ph);
 		if (ph != null) ph.close();
 		let busy = match(sockets, regexp(":" + port + "[[:space:]]")) != null;
@@ -1295,21 +1309,18 @@ remove = function(...values) {
 };
 
 is_install = function(package_name) {
-	if (type(package_name) != "string" || length(package_name) == 0)
+	if (type(package_name) != "string" || match(package_name, /^[A-Za-z0-9+_.-]+$/) == null)
 		return false;
-	if (match(package_name, /[^A-Za-z0-9+_.-]/) != null)
+	let list_size = fs_stat("/lib/apk/packages/" + package_name + ".list", "size");
+	if (list_size != null && list_size > 0)
+		return true;
+	let db = readfile("/lib/apk/db/installed");
+	if (type(db) != "string" || db == "")
 		return false;
-	// apk is the package manager from OpenWrt 25.12 onward. Prefer its
-	// database whenever it is present so a leftover opkg directory cannot
-	// hide an apk-installed dependency. Packages that ship no files have no
-	// .list; P:<name> in the installed database still records them.
-	let apk_size = fs_stat("/lib/apk/db/installed", "size");
-	if (apk_size != null && apk_size > 0) {
-		if (sys_call("[ -s " + shellquote("/lib/apk/packages/" + package_name + ".list") + " ]") == 0)
+	for (let line in split(db, "\n"))
+		if (line == "P:" + package_name)
 			return true;
-		return sys_call("awk -v p=" + shellquote(package_name) + " '$0==(\"P:\" p) { found=1 } END { exit !found }' /lib/apk/db/installed") == 0;
-	}
-	return sys_call("[ -s " + shellquote("/usr/lib/opkg/info/" + package_name + ".control") + " ]") == 0;
+	return false;
 };
 
 get_args = function(arg) {
@@ -1818,7 +1829,7 @@ exec_argv = function(cmd, args, writer, timeout_sec) {
 			return 1;
 		return rc;
 	}
-	let p = popen(argv, "r");
+	let p = command_pipe(argv, "r");
 	if (p == null)
 		return 255;
 	let chunk = p.read(2048);
@@ -2372,18 +2383,26 @@ get_version = function() {
 	if (fs_access(version_file)) {
 		version = readfile(version_file);
 	} else {
-		// OpenWrt 25.12 replaced opkg. `apk info` lists names only, so read
-		// the version from `apk query` and fall back to the installed database.
-		// Prefer that database whenever it is present so a leftover opkg
-		// status file cannot report a stale version.
-		let apk_size = fs_stat("/lib/apk/db/installed", "size");
-		if (apk_size != null && apk_size > 0) {
-			version = trim(sys_exec("apk query --installed --format json --fields name,version luci-app-passwall 2>/dev/null | jsonfilter -e '$[0].version' 2>/dev/null"));
-			if (version == "")
-				version = trim(sys_exec("awk '$0==\"P:luci-app-passwall\"{f=1;next} f&&/^V:/{sub(/^V:/,\"\"); print; exit} f&&NF==0{exit}' /lib/apk/db/installed 2>/dev/null"));
-		} else {
-			version = trim(sys_exec("opkg list-installed luci-app-passwall 2>/dev/null | awk '{print $3; exit}'"));
+		version = "";
+		let db = readfile("/lib/apk/db/installed");
+		if (type(db) == "string" && db != "") {
+			let armed = false;
+			for (let line in split(db, "\n")) {
+				if (line == "P:luci-app-passwall") {
+					armed = true;
+					continue;
+				}
+				if (!armed)
+					continue;
+				if (substr(line, 0, 2) == "V:") {
+					version = substr(line, 2);
+					break;
+				}
+				if (line == "")
+					break;
+			}
 		}
+		version = trim(version);
 		if (version != "")
 			writefile(version_file, version);
 	}
@@ -2401,20 +2420,8 @@ to_check_self = function() {
 	let local_version = get_version();
 	let remote_version = replace(release.tag_name, /^v/, "");
 	let has_update = compare_versions(local_version, "<", remote_version);
-	let prefix;
-	let extension;
-	if (sys_call("command -v apk >/dev/null 2>&1") == 0) {
-		prefix = "25.12+_";
-		extension = ".apk";
-	} else {
-		if (sys_call("command -v uname >/dev/null 2>&1") != 0)
-			return { code: 1 };
-		let kernel_m = match(trim(sys_exec("uname -r 2>/dev/null")), /^([0-9]+\.[0-9]+)/);
-		if (kernel_m == null)
-			return { code: 1 };
-		prefix = compare_versions(kernel_m[1], "<", "5.11") ? "22.03-_" : "23.05-24.10_";
-		extension = ".ipk";
-	}
+	let prefix = "25.12+_";
+	let extension = ".apk";
 	let main_pkg = null;
 	let i18n_package = null;
 	let main_re = regexp("^luci-app-" + appname + "[_-][0-9]");
@@ -2454,8 +2461,8 @@ to_install_self = function(id, force) {
 	if (!isset(id) || match(id, /^[A-Za-z0-9_-]+$/) == null)
 		return { code: 1 };
 	let dir = "/tmp/" + appname + "_luci_update." + id;
-	let manager = sys_call("command -v apk >/dev/null 2>&1") == 0 ? "apk" : "opkg";
-	let extension = manager == "apk" ? ".apk" : ".ipk";
+	let manager = "apk";
+	let extension = ".apk";
 	let status_dir = "/www/luci-static/resources/" + appname + "-update";
 	let status = status_dir + "/" + id + ".json";
 	mkdir_p(dir);
@@ -3039,4 +3046,4 @@ get_socks_port_by_cache = function(node_id) {
 set_socks_port_to_cache = function(node_id, v) {
 	set_cache_var(sprintf("node_%s_socks_port", node_id), v);
 };
-export { shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };
+export { command_pipe, shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };
