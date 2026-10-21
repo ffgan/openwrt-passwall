@@ -1,6 +1,7 @@
 'use strict';
 
 import * as api from 'passwall.api';
+import * as utils from 'passwall.utils';
 let ltruth, lor, or_nil, tonumber, set_if, leading_int, gmatch, nonempty, has_keys, is_table, lua_quote, exec_pair, lua_tostring, finalize, drop_underscore, pem_lines, both_set, ensure_version, get_log_level, asset_dir, check_geoview, geo_convert_srs, convert_geofile, get_ech_domain, build_ech, alpn_list, hysteria2_obfs, hysteria2_idle, hysteria2_keepalive, opt_num, mb_window, collect_hop_ports, hysteria_hop_interval, hysteria2_hop_times, client_realm, server_realm, decode_reserved, masque_header_map, ws_early_data, ua_headers, http_host_path, build_client_transport, build_server_transport, build_client_mux, build_server_mux, build_client_tls, uot_obj, apply_node_dns, fill_client_protocol, gen_outbound, server_users, build_server_tls, gen_config_server, get_node_by_id, parse_rule_set, geo_rule_set, strip_at, split_ports, read_proxy_list, gen_config, gen_proto_config, print_result, dispatch, main;
 
 let ech_domain = {};
@@ -953,9 +954,12 @@ gen_outbound = function(flag, node, tag, proxy_table) {
 					let config_file = sprintf("nodesocks_%s_%s.json", node_id, new_port);
 					if (ltruth(tag) && ltruth(node_id) && index(tag, node_id) < 0)
 						config_file = sprintf("nodesocks_%s_%s_%s.json", tag, node_id, new_port);
-					let arg = sprintf("flag=%s node=%s bind=%s socks_port=%s config_file=%s relay_port=%s",
-						new_port, node_id, "127.0.0.1", new_port, config_file, relay_port);
-					api.sys.call(sprintf('/usr/share/passwall/app.sh run_socks "%s"> /dev/null', arg));
+					utils.run([
+						"/usr/bin/ucode", "/usr/libexec/passwall/app.uc", "run_socks",
+						"flag=" + new_port, "node=" + node_id, "bind=127.0.0.1",
+						"socks_port=" + new_port, "config_file=" + config_file,
+						"relay_port=" + relay_port
+					], true);
 					if (relay_port == "")
 						api.set_socks_port_to_cache(node_id, new_port);
 				}

@@ -2,6 +2,7 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+import * as utils from 'passwall.utils';
 let ltruth, tonumber, gmatch, leading_int, get_ip_port_from, server_endpoint, main;
 
 ltruth = function(v) {
@@ -164,15 +165,12 @@ resolvers mydns
 						} else {
 							new_port = api.get_new_port();
 							let config_file = sprintf("%s_%s.json", t[".name"], new_port);
-							api.sys.call(sprintf('/usr/share/%s/app.sh run_socks "%s"> /dev/null',
-								appname,
-								sprintf("flag=%s node=%s bind=%s socks_port=%s config_file=%s",
-									new_port,
-									server_node[".name"],
-									"127.0.0.1",
-									new_port,
-									config_file)
-							));
+							utils.run([
+								"/usr/bin/ucode", "/usr/libexec/passwall/app.uc", "run_socks",
+								"flag=" + new_port, "node=" + server_node[".name"],
+								"bind=127.0.0.1", "socks_port=" + new_port,
+								"config_file=" + config_file
+							], true);
 							api.set_socks_port_to_cache(server_node[".name"], new_port);
 						}
 						server_address = "127.0.0.1";
@@ -270,7 +268,7 @@ resolvers mydns
 			body += "	" + api.trim(server_conf) + "\n";
 
 			if (o.export != "0")
-				api.sys.call(sprintf(". /usr/share/%s/utils.sh ; add_ip2route %s %s", appname, o.origin_address, o.export));
+				utils.add_ip2route(o.origin_address, o.export);
 
 			log(sprintf("  | - 出口节点：%s:%s，权重：%s", o.origin_address, o.origin_port, o.lbweight));
 		}

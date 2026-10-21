@@ -67,7 +67,7 @@ function words(data) {
 	return out;
 }
 
-/* app.sh writes POSIX single-quoted assignments. Decode that deliberately
+/* passwall.app writes POSIX single-quoted assignments. Decode that deliberately
  * small format without evaluating it. */
 function load_env() {
 	let data = read(TMP + "/nft.env");
@@ -1069,7 +1069,8 @@ function update_mwan3(add) {
 	let data = read(path);
 	let kept = [];
 	for (let line in split(data, "\n")) {
-		if (index(line, "passwall/nftables.uc mwan3_") < 0 && index(line, "passwall/nftables.sh mwan3_") < 0)
+		if (index(line, "passwall/nftables.uc mwan3_") < 0 &&
+		    index(line, "passwall/nftables.sh mwan3_") < 0)
 			push(kept, line);
 	}
 	data = join("\n", kept);

@@ -46,7 +46,7 @@ split_lines = function(text) {
 	return rows;
 };
 
-// Match utils.sh: strip through the last ") ", then take awk field 20.
+// Match the historical utility behavior: strip through the last ") ", then field 20.
 start_time_of = function(pid) {
 	if (match(pid, /^[0-9]+$/) == null)
 		return "";

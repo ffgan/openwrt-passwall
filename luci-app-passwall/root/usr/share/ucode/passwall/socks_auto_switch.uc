@@ -104,7 +104,7 @@ curl_code = function(url, tries, timeout, proxy, repeat) {
 check_process = function() {
 	while (true) {
 		let got = read_cmd(["busybox", "pgrep", "-af", "passwall/"]);
-		if (got == null || match(got.out, /app\.sh.*(start|stop)|nftables\.sh|iptables\.sh|subscribe\.(lua|uc)/) == null)
+		if (got == null || match(got.out, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc|iptables\.uc|subscribe\.uc/) == null)
 			return;
 		command_rc(["sleep", "6s"]);
 	}
@@ -199,7 +199,7 @@ try_switch_backup = function(backup_nodes, now_node) {
 			api.log("Socks切换检测：端口[" + socks_port + "]【" + node_type + "：[" + node_remarks + "]】正常，切换到此节点！");
 			let rc = command_rc([
 				"/usr/bin/env", "NO_REC_PROCESS=1",
-				"/usr/share/passwall/app.sh", "socks_node_switch",
+				"/usr/bin/ucode", "/usr/libexec/passwall/app.uc", "socks_node_switch",
 				"flag=" + id, "new_node=" + new_node
 			]);
 			if (rc == 0) {
@@ -233,7 +233,7 @@ test_auto_switch = function(backup_nodes) {
 		api.log("Socks切换检测：端口[" + socks_port + "] 主节点【" + node_type + "：[" + node_remarks + "]】正常，切换到主节点！");
 		let rc = command_rc([
 			"/usr/bin/env", "NO_REC_PROCESS=1",
-			"/usr/share/passwall/app.sh", "socks_node_switch",
+			"/usr/bin/ucode", "/usr/libexec/passwall/app.uc", "socks_node_switch",
 			"flag=" + id, "new_node=" + main_node
 		]);
 		if (rc == 0) {
@@ -268,7 +268,7 @@ main = function(argv) {
 		let flag = "test_node_" + id + "_" + node_id;
 		command_rc([
 			"/usr/bin/env", "NO_REC_PROCESS=1",
-			"/usr/share/passwall/app.sh", "run_socks",
+			"/usr/bin/ucode", "/usr/libexec/passwall/app.uc", "run_socks",
 			"flag=" + flag, "node=" + node_id, "bind=127.0.0.1",
 			"socks_port=" + port, "config_file=" + flag + ".json"
 		]);
