@@ -1069,7 +1069,8 @@ function update_mwan3(add) {
 	let data = read(path);
 	let kept = [];
 	for (let line in split(data, "\n")) {
-		if (index(line, "passwall/nftables.uc mwan3_") < 0)
+		if (index(line, "passwall/nftables.uc mwan3_") < 0 &&
+		    index(line, "passwall/nftables.sh mwan3_") < 0)
 			push(kept, line);
 	}
 	data = join("\n", kept);
