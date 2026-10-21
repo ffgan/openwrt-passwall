@@ -28,7 +28,7 @@ export function run(argv, quiet) {
 	if (type(global.system) == 'function')
 		rc = global.system(argv);
 	else {
-		let ph = fs.popen(argv, 'r');
+		let ph = api.command_pipe(argv, 'r');
 		rc = ph == null ? 255 : ph.close();
 	}
 	rc = rc == null ? 255 : rc;
@@ -38,7 +38,7 @@ export function run(argv, quiet) {
 };
 
 export function output(argv) {
-	let ph = fs.popen(argv, 'r');
+	let ph = api.command_pipe(argv, 'r');
 	if (ph == null)
 		return '';
 	let data = ph.read('all') ?? '';

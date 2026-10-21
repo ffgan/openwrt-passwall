@@ -146,6 +146,12 @@ function migrate_client() {
 	cur.delete('firewall', 'passwall', 'reload');
 	cur.commit('firewall');
 
+	mkdir_p('/var/etc');
+	if (fs.stat('/var/etc/passwall.include') == null) {
+		fs.writefile('/var/etc/passwall.include', "#!/bin/sh\nreturn 0\n");
+		fs.chmod('/var/etc/passwall.include', 0o755);
+	}
+
 	if ((fs.stat('/etc/config/passwall')?.size ?? 0) == 0) {
 		let data = fs.readfile('/usr/share/passwall/0_default_config');
 		if (data != null)

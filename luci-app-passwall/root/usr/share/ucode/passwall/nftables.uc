@@ -18,7 +18,7 @@ function run(argv, quiet) {
 	if (type(global.system) == "function")
 		rc = global.system(argv);
 	else {
-		let p = fs.popen(argv, "r");
+		let p = api.command_pipe(argv, "r");
 		rc = p == null ? 255 : p.close();
 	}
 	if (rc == null)
@@ -29,7 +29,7 @@ function run(argv, quiet) {
 }
 
 function output(argv) {
-	let p = fs.popen(argv, "r");
+	let p = api.command_pipe(argv, "r");
 	if (p == null)
 		return "";
 	let data = p.read("all") ?? "";
@@ -815,7 +815,7 @@ function add_output_rules(tproxy) {
 		nft("add rule " + TABLE + " nat_output ip protocol tcp counter jump PSW_OUTPUT_NAT");
 	nft("add rule " + TABLE + " mangle_output oif lo counter return comment \"PSW_OUTPUT_MANGLE\"");
 	nft("add rule " + TABLE + " mangle_output meta mark " + MARK + " counter return comment \"PSW_OUTPUT_MANGLE\"");
-	for (let iface in lsdir(TMP + "/iface") ?? []) {
+	for (let iface in fs.lsdir(TMP + "/iface") ?? []) {
 		nft("add rule " + TABLE + " " + tcp_chain + " oif " + quote_comment(iface) + " counter return");
 		nft("add rule " + TABLE + " PSW_OUTPUT_MANGLE_V6 oif " + quote_comment(iface) + " counter return");
 	}
@@ -942,7 +942,7 @@ function base_rules(tproxy) {
 function set_sysctl() {
 	run(["sysctl", "-w", "net.ipv4.conf.all.rp_filter=0"], true);
 	run(["sysctl", "-w", "net.ipv4.conf.default.rp_filter=0"], true);
-	for (let name in lsdir("/proc/sys/net/ipv4/conf") ?? [])
+	for (let name in fs.lsdir("/proc/sys/net/ipv4/conf") ?? [])
 		write("/proc/sys/net/ipv4/conf/" + name + "/rp_filter", "0\n");
 }
 
@@ -1089,37 +1089,9 @@ function destroy_nftset(...names) {
 }
 
 function del_firewall_rule() {
-	for (let hook in ["dstnat", "srcnat", "nat_output", "mangle_prerouting", "mangle_output"]) {
-		let listing = output(["nft", "-a", "list", "chain", "inet", "passwall", hook]);
-		for (let line in split(listing, "\n")) {
-			if (index(line, "PSW_") < 0)
-				continue;
-			let m = match(line, /# handle ([0-9]+)/);
-			if (m != null)
-				run(["nft", "delete", "rule", "inet", "passwall", hook, "handle", m[1]], true);
-		}
-	}
-	let listing = output(["nft", "list", "table", "inet", "passwall"]);
-	let chains = [];
-	for (let line in split(listing, "\n")) {
-		let m = match(line, /^[[:space:]]*chain (PSW_[A-Za-z0-9_]+)/);
-		if (m != null && m[1] != "PSW_RULE")
-			push(chains, m[1]);
-	}
-	for (let name in chains) {
-		run(["nft", "flush", "chain", "inet", "passwall", name], true);
-		run(["nft", "delete", "chain", "inet", "passwall", name], true);
-	}
-	run(["nft", "flush", "chain", "inet", "passwall", "PSW_RULE"], true);
-	run(["nft", "delete", "chain", "inet", "passwall", "PSW_RULE"], true);
+	if (table_exists())
+		flush_table();
 	delete_routes();
-	destroy_nftset(
-		"psw_local", "psw_wan", "psw_lan", "psw_vps", "psw_shunt_static",
-		"psw_chn_static", "psw_black_static", "psw_block", "psw_block_static",
-		"psw_white", "psw_white_static", "psw_local6", "psw_wan6", "psw_lan6",
-		"psw_vps6", "psw_shunt6_static", "psw_chn6_static", "psw_black6_static",
-		"psw_block6", "psw_block6_static", "psw_white6", "psw_white6_static"
-	);
 }
 
 function flush_nftset() {
@@ -1188,7 +1160,7 @@ function stop() {
 		api.uci_del_c("@global[0]", "flush_set");
 		api.uci_save_c(true);
 		flush_nftset();
-		for (let name in lsdir("/tmp/etc/passwall_tmp") ?? [])
+		for (let name in fs.lsdir("/tmp/etc/passwall_tmp") ?? [])
 			if (match(name, /^(singbox|dnsmasq)/) != null || name == "geo_output" || name == "user_rules")
 				run(["rm", "-rf", "/tmp/etc/passwall_tmp/" + name], true);
 	}

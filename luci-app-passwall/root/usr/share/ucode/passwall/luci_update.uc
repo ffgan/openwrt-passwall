@@ -9,7 +9,10 @@ command_rc = function(argv) {
 		let rc = global.system(argv);
 		return rc == null ? 255 : rc;
 	}
-	let ph = popen(argv, "r");
+	let parts = [];
+	for (let arg in argv)
+		push(parts, "'" + replace(arg == null ? "" : "" + arg, /'/g, "'\\''") + "'");
+	let ph = popen(join(" ", parts), "r");
 	if (ph == null)
 		return 255;
 	let rc = ph.close();

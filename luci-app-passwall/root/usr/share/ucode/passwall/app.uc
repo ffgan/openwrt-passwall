@@ -51,7 +51,7 @@ function command(argv, quiet) {
 }
 
 function capture(argv, destination) {
-	let ph = fs.popen(argv, 'r');
+	let ph = api.command_pipe(argv, 'r');
 	if (ph == null) return 127;
 	let data = ph.read('all') ?? '';
 	let rc = ph.close();

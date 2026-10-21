@@ -1,7 +1,6 @@
 'use strict';
 
 import * as api from 'passwall.api';
-import { popen } from 'fs';
 
 let command_rc, number_or_null, launch, run;
 
@@ -10,7 +9,7 @@ command_rc = function(argv) {
 		let rc = global.system(argv);
 		return rc == null ? 255 : rc;
 	}
-	let ph = popen(argv, "r");
+	let ph = api.command_pipe(argv, "r");
 	if (ph == null)
 		return 255;
 	let rc = ph.close();

@@ -1,7 +1,7 @@
 'use strict';
 
 import * as api from 'passwall.api';
-import { popen, readfile, unlink, lsdir } from 'fs';
+import { readfile, unlink, lsdir } from 'fs';
 
 let read_cmd, command_rc, words, retry_all, curl_code, check_process, test_proxy, cleanup_node, test_node, next_node, try_switch_backup, test_auto_switch, main;
 let id = "";
@@ -15,7 +15,7 @@ let probe_url = "https://www.google.com/generate_204";
 let backup_count = 0;
 
 read_cmd = function(argv) {
-	let ph = popen(argv, "r");
+	let ph = api.command_pipe(argv, "r");
 	if (ph == null)
 		return null;
 	let out = "";
