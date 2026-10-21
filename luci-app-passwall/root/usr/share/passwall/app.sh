@@ -1703,6 +1703,25 @@ acl_app() {
 	fi
 }
 
+write_nft_env() {
+	local f="$TMP_PATH/nft.env" v val
+	mkdir -p "$TMP_PATH"
+	: > "$f"
+	for v in \
+		NODE ENABLED ENABLED_DEFAULT_ACL ENABLED_ACLS CLIENT_PROXY \
+		TCP_NO_REDIR_PORTS UDP_NO_REDIR_PORTS TCP_PROXY_DROP_PORTS UDP_PROXY_DROP_PORTS \
+		TCP_REDIR_PORTS UDP_REDIR_PORTS TCP_PROXY_MODE UDP_PROXY_MODE \
+		USE_DIRECT_LIST USE_PROXY_LIST USE_BLOCK_LIST USE_GFW_LIST CHN_LIST \
+		DNS_REDIRECT_PORT DIRECT_DNSMASQ_PORT USE_FAKEDNS PROXY_IPV6 TCP_PROXY_WAY \
+		LOCALHOST_TCP_PROXY_MODE LOCALHOST_UDP_PROXY_MODE LOCALHOST_PROXY \
+		REDIR_PORT TCP_PROXY_DNS UDP_PROXY_DNS REMOTE_DNS IPT_APPEND_DNS \
+		ISP_DNS ISP_DNS6 DNS_REDIRECT FILTER_PROXY_IPV6
+	do
+		eval "val=\${$v}"
+		printf '%s=%s\n' "$v" "$(shell_quote "$val")" >> "$f"
+	done
+}
+
 start() {
 	busybox pgrep -f ${TMP_PATH}/bin > /dev/null 2>&1 && {
 		logger -t PSW-RESTART "Upgrade or overload residue is detected, and the subprocess is being called to perform complete cleaning..."
@@ -1745,7 +1764,13 @@ start() {
 			return 1
 		}
 	}
-	[ -n "$USE_TABLES" ] && source $APP_PATH/${USE_TABLES}.sh start
+	if [ "$USE_TABLES" = "nftables" ]; then
+		[ "$ENABLED_ACLS" = 1 ] && acl_app
+		write_nft_env
+		ucode $UCODE_BIN/nftables.uc start
+	elif [ -n "$USE_TABLES" ]; then
+		source $APP_PATH/${USE_TABLES}.sh start
+	fi
 	set_cache_var "USE_TABLES" "$USE_TABLES"
 	if [ "$ENABLED_DEFAULT_ACL" = 1 ] || [ "$ENABLED_ACLS" = 1 ]; then
 		bridge_nf_ipt=$(sysctl -e -n net.bridge.bridge-nf-call-iptables)
@@ -1778,7 +1803,11 @@ start() {
 stop() {
 	clean_log
 	eval_cache_var
-	[ -n "$USE_TABLES" ] && source $APP_PATH/${USE_TABLES}.sh stop
+	if [ "$USE_TABLES" = "nftables" ]; then
+		ucode $UCODE_BIN/nftables.uc stop
+	elif [ -n "$USE_TABLES" ]; then
+		source $APP_PATH/${USE_TABLES}.sh stop
+	fi
 	delete_ip2route
 	# 结束 SS 插件进程
 	# kill_all xray-plugin v2ray-plugin obfs-local shadow-tls

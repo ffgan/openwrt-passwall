@@ -475,42 +475,7 @@ get_process_start_time() {
 }
 
 ln_run() {
-	local file_func=${1}
-	local ln_name=${2}
-	local output=${3}
-
-	shift 3;
-	case "$ln_name" in
-		dnsmasq*) set -- -k "$@" ;;
-		haproxy) set -- -db "$@" ;;
-	esac
-	if [  "${file_func%%/*}" != "${file_func}" ]; then
-		[ ! -L "${file_func}" ] && {
-			ln -s "${file_func}" "${TMP_BIN_PATH}/${ln_name}" >/dev/null 2>&1
-			file_func="${TMP_BIN_PATH}/${ln_name}"
-		}
-		[ -x "${file_func}" ] || echolog "  - $(readlink ${file_func}) 没有执行权限，无法启动：${file_func} $*"
-	fi
-	#echo "${file_func} $*" >&2
-	[ -n "${file_func}" ] || {
-		echolog "  - 找不到 ${ln_name}，无法启动..."
-		return 1
-	}
-
-	"$file_func" "$@" >"$output" 2>&1 &
-	local pid=$!
-
-	[ "$NO_REC_PROCESS" = "1" ] && return
-	local process_file=$(mktemp "$TMP_SCRIPT_FUNC_PATH/XXXXXX")
-	local arg
-	{
-		printf '%s\n' "$pid" "$(get_process_start_time "$pid")"
-		printf '%s' "$(shell_quote "$file_func")"
-		for arg in "$@"; do
-			printf ' %s' "$(shell_quote "$arg")"
-		done
-		printf ' >%s 2>&1\n' "$(shell_quote "$output")"
-	} > "$process_file"
+	ucode "$UCODE_BIN/ln_run.uc" "$@"
 }
 
 kill_all() {
