@@ -237,7 +237,7 @@ resolvers mydns
 		body += "\n" + sprintf("listen %s\n\tbind %s:%s\n\tmode tcp\n\tbalance %s\n", port, bind_address, port, balancingStrategy);
 
 		if (health_check_type == "script_logic") {
-			body += sprintf("	option external-check\n	external-check command \"/usr/share/%s/haproxy_check.sh\"\n", appname);
+			body += sprintf("	option external-check\n	external-check command \"/usr/libexec/%s/haproxy_check.uc\"\n", appname);
 		}
 
 		let count_M = 1;
@@ -277,7 +277,7 @@ resolvers mydns
 	}
 
 	if (length(shared_checks) > 0) {
-		body += sprintf("\nbackend %s_health_checks\n\tmode tcp\n\toption external-check\n\texternal-check command \"/usr/share/%s/haproxy_check.sh\"\n", appname, appname);
+		body += sprintf("\nbackend %s_health_checks\n\tmode tcp\n\toption external-check\n\texternal-check command \"/usr/libexec/%s/haproxy_check.uc\"\n", appname, appname);
 		for (let check in shared_checks)
 			body += sprintf("\tserver %s %s check %s rise 2 fall 2\n", check.name, check.server, inter_arg);
 	}

@@ -18,11 +18,11 @@ boot() {
 }
 
 start() {
-	ucode /usr/share/passwall/server_app.uc start
+	ucode /usr/libexec/passwall/server_app.uc start
 }
 
 stop() {
-	ucode /usr/share/passwall/server_app.uc stop
+	ucode /usr/libexec/passwall/server_app.uc stop
 }
 
 restart() {

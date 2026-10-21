@@ -9,12 +9,11 @@
 
 . /usr/share/passwall/utils.sh
 GLOBAL_ACL_PATH=${TMP_ACL_PATH}/default
-UCODE_LIB=/usr/share/passwall
-UTIL_SINGBOX=$UCODE_LIB/util_singbox.uc
-UTIL_SS=$UCODE_LIB/util_shadowsocks.uc
-UTIL_XRAY=$UCODE_LIB/util_xray.uc
-UTIL_NAIVE=$UCODE_LIB/util_naiveproxy.uc
-UTIL_HYSTERIA2=$UCODE_LIB/util_hysteria2.uc
+UTIL_SINGBOX=$UCODE_BIN/util_singbox.uc
+UTIL_SS=$UCODE_BIN/util_shadowsocks.uc
+UTIL_XRAY=$UCODE_BIN/util_xray.uc
+UTIL_NAIVE=$UCODE_BIN/util_naiveproxy.uc
+UTIL_HYSTERIA2=$UCODE_BIN/util_hysteria2.uc
 SINGBOX_BIN=$(first_type $(config_n_get @global_app[0] sing_box_file) sing-box)
 XRAY_BIN=$(first_type $(config_n_get @global_app[0] xray_file) xray)
 
@@ -46,9 +45,6 @@ check_run_environment() {
 
 	if [ -n "$USE_TABLES" ]; then
 		local dep_list
-		local file_path="/usr/lib/opkg/info"
-		local file_ext=".control"
-		[ -d "/lib/apk/packages" ] && { file_path="/lib/apk/packages"; file_ext=".list"; }
 
 		if [ "$USE_TABLES" = "iptables" ]; then
 			dep_list="iptables-mod-tproxy iptables-mod-socket iptables-mod-iprange iptables-mod-conntrack-extra iptables-mod-extra kmod-ipt-nat"
@@ -62,9 +58,7 @@ check_run_environment() {
 		fi
 		local pkg
 		for pkg in $dep_list; do
-			if [ ! -s "${file_path}/${pkg}${file_ext}" ]; then
-				echolog "警告：${USE_TABLES} 透明代理缺失基础依赖 ${pkg}！"
-			fi
+			pkg_installed "$pkg" || echolog "警告：${USE_TABLES} 透明代理缺失基础依赖 ${pkg}！"
 		done
 	else
 		echolog "警告：不满足任何透明代理系统环境。(has_fw4:$has_fw4/has_ipt:$has_ipt/has_ipset:$has_ipset/dnsmasq_nftset:$dnsmasq_nftset/dnsmasq_ipset:$dnsmasq_ipset)"
@@ -343,7 +337,7 @@ run_chinadns_ng() {
 	_extra_param="${_extra_param} -DEFAULT_TAG ${_default_tag} -NFTFLAG ${nftflag} -NO_LOGIC_LOG ${_no_logic_log}"
 	_extra_param="${_extra_param} -FILTER_HTTPS ${_filter_https} -LOG_FILE ${_LOG_FILE}"
 
-	ucode $APP_PATH/helper_chinadns_add.uc ${_extra_param} > ${_CONF_FILE}
+	ucode $UCODE_BIN/helper_chinadns_add.uc ${_extra_param} > ${_CONF_FILE}
 	ln_run "$(first_type chinadns-ng)" chinadns-ng "${_LOG_FILE}" -C ${_CONF_FILE}
 }
 
@@ -890,7 +884,7 @@ start_socks() {
 				NO_REC_PROCESS=$no_rec $APP_PATH/app.sh run_socks flag=$id node=$node bind=$bind socks_port=$port config_file=$config_file http_port=$http_port http_config_file=$http_config_file log_file=$log_file
 				set_cache_var "${id}" "$node"
 				#自动切换逻辑
-				[ "$enable_autoswitch" = "1" ] && { $APP_PATH/socks_auto_switch.sh ${id} > /dev/null 2>&1 & }
+				[ "$enable_autoswitch" = "1" ] && { ucode $UCODE_BIN/socks_auto_switch.uc ${id} > /dev/null 2>&1 & }
 			done
 		}
 	}
@@ -939,12 +933,14 @@ clean_crontab() {
 	touch /etc/crontabs/root
 	#sed -i "/${CONFIG}/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "/etc/init.d/${CONFIG}" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
+	sed -i "/$(echo "ucode ${UCODE_BIN}/rule_update.uc log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "ucode ${APP_PATH}/rule_update.uc log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "lua ${APP_PATH}/rule_update.lua log" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
+	sed -i "/$(echo "ucode ${UCODE_BIN}/subscribe.uc start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "ucode ${APP_PATH}/subscribe.uc start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 	sed -i "/$(echo "lua ${APP_PATH}/subscribe.lua start" | sed 's#\/#\\\/#g')/d" /etc/crontabs/root >/dev/null 2>&1
 
-	busybox pgrep -af "${CONFIG}/" | awk '/tasks\.sh/{print $1}' | xargs kill -9 >/dev/null 2>&1
+	busybox pgrep -af "${CONFIG}/" | awk '/tasks\.(sh|uc)/{print $1}' | xargs kill -9 >/dev/null 2>&1
 	rm -f ${LOCK_PATH}/${CONFIG}_tasks.lock
 }
 
@@ -955,7 +951,7 @@ start_crontab() {
 
 	if [ "$ENABLED_DEFAULT_ACL" = "1" ] || [ "$ENABLED_ACLS" = "1" ]; then
 		local start_daemon=$(config_n_get @global_delay[0] start_daemon 0)
-		[ "$start_daemon" = "1" ] && { $APP_PATH/monitor.sh > /dev/null 2>&1 & }
+		[ "$start_daemon" = "1" ] && { ucode $UCODE_BIN/monitor.uc > /dev/null 2>&1 & }
 	fi
 
 	if [ "$1" = "cron" ]; then
@@ -1020,7 +1016,7 @@ start_crontab() {
 		if [ "$rules_update_week_mode" = "8" ]; then
 			update_loop=1
 		else
-			echo "$rule_t ${setsid_cmd}ucode $APP_PATH/rule_update.uc log all cron > /dev/null 2>&1 &" >>/etc/crontabs/root
+			echo "$rule_t ${setsid_cmd}ucode $UCODE_BIN/rule_update.uc log all cron > /dev/null 2>&1 &" >>/etc/crontabs/root
 		fi
 		echolog "配置定时任务：自动更新规则。"
 	fi
@@ -1048,7 +1044,7 @@ start_crontab() {
 			if [ "$sub_update_week_mode" = "8" ]; then
 				update_loop=1
 			else
-				echo "$sub_t ${setsid_cmd}ucode $APP_PATH/subscribe.uc start $cfgids cron > /dev/null 2>&1 &" >>/etc/crontabs/root
+				echo "$sub_t ${setsid_cmd}ucode $UCODE_BIN/subscribe.uc start $cfgids cron > /dev/null 2>&1 &" >>/etc/crontabs/root
 			fi
 		done
 		rm -rf "$TMP_SUB_PATH"
@@ -1057,7 +1053,7 @@ start_crontab() {
 	# ===== loop =====
 	if [ "$ENABLED_DEFAULT_ACL" = "1" ] || [ "$ENABLED_ACLS" = "1" ]; then
 		if [ "$update_loop" = "1" ]; then
-			$APP_PATH/tasks.sh > /dev/null 2>&1 &
+			ucode $UCODE_BIN/tasks.uc > /dev/null 2>&1 &
 			echolog "自动更新：启动循环更新进程。"
 		fi
 	else
@@ -1287,7 +1283,7 @@ start_dns() {
 			echolog "  - SmartDNS(127.0.0.1#${smartdns_listen_port})，直连 DNS：${SMARTDNS_DIRECT_DNS} -> 分组(direct)"
 			[ "${SMARTDNS_LOCAL_PORT:-0}" != "0" ] && echolog "  - SmartDNS 直连入口：${LOCAL_DNS} -> 分组(direct)"
 
-			ucode "$APP_PATH/helper_smartdns_add.uc" -FLAG "default" \
+			ucode "$UCODE_BIN/helper_smartdns_add.uc" -FLAG "default" \
 				-LISTEN_PORT "$smartdns_listen_port" -DIRECT_DNS "$SMARTDNS_DIRECT_DNS" -LOCAL_PORT "${SMARTDNS_LOCAL_PORT:-0}" -DNS_REDIRECT "${DNS_REDIRECT}" \
 				-REMOTE_PROXY_SERVER "${GLOBAL_SOCKS_server}" -USE_DEFAULT_DNS "${smartdns_default_dns}" \
 				-REMOTE_DNS "${smartdns_remote_dns}" -DNS_MODE "${DNS_MODE:-socks}" -TUN_DNS "${TUN_DNS}" \
@@ -1366,15 +1362,15 @@ start_dns() {
 			DIRECT_DNSMASQ_CONF=${GLOBAL_ACL_PATH}/direct_dnsmasq.conf
 			DIRECT_DNSMASQ_CONF_PATH=${GLOBAL_ACL_PATH}/direct_dnsmasq.d
 			mkdir -p ${DIRECT_DNSMASQ_CONF_PATH}
-			ucode $APP_PATH/helper_dnsmasq.uc copy_instance -LISTEN_PORT ${DIRECT_DNSMASQ_PORT} -DNSMASQ_CONF ${DIRECT_DNSMASQ_CONF} -TMP_DNSMASQ_PATH ${DIRECT_DNSMASQ_CONF_PATH}
+			ucode $UCODE_BIN/helper_dnsmasq.uc copy_instance -LISTEN_PORT ${DIRECT_DNSMASQ_PORT} -DNSMASQ_CONF ${DIRECT_DNSMASQ_CONF} -TMP_DNSMASQ_PATH ${DIRECT_DNSMASQ_CONF_PATH}
 			ln_run "$(first_type dnsmasq)" "dnsmasq_direct" "/dev/null" -C ${DIRECT_DNSMASQ_CONF} -x ${GLOBAL_ACL_PATH}/direct_dnsmasq.pid
 			echo "${DIRECT_DNSMASQ_PORT}" > ${GLOBAL_ACL_PATH}/direct_dnsmasq_port
 		}
 
 		#Rewrite the default DNS service configuration
 		#Modify the default dnsmasq service
-		ucode $APP_PATH/helper_dnsmasq.uc stretch
-		ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
+		ucode $UCODE_BIN/helper_dnsmasq.uc stretch
+		ucode $UCODE_BIN/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
 			-DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS ${LOCAL_DNS} -TUN_DNS ${DNSMASQ_TUN_DNS} \
 			-USE_DEFAULT_DNS "${USE_DEFAULT_DNS:-direct}" -CHINADNS_DNS ${china_ng_listen:-0} \
 			-USE_DIRECT_LIST "${USE_DIRECT_LIST}" -USE_PROXY_LIST "${USE_PROXY_LIST}" -USE_BLOCK_LIST "${USE_BLOCK_LIST}" -USE_GFW_LIST "${USE_GFW_LIST}" -CHN_LIST "${CHN_LIST}" \
@@ -1383,7 +1379,7 @@ start_dns() {
 		uci -q delete dhcp.@dnsmasq[0].min_cache_ttl
 		uci -q add_list dhcp.@dnsmasq[0].addnmount=${GLOBAL_DNSMASQ_CONF_PATH}
 		uci -q commit dhcp
-		ucode $APP_PATH/helper_dnsmasq.uc logic_restart -LOG 1
+		ucode $UCODE_BIN/helper_dnsmasq.uc logic_restart -LOG 1
 	elif [ "${DNS_SHUNT}" = "smartdns" ]; then
 		# SmartDNS reads DHCP leases itself; no forwarding dnsmasq instance is needed.
 		DNS_REDIRECT_PORT=${smartdns_listen_port}
@@ -1393,7 +1389,7 @@ start_dns() {
 		GLOBAL_DNSMASQ_PORT=$(get_new_port 11400)
 		GLOBAL_DNSMASQ_CONF=${GLOBAL_ACL_PATH}/dnsmasq.conf
 		GLOBAL_DNSMASQ_CONF_PATH=${GLOBAL_ACL_PATH}/dnsmasq.d
-		ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
+		ucode $UCODE_BIN/helper_dnsmasq.uc add_rule -FLAG "default" -TMP_DNSMASQ_PATH ${GLOBAL_DNSMASQ_CONF_PATH} -DNSMASQ_CONF_FILE ${GLOBAL_DNSMASQ_CONF} \
 			-LISTEN_PORT ${GLOBAL_DNSMASQ_PORT} -DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS ${LOCAL_DNS} -TUN_DNS ${DNSMASQ_TUN_DNS} \
 			-USE_DEFAULT_DNS "${USE_DEFAULT_DNS:-direct}" -CHINADNS_DNS ${china_ng_listen:-0} \
 			-USE_DIRECT_LIST "${USE_DIRECT_LIST}" -USE_PROXY_LIST "${USE_PROXY_LIST}" -USE_BLOCK_LIST "${USE_BLOCK_LIST}" -USE_GFW_LIST "${USE_GFW_LIST}" -CHN_LIST "${CHN_LIST}" \
@@ -1403,7 +1399,7 @@ start_dns() {
 		set_cache_var "ACL_default_dns_port" "${GLOBAL_DNSMASQ_PORT}"
 		DNS_REDIRECT_PORT=${GLOBAL_DNSMASQ_PORT}
 		#dhcp.leases to hosts
-		$APP_PATH/lease2hosts.sh > /dev/null 2>&1 &
+		ucode $UCODE_BIN/lease2hosts.uc > /dev/null 2>&1 &
 	fi
 }
 
@@ -1416,7 +1412,7 @@ start_haproxy() {
 	fi
 	local haproxy_path=$TMP_PATH/haproxy
 	local haproxy_conf="config.cfg"
-	ucode $APP_PATH/haproxy.uc -path ${haproxy_path} -conf ${haproxy_conf}
+	ucode $UCODE_BIN/haproxy.uc -path ${haproxy_path} -conf ${haproxy_conf}
 	ln_run "$(first_type haproxy)" haproxy "/dev/null" -f "${haproxy_path}/${haproxy_conf}"
 }
 
@@ -1624,7 +1620,7 @@ acl_app() {
 							dnsmasq_port=$(get_new_port $(expr $dnsmasq_port + 1))
 							local dnsmasq_conf=${acl_path}/dnsmasq.conf
 							local dnsmasq_conf_path=${acl_path}/dnsmasq.d
-							ucode $APP_PATH/helper_dnsmasq.uc add_rule -FLAG ${sid} -TMP_DNSMASQ_PATH ${dnsmasq_conf_path} -DNSMASQ_CONF_FILE ${dnsmasq_conf} \
+							ucode $UCODE_BIN/helper_dnsmasq.uc add_rule -FLAG ${sid} -TMP_DNSMASQ_PATH ${dnsmasq_conf_path} -DNSMASQ_CONF_FILE ${dnsmasq_conf} \
 								-LISTEN_PORT ${dnsmasq_port} -DEFAULT_DNS ${DEFAULT_DNS} -LOCAL_DNS $LOCAL_DNS \
 								-USE_DIRECT_LIST "${use_direct_list}" -USE_PROXY_LIST "${use_proxy_list}" -USE_BLOCK_LIST "${use_block_list}" -USE_GFW_LIST "${use_gfw_list}" -CHN_LIST "${chn_list}" \
 								-TUN_DNS "127.0.0.1#${dns_fwd_port}" -USE_DEFAULT_DNS "${use_default_dns:-direct}" -CHINADNS_DNS ${_china_ng_listen:-0} \
@@ -1633,7 +1629,7 @@ acl_app() {
 							ln_run "$(first_type dnsmasq)" "dnsmasq_${sid}" "/dev/null" -C ${dnsmasq_conf} -x ${acl_path}/dnsmasq.pid
 							set_cache_var "ACL_${sid}_dns_port" "${dnsmasq_port}"
 							#dhcp.leases to hosts
-							$APP_PATH/lease2hosts.sh > /dev/null 2>&1 &
+							ucode $UCODE_BIN/lease2hosts.uc > /dev/null 2>&1 &
 						}
 						local _redir_port=$(get_cache_var "acl_node_${node}_redir_port")
 						local _socks_port=$(get_cache_var "acl_node_${node}_socks_port")
@@ -1707,6 +1703,25 @@ acl_app() {
 	fi
 }
 
+write_nft_env() {
+	local f="$TMP_PATH/nft.env" v val
+	mkdir -p "$TMP_PATH"
+	: > "$f"
+	for v in \
+		NODE ENABLED ENABLED_DEFAULT_ACL ENABLED_ACLS CLIENT_PROXY \
+		TCP_NO_REDIR_PORTS UDP_NO_REDIR_PORTS TCP_PROXY_DROP_PORTS UDP_PROXY_DROP_PORTS \
+		TCP_REDIR_PORTS UDP_REDIR_PORTS TCP_PROXY_MODE UDP_PROXY_MODE \
+		USE_DIRECT_LIST USE_PROXY_LIST USE_BLOCK_LIST USE_GFW_LIST CHN_LIST \
+		DNS_REDIRECT_PORT DIRECT_DNSMASQ_PORT USE_FAKEDNS PROXY_IPV6 TCP_PROXY_WAY \
+		LOCALHOST_TCP_PROXY_MODE LOCALHOST_UDP_PROXY_MODE LOCALHOST_PROXY \
+		REDIR_PORT TCP_PROXY_DNS UDP_PROXY_DNS REMOTE_DNS IPT_APPEND_DNS \
+		ISP_DNS ISP_DNS6 DNS_REDIRECT FILTER_PROXY_IPV6
+	do
+		eval "val=\${$v}"
+		printf '%s=%s\n' "$v" "$(shell_quote "$val")" >> "$f"
+	done
+}
+
 start() {
 	busybox pgrep -f ${TMP_PATH}/bin > /dev/null 2>&1 && {
 		logger -t PSW-RESTART "Upgrade or overload residue is detected, and the subprocess is being called to perform complete cleaning..."
@@ -1733,7 +1748,7 @@ start() {
 			uci -q commit ${CONFIG}
 			uci -q set dhcp.@dnsmasq[0].dns_redirect='0'
 			uci -q commit dhcp
-			ucode $APP_PATH/helper_dnsmasq.uc restart -LOG 0
+			ucode $UCODE_BIN/helper_dnsmasq.uc restart -LOG 0
 		}
 	fi
 	[ "$ENABLED_DEFAULT_ACL" = 1 ] && {
@@ -1749,7 +1764,13 @@ start() {
 			return 1
 		}
 	}
-	[ -n "$USE_TABLES" ] && source $APP_PATH/${USE_TABLES}.sh start
+	if [ "$USE_TABLES" = "nftables" ]; then
+		[ "$ENABLED_ACLS" = 1 ] && acl_app
+		write_nft_env
+		$UCODE_BIN/nftables.uc start
+	elif [ -n "$USE_TABLES" ]; then
+		source $APP_PATH/${USE_TABLES}.sh start
+	fi
 	set_cache_var "USE_TABLES" "$USE_TABLES"
 	if [ "$ENABLED_DEFAULT_ACL" = 1 ] || [ "$ENABLED_ACLS" = 1 ]; then
 		bridge_nf_ipt=$(sysctl -e -n net.bridge.bridge-nf-call-iptables)
@@ -1774,7 +1795,7 @@ start() {
 		done
 		[ -n "$cfgids" ] && {
 			sleep 5
-			ucode $APP_PATH/subscribe.uc start $cfgids cron > /dev/null 2>&1 &
+			ucode $UCODE_BIN/subscribe.uc start $cfgids cron > /dev/null 2>&1 &
 		}
 	}
 }
@@ -1782,7 +1803,11 @@ start() {
 stop() {
 	clean_log
 	eval_cache_var
-	[ -n "$USE_TABLES" ] && source $APP_PATH/${USE_TABLES}.sh stop
+	if [ "$USE_TABLES" = "nftables" ]; then
+		$UCODE_BIN/nftables.uc stop
+	elif [ -n "$USE_TABLES" ]; then
+		source $APP_PATH/${USE_TABLES}.sh stop
+	fi
 	delete_ip2route
 	# 结束 SS 插件进程
 	# kill_all xray-plugin v2ray-plugin obfs-local shadow-tls
@@ -1793,9 +1818,9 @@ stop() {
 			kill -9 "$pid" >/dev/null 2>&1
 		fi
 	done
-	busybox pgrep -af "${CONFIG}/monitor\.sh" | xargs -r kill -9 >/dev/null 2>&1
+	busybox pgrep -af "${CONFIG}/monitor\." | xargs -r kill -9 >/dev/null 2>&1
 	busybox pgrep -f "sleep.*(6s|9s|58s)" | xargs -r kill -9 >/dev/null 2>&1
-	busybox pgrep -af "${CONFIG}/" | awk '! /app\.sh|subscribe\.(lua|uc)|rule_update\.(lua|uc)|tasks\.sh|server_app\.(lua|uc)|ujail/{print $1}' | xargs -r kill -9 >/dev/null 2>&1
+	busybox pgrep -af "${CONFIG}/" | awk '! /app\.sh|subscribe\.(lua|uc)|rule_update\.(lua|uc)|tasks\.(sh|uc)|server_app\.(lua|uc)|ujail/{print $1}' | xargs -r kill -9 >/dev/null 2>&1
 	unset V2RAY_LOCATION_ASSET
 	unset XRAY_LOCATION_ASSET
 	unset SS_SYSTEM_DNS_RESOLVER_FORCE_BUILTIN
@@ -1814,7 +1839,7 @@ stop() {
 		if [ -z "${ACL_default_dns_port}" ] || [ -n "${bak_dnsmasq_dns_redirect}" ]; then
 			uci -q del_list dhcp.@dnsmasq[0].addnmount="${GLOBAL_DNSMASQ_CONF_PATH}"
 			uci -q commit dhcp
-			ucode $APP_PATH/helper_dnsmasq.uc restart -LOG 0
+			ucode $UCODE_BIN/helper_dnsmasq.uc restart -LOG 0
 		fi
 		[ -n "${bak_bridge_nf_ipt}" ] && sysctl -w net.bridge.bridge-nf-call-iptables=${bak_bridge_nf_ipt} >/dev/null 2>&1
 		[ -n "${bak_bridge_nf_ip6t}" ] && sysctl -w net.bridge.bridge-nf-call-ip6tables=${bak_bridge_nf_ip6t} >/dev/null 2>&1

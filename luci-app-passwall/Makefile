@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
 # Copyright (C) 2018-2020 L-WRT Team
 # Copyright (C) 2021-2025 xiaorouji
 # Copyright (C) 2026 Openwrt-Passwall Organization
@@ -8,8 +10,9 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall
 PKG_VERSION:=26.10.16
-PKG_RELEASE:=3
+PKG_RELEASE:=8
 PKG_PO_VERSION:=$(PKG_VERSION)
+PKG_LICENSE:=GPL-3.0-only
 
 PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_$(PKG_NAME)_Iptables_Transparent_Proxy \
@@ -31,7 +34,11 @@ PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Xray_Plugin
 
 LUCI_TITLE:=LuCI support for PassWall
+LUCI_DESCRIPTION:=LuCI interface for PassWall. Transparent proxy follows firewall4 and nftables; iptables/ipset remain available for the legacy firewall.
 LUCI_PKGARCH:=all
+LUCI_URL:=https://github.com/Openwrt-Passwall/openwrt-passwall
+LUCI_MAINTAINER:=Openwrt-Passwall Organization
+PKG_MAINTAINER:=$(LUCI_MAINTAINER)
 LUCI_DEPENDS:=+coreutils +coreutils-base64 +coreutils-nohup +coreutils-timeout +curl \
 	+chinadns-ng +dns2socks +dnsmasq-full +ip-full \
 	+ucode +ucode-mod-digest +ucode-mod-fs +ucode-mod-math +ucode-mod-uci \
@@ -45,8 +52,9 @@ config PACKAGE_$(PKG_NAME)_Iptables_Transparent_Proxy
 	bool "Iptables Transparent Proxy"
 	select PACKAGE_ipset
 	select PACKAGE_ipt2socks
-	select PACKAGE_iptables
 	select PACKAGE_iptables-zz-legacy
+	select PACKAGE_ip6tables-zz-legacy if IPV6
+	select PACKAGE_dnsmasq_full_ipset
 	select PACKAGE_iptables-mod-conntrack-extra
 	select PACKAGE_iptables-mod-extra
 	select PACKAGE_iptables-mod-iprange
@@ -59,6 +67,7 @@ config PACKAGE_$(PKG_NAME)_Nftables_Transparent_Proxy
 	bool "Nftables Transparent Proxy"
 	select PACKAGE_ipt2socks
 	select PACKAGE_nftables
+	select PACKAGE_dnsmasq_full_nftset
 	select PACKAGE_kmod-nft-socket
 	select PACKAGE_kmod-nft-tproxy
 	select PACKAGE_kmod-nft-nat

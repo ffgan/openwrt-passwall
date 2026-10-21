@@ -1259,16 +1259,20 @@ remove = function(...values) {
 };
 
 is_install = function(package_name) {
-	if (type(package_name) == "string" && length(package_name) > 0) {
-		let file_path = "/usr/lib/opkg/info";
-		let file_ext = ".control";
-		if (sys_call("[ -d " + file_path + " ]") != 0) {
-			file_path = "/lib/apk/packages";
-			file_ext = ".list";
-		}
-		return sys_call("[ -s \"" + file_path + "/" + package_name + file_ext + "\" ]") == 0;
-	}
-	return false;
+	if (type(package_name) != "string" || length(package_name) == 0)
+		return false;
+	if (match(package_name, /[^A-Za-z0-9+_.-]/) != null)
+		return false;
+	// apk is the package manager from OpenWrt 25.12 onward. Prefer its
+	// database whenever it is present so a leftover opkg directory cannot
+	// hide an apk-installed dependency.
+	let apk_size = fs_stat("/lib/apk/db/installed", "size");
+	let path;
+	if (apk_size != null && apk_size > 0)
+		path = "/lib/apk/packages/" + package_name + ".list";
+	else
+		path = "/usr/lib/opkg/info/" + package_name + ".control";
+	return sys_call("[ -s " + shellquote(path) + " ]") == 0;
 };
 
 get_args = function(arg) {
@@ -2331,10 +2335,14 @@ get_version = function() {
 	if (fs_access(version_file)) {
 		version = readfile(version_file);
 	} else {
-		version = sys_exec("opkg list-installed luci-app-passwall 2>/dev/null | awk '{print $3}'");
-		if (version == null || trim(version) == "")
-			version = sys_exec("apk list luci-app-passwall 2>/dev/null | awk '/installed/ {print $1}' | cut -d'-' -f4-");
-		version = trim(version ?? "");
+		// opkg list-installed on 24.10 and older. OpenWrt 25.12 replaced it
+		// with apk; `apk info` lists names only, so read the version from
+		// `apk query` and fall back to the installed database.
+		version = trim(sys_exec("opkg list-installed luci-app-passwall 2>/dev/null | awk '{print $3; exit}'"));
+		if (version == "")
+			version = trim(sys_exec("apk query --installed --format json --fields name,version luci-app-passwall 2>/dev/null | jsonfilter -e '$[0].version' 2>/dev/null"));
+		if (version == "")
+			version = trim(sys_exec("awk '$0==\"P:luci-app-passwall\"{f=1;next} f&&/^V:/{sub(/^V:/,\"\"); print; exit} f&&NF==0{exit}' /lib/apk/db/installed 2>/dev/null"));
 		if (version != "")
 			writefile(version_file, version);
 	}
@@ -2413,8 +2421,8 @@ to_install_self = function(id, force) {
 	mkdir_p(status_dir);
 	exec_argv("/bin/mv", ["/tmp/" + appname + "_download." + id + "1", dir + "/luci-app-" + appname + extension], null, null);
 	exec_argv("/bin/mv", ["/tmp/" + appname + "_download." + id + "2", dir + "/luci-i18n-" + appname + "-zh-cn" + extension], null, null);
-	let script = dir + "/luci_update.sh";
-	if (exec_argv("/bin/cp", ["/usr/share/" + appname + "/luci_update.sh", script], null, null) != 0) {
+	let script = dir + "/luci_update.uc";
+	if (exec_argv("/bin/cp", ["/usr/libexec/" + appname + "/luci_update.uc", script], null, null) != 0) {
 		remove(dir);
 		return { code: 1 };
 	}
