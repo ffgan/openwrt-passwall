@@ -1,0 +1,19 @@
+name: Check
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Syntax and runtime helpers
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check LuCI modules and cache format
+        run: node tests/check.mjs

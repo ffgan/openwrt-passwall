@@ -77,9 +77,9 @@ cleanup_socks = function(flag) {
 		if (pid != null)
 			command_ok(["kill", "-9", pid[1]]);
 	}
-	let listed = read_cmd(["busybox", "pgrep", "-af", tmp + "/" + flag + "[._]"]);
-	if (listed != null) {
-		let lines = split_lines(listed.out);
+	let listed = api.proc_lines(tmp + "/" + flag + "[._]");
+	if (listed != "") {
+		let lines = split_lines(listed);
 		for (let line in lines) {
 			if (match(line, /urltest\.uc/) != null)
 				continue;

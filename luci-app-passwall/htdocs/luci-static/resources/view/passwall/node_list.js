@@ -19,10 +19,9 @@ var URL_PRESETS = [
 var CSS = [
 	'table th, .table .th { text-align: center; }',
 	'table td, .table .td { text-align: center; word-break: keep-all; }',
-	'#set_node_div { display: none; width: 30rem; position: fixed; top: 45%; z-index: 99; text-align: center; background: white; box-shadow: darkgrey 10px 10px 30px 5px; padding: 0.5em; }',
-	'._now_use_bg { background: #5e72e445 !important; }',
+	'#set_node_div { display: none; width: min(30rem, 92vw); position: fixed; top: 45%; z-index: 99; text-align: center; background: var(--background-color-high, var(--background-color, #fff)); color: var(--text-color, inherit); border: 1px solid var(--border-color-medium, rgba(127,127,127,.3)); border-radius: .8rem; box-shadow: 0 12px 40px rgba(0,0,0,.28); padding: 0.5em; }',
+	'._now_use_bg { background: color-mix(in srgb, var(--primary, #5e72e4) 22%, transparent) !important; }',
 	'.ping a, .ping_value a, .tcping_value a { text-decoration: none; cursor: pointer; }',
-	'@media (prefers-color-scheme: dark) { ._now_use_bg { background: #4a90e2 !important; } }',
 	'.td.cbi-section-actions { text-align: right !important; }',
 	'.node-wrapper { align-items: center; display: inline-flex !important; gap: 4px; }',
 	'.cbi-tabmenu > li { margin-right: 2px !important; }',
@@ -309,7 +308,7 @@ function ensureSortable() {
 	if (window.Sortable)
 		return Promise.resolve(window.Sortable);
 	return new Promise(function(resolve) {
-		var script = E('script', { src: L.resource('view/passwall/Sortable.min.js') });
+		var script = E('script', { src: L.resource('view/passwall/sortable.js') });
 		script.onload = function() { resolve(window.Sortable || null); };
 		script.onerror = function() { resolve(null); };
 		document.head.appendChild(script);

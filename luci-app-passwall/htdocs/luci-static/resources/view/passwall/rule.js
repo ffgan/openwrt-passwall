@@ -64,7 +64,7 @@ function ensureSortable() {
 	if (window.Sortable)
 		return Promise.resolve(window.Sortable);
 	return new Promise(function(resolve) {
-		var script = E('script', { 'src': L.resource('view/passwall/Sortable.min.js') });
+		var script = E('script', { 'src': L.resource('view/passwall/sortable.js') });
 		script.onload = function() { resolve(window.Sortable || null); };
 		script.onerror = function() { resolve(null); };
 		document.head.appendChild(script);

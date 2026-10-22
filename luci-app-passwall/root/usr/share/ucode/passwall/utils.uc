@@ -95,52 +95,19 @@ export function config_t_get(type_name, option, fallback, index) {
 };
 
 export function del_cache_var(key) {
-	let data = fs.readfile(TMP_PATH + '/var') ?? '';
-	let kept = [];
-	for (let line in split(data, '\n'))
-		if (match(line, regexp('^' + replace(str(key), /[][(){}.^$*+?|\\]/g, '\\$&') + '=')) == null && line != '')
-			push(kept, line);
-	if (length(kept))
-		fs.writefile(TMP_PATH + '/var', join('\n', kept) + '\n');
-	else
-		fs.unlink(TMP_PATH + '/var');
+	api.del_cache_var(key);
 };
 
-function decode_cache(value) {
-	if (length(value) >= 2 && substr(value, 0, 1) == "'" && substr(value, -1) == "'") {
-		value = substr(value, 1, length(value) - 2);
-		value = replace(value, /'\\''/g, "'");
-	}
-	return value;
-}
-
 export function cache_all() {
-	let out = {};
-	for (let line in split(fs.readfile(TMP_PATH + '/var') ?? '', '\n')) {
-		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-		if (m != null)
-			out[m[1]] = decode_cache(m[2]);
-	}
-	return out;
+	return api.cache_map();
 };
 
 export function set_cache_var(key, value) {
-	if (key == null || key == '')
-		return;
-	del_cache_var(key);
-	value = str(value);
-	if (value == '')
-		return;
-	api.fs.mkdirr(TMP_PATH);
-	let fh = fs.open(TMP_PATH + '/var', 'a');
-	if (fh != null) {
-		fh.write(key + '=' + api.shellquote(value) + '\n');
-		fh.close();
-	}
+	api.set_cache_var(key, value);
 };
 
 export function get_cache_var(key) {
-	return cache_all()[key];
+	return api.get_cache_var(key);
 };
 
 export function first_type(primary, fallback) {

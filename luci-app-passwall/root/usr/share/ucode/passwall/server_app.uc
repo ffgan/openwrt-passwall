@@ -98,8 +98,10 @@ start = function() {
 	let fw_changed = remove_firewall_rules(true);
 	let uci = api.uci;
 
-	cmd(sprintf("mkdir -p %s %s", CONFIG_PATH, TMP_BIN_PATH));
-	cmd(sprintf("touch %s", LOG_APP_FILE));
+	api.fs.mkdirr(CONFIG_PATH);
+	api.fs.mkdirr(TMP_BIN_PATH);
+	if (api.fs.stat(LOG_APP_FILE) == null)
+		api.fs.writefile(LOG_APP_FILE, "");
 	let firewall_num = 0;
 	api.uci_foreach_s("server", (server) => {
 		let id = server[".name"];
@@ -222,7 +224,15 @@ lor_src = function(v) {
 };
 
 stop = function() {
-	cmd(sprintf("/bin/busybox top -bn1 | grep -v 'grep' | grep '%s/' | awk '{print $1}' | xargs kill -9 >/dev/null 2>&1", CONFIG_PATH));
+	let pattern = replace(CONFIG_PATH + "/", /[][(){}.^$*+?|\\]/g, "\\$&");
+	for (let line in api.split(api.proc_lines(pattern), "\n")) {
+		let pid = match(line, /^([0-9]+)/);
+		if (pid == null)
+			continue;
+		let ph = api.command_pipe(["kill", "-9", pid[1]], "r");
+		if (ph != null)
+			ph.close();
+	}
 	remove_firewall_rules();
 	api.remove(CONFIG_PATH, LOG_APP_FILE);
 };

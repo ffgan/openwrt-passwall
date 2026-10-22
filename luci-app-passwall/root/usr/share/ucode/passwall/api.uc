@@ -574,43 +574,194 @@ sh_uci_add_list = function(config, section, option, val, commit_flag) {
 		sh_uci_commit(config);
 };
 
-del_cache_var = function(key) {
-	let path = TMP_PATH + "/var";
-	let kept = [];
-	for (let line in global.split(readfile(path) ?? "", "\n")) {
-		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=/);
-		if (line != "" && (m == null || m[1] != ("" + key)))
-			push(kept, line);
+cache_file = function() {
+	return TMP_PATH + "/var";
+};
+
+cache_decode_legacy = function(value) {
+	if (length(value) >= 2 && substr(value, 0, 1) == "'" && substr(value, -1) == "'")
+		value = replace(substr(value, 1, length(value) - 2), /'\\''/g, "'");
+	return value;
+};
+
+cache_object = function(text) {
+	try {
+		let obj = json(text);
+		if (type(obj) == "object" && type(obj) != "array")
+			return obj;
+	} catch (e) {}
+	return null;
+};
+
+cache_fill_json = function(out, obj) {
+	for (let key, value in obj) {
+		if (type(key) != "string" || match(key, /^[A-Za-z_][A-Za-z0-9_]*$/) == null)
+			continue;
+		if (value == null || ("" + value) == "")
+			continue;
+		out[key] = "" + value;
 	}
-	if (length(kept))
-		writefile(path, join("\n", kept) + "\n");
-	else
+};
+
+cache_fill_legacy = function(out, raw) {
+	for (let line in global.split(raw, "\n")) {
+		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+		if (m == null)
+			continue;
+		let value = cache_decode_legacy(m[2]);
+		if (value != "")
+			out[m[1]] = value;
+	}
+};
+
+cache_load = function() {
+	let raw = readfile(cache_file()) ?? "";
+	let text = trim(raw);
+	let out = {};
+	if (text != "" && substr(text, 0, 1) == "{") {
+		let obj = cache_object(text);
+		let rest = "";
+		if (obj == null) {
+			let nl = index(text, "\n");
+			if (nl >= 0) {
+				obj = cache_object(substr(text, 0, nl));
+				rest = substr(text, nl + 1);
+			}
+		}
+		if (obj != null) {
+			cache_fill_json(out, obj);
+			cache_fill_legacy(out, rest);
+			return out;
+		}
+	}
+	cache_fill_legacy(out, raw);
+	return out;
+};
+
+cache_save = function(map) {
+	let path = cache_file();
+	let keys = [];
+	for (let key, value in map) {
+		if (type(key) != "string" || match(key, /^[A-Za-z_][A-Za-z0-9_]*$/) == null)
+			continue;
+		if (value == null || ("" + value) == "")
+			continue;
+		push(keys, key);
+	}
+	if (length(keys) == 0) {
 		unlink(path);
+		return;
+	}
+	sort(keys);
+	let obj = {};
+	for (let key in keys)
+		obj[key] = "" + map[key];
+	mkdir_p(TMP_PATH);
+	let body = null;
+	try {
+		body = json(obj);
+	} catch (e) {}
+	if (type(body) != "string" || body == "")
+		body = sprintf("%J", obj);
+	writefile(path, body + "\n");
+};
+
+cache_map = function() {
+	return cache_load();
+};
+
+del_cache_var = function(key) {
+	if (key == null || ("" + key) == "")
+		return;
+	let map = cache_load();
+	map["" + key] = null;
+	delete map["" + key];
+	cache_save(map);
 };
 
 set_cache_var = function(key, val) {
-	del_cache_var(key);
-	if (val == null || ("" + val) == "")
+	if (key == null || ("" + key) == "")
 		return;
-	mkdir_p(TMP_PATH);
-	let fh = open(TMP_PATH + "/var", "a");
-	if (fh != null) {
-		fh.write(key + "=" + shellquote("" + val) + "\n");
-		fh.close();
-	}
+	key = "" + key;
+	if (match(key, /^[A-Za-z_][A-Za-z0-9_]*$/) == null)
+		return;
+	let map = cache_load();
+	if (val == null || ("" + val) == "")
+		delete map[key];
+	else
+		map[key] = "" + val;
+	cache_save(map);
 };
 
 get_cache_var = function(key) {
-	for (let line in global.split(readfile(TMP_PATH + "/var") ?? "", "\n")) {
-		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-		if (m == null || m[1] != ("" + key))
-			continue;
-		let val = m[2];
-		if (length(val) >= 2 && substr(val, 0, 1) == "'" && substr(val, -1) == "'")
-			val = replace(substr(val, 1, length(val) - 2), /'\\''/g, "'");
-		return val == "" ? null : val;
+	if (key == null)
+		return null;
+	let value = cache_load()["" + key];
+	if (value == null || value == "")
+		return null;
+	return value;
+};
+
+proc_self = function() {
+	let stat = readfile("/proc/self/stat") ?? "";
+	let m = match(stat, /^([0-9]+)/);
+	return m == null ? "" : m[1];
+};
+
+proc_text = function(pid) {
+	let raw = readfile("/proc/" + pid + "/cmdline");
+	let blank = type(raw) != "string" || raw == "";
+	if (!blank) {
+		blank = true;
+		for (let i = 0; i < length(raw); i++) {
+			if (ord(raw, i) != 0) {
+				blank = false;
+				break;
+			}
+		}
 	}
-	return null;
+	if (blank)
+		raw = readfile("/proc/" + pid + "/comm") ?? "";
+	if (type(raw) != "string")
+		return "";
+	let out = "";
+	for (let i = 0; i < length(raw); i++) {
+		let c = ord(raw, i);
+		if (c == 0)
+			out += " ";
+		else if (c != 10 && c != 13)
+			out += substr(raw, i, 1);
+	}
+	return trim(out);
+};
+
+proc_lines = function(pattern) {
+	if (pattern == null || ("" + pattern) == "")
+		return "";
+	let re = null;
+	try {
+		re = regexp("" + pattern);
+	} catch (e) {
+		return "";
+	}
+	let self = proc_self();
+	let names = lsdir("/proc");
+	if (names == null)
+		return "";
+	let lines = [];
+	for (let name in names) {
+		if (name == self || match(name, /^[0-9]+$/) == null)
+			continue;
+		let cmd = proc_text(name);
+		if (cmd == "" || match(cmd, re) == null)
+			continue;
+		push(lines, name + " " + cmd);
+	}
+	return join("\n", lines);
+};
+
+proc_running = function(pattern) {
+	return proc_lines(pattern) != "";
 };
 
 get_new_port = function(start_port, protocol) {
@@ -2347,7 +2498,7 @@ to_move = function(app_name, file) {
 			error: translate("The client file is not suitable for current device.") + app_name + "__" + bin_path
 		};
 	}
-	let flag = sys_call("busybox pgrep -af \"passwall/.*" + app_name + "\" >/dev/null");
+	let flag = proc_running("passwall/.*" + app_name) ? 0 : 1;
 	if (flag == 0)
 		sys_call("/etc/init.d/passwall stop");
 	let old_app_size = 0;
@@ -3046,4 +3197,4 @@ get_socks_port_by_cache = function(node_id) {
 set_socks_port_to_cache = function(node_id, v) {
 	set_cache_var(sprintf("node_%s_socks_port", node_id), v);
 };
-export { command_pipe, shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };
+export { cache_map, proc_lines, proc_running, command_pipe, shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };

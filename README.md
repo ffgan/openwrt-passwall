@@ -1,38 +1,45 @@
-## :mega:公告
-自 2026 年 6 月 1 日起，Xray Core 内部定时器已自动弃用 `allowInsecure`（跳过证书验证），并要求自签证书必须配置 `pinnedPeerCertSha256`（`pcs` 参数）。
+# luci-app-passwall
 
-若机场使用自签证书且未提供 `pcs` 参数，节点将无法正常连接。
+OpenWrt 25.12 及更新版本上的 PassWall。透明代理走 **firewall4 / nftables**，软件包用 **apk** 安装，Web 界面是 LuCI JavaScript 视图，服务逻辑是 ucode。
 
-**解决方法：**
+## 布局
 
-* 向机场获取 `pinnedPeerCertSha256`（`pcs` 参数）；
-* 或切换至 Sing-box Core。  
+| 路径 | 作用 |
+| --- | --- |
+| `luci-app-passwall/htdocs/` | LuCI 页面。公共样式在 `passwall.css`，运行状态缓存解析在 `runtime.js`。 |
+| `luci-app-passwall/root/usr/libexec/passwall/` | 给 procd、热插拔和计划任务调用的 ucode 入口。 |
+| `luci-app-passwall/root/usr/share/ucode/passwall/` | 可复用的服务、订阅、nftables 和协议配置库。 |
+| `luci-app-passwall/root/usr/share/rpcd/ucode/luci.passwall` | LuCI 通过 ubus 调用的接口。 |
 
-## 运行环境
+运行中的变量写在 `/tmp/etc/passwall/var`。新进程把它写成 JSON 对象；启动时仍能读旧的 `KEY='value'` 行，下一次写入会换成 JSON。进程匹配直接读 `/proc/<pid>/cmdline`，不再调用 `busybox pgrep`。
 
-面向 **OpenWrt 25.12 及更新版本**。透明代理使用 **firewall4 + nftables**，包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。
+节点列表和分流规则的拖动排序由 `sortable.js` 完成，使用指针事件，不再附带 SortableJS。
 
-## 📌如何能编译到最新代码？
+## 编译
 
-### 方法1：
-
-执行 `./scripts/feeds update -a` 操作前，在 `feeds.conf.default` **顶部**插入如下代码：
+在官方 `feeds.conf.default` 顶部加入：
 
 ```
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
-src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
+src-git passwall_luci https://github.com/ffgan/openwrt-passwall.git;main
 ```
 
-### 方法2：
+然后执行 `./scripts/feeds update -a` 和 `./scripts/feeds install -a`，在 menuconfig 里选择 `luci-app-passwall`。
 
-在 `./scripts/feeds install -a` 操作完成后，执行以下命令：
+设备上安装编译产物：
 
 ```shell
-# 移除 openwrt feeds 自带的核心库
-rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
-git clone https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-
-# 移除 openwrt feeds 过时的luci版本
-rm -rf feeds/luci/applications/luci-app-passwall
-git clone https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+apk add --allow-untrusted /path/to/luci-app-passwall.apk
 ```
+
+## Xray 证书
+
+自 2026 年 6 月 1 日起，Xray 不再接受用 `allowInsecure` 跳过证书校验。自签证书需要 `pinnedPeerCertSha256`（分享链接里的 `pcs`）。没有这个值时，改用 Sing-box。
+
+## 检查
+
+```shell
+node tests/check.mjs
+```
+
+检查 LuCI 脚本语法、JSON/旧缓存解析，以及表格拖动排序。

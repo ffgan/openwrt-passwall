@@ -34,24 +34,42 @@ function isUUID(str) {
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 }
 
+function installValidators() {
+	if (!validation.types.base64)
+		validation.types.base64 = function() {
+			return this.assert(isBase64(this.value), _('Must be Base64 text!'));
+		};
+	if (!validation.types.json)
+		validation.types.json = function() {
+			return this.assert(isJsonText(this.value), _('Must be JSON text!'));
+		};
+	if (!validation.types.timehhmm)
+		validation.types.timehhmm = function() {
+			return this.assert(isTimeHHMM(this.value), _('valid time (hh:mm)'));
+		};
+	if (!validation.types.uuid)
+		validation.types.uuid = function() {
+			return this.assert(isUUID(this.value), _('Must be UUID format!'));
+		};
+}
+
+function installTheme() {
+	if (typeof document === 'undefined' || !document.head || document.getElementById('pw-theme'))
+		return;
+	var link = document.createElement('link');
+	link.id = 'pw-theme';
+	link.rel = 'stylesheet';
+	link.href = L.resource('view/passwall/passwall.css');
+	document.head.appendChild(link);
+}
+
+installValidators();
+installTheme();
+
 return baseclass.extend({
 	__init__: function() {
-		if (!validation.types.base64)
-			validation.types.base64 = function() {
-				return this.assert(isBase64(this.value), _('Must be Base64 text!'));
-			};
-		if (!validation.types.json)
-			validation.types.json = function() {
-				return this.assert(isJsonText(this.value), _('Must be JSON text!'));
-			};
-		if (!validation.types.timehhmm)
-			validation.types.timehhmm = function() {
-				return this.assert(isTimeHHMM(this.value), _('valid time (hh:mm)'));
-			};
-		if (!validation.types.uuid)
-			validation.types.uuid = function() {
-				return this.assert(isUUID(this.value), _('Must be UUID format!'));
-			};
+		installValidators();
+		installTheme();
 	},
 
 	appname: 'passwall',
