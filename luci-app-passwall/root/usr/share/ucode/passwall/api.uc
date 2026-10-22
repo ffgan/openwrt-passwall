@@ -6,6 +6,7 @@ import { readfile, writefile, stat, unlink, mkdir, lsdir, popen, error, open, ac
 import { cursor } from 'uci';
 import { md5 } from 'digest';
 import * as com from 'passwall.com';
+import { awk_field, df_available_kb, du_kb } from 'passwall.text';
 let isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, command_pipe, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
 
 export let appname = "passwall";
@@ -1303,8 +1304,14 @@ repeat_exist = function(arr, value) {
 
 remove = function(...values) {
 	for (let value in values) {
-		if (type(value) == "string" && length(value) > 0 && value != "/")
-			sys_call("rm -rf -- " + value);
+		if (type(value) != "string" || length(value) == 0 || value == "/")
+			continue;
+		if (index(value, "*") >= 0 || index(value, "?") >= 0 || index(value, "[") >= 0) {
+			if (match(value, /^\/tmp\/[A-Za-z0-9._+-]+\.\*$/) != null)
+				sys_call("rm -rf -- " + value);
+			continue;
+		}
+		exec_argv("/bin/rm", ["-rf", "--", value], null, null);
 	}
 };
 
@@ -1651,13 +1658,40 @@ get_random_normal_node = function(exclude_id) {
 };
 
 gen_uuid = function() {
-	return sys_exec("echo -n $(cat /proc/sys/kernel/random/uuid)");
+	let raw = readfile("/proc/sys/kernel/random/uuid");
+	if (type(raw) != "string")
+		return "";
+	return trim(raw);
 };
 
 gen_random_char = function(len) {
 	if (!isset(len))
 		len = 8;
-	return sys_exec("echo -n $(head /dev/urandom | tr -dc A-Za-z0-9 | head -c " + len + ")");
+	if (type(len) == "string" && match(len, /^[0-9]+$/) != null)
+		len = int(len);
+	if (type(len) != "int" || len <= 0)
+		len = 8;
+	if (len > 4096)
+		len = 4096;
+	let fh = open("/dev/urandom", "r");
+	if (fh == null)
+		return "";
+	let out = "";
+	let guard = 0;
+	while (length(out) < len && guard < 32) {
+		guard++;
+		let buf = fh.read(len * 4);
+		if (type(buf) != "string" || buf == "")
+			break;
+		let n = length(buf);
+		for (let i = 0; i < n && length(out) < len; i++) {
+			let c = substr(buf, i, 1);
+			if (match(c, /^[A-Za-z0-9]$/) != null)
+				out += c;
+		}
+	}
+	fh.close();
+	return out;
 };
 
 chmod_755 = function(file) {
@@ -1700,7 +1734,7 @@ get_bin_version_cache = function(file, cmd) {
 			if (type(cached) == "string" && trim(cached) != "")
 				return trim(cached);
 		}
-		let version = sys_exec("echo -n $(" + shellquote(file) + " " + cmd + ")");
+		let version = trim(sys_exec(shellquote(file) + " " + cmd));
 		if (isset(version) && version != "") {
 			if (cache_file != null) {
 				mkdir_p(CACHE_PATH);
@@ -1725,18 +1759,21 @@ finded_com = function(e) {
 	let bin = get_app_path(e);
 	if (!isset(bin) || bin == "")
 		return null;
-	let s = sys_exec("echo -n $(type -t -p " + shellquote(bin) + " | head -n1)");
-	if (s == null || s == "")
+	let out = sys_exec("type -t -p " + shellquote(bin));
+	let s = "";
+	if (type(out) == "string" && out != "")
+		s = trim(split(out, "\n")[0] ?? "");
+	if (s == "")
 		return null;
 	return s;
 };
 
 finded = function(name) {
 	let bin = "" + name;
-	let s = sys_exec("echo -n $(type -t -p " + shellquote("/bin/" + bin) + " -p " + shellquote("/usr/bin/" + bin) + " " + shellquote(bin) + " | head -n1)");
-	if (s == null)
+	let out = sys_exec("type -t -p " + shellquote("/bin/" + bin) + " -p " + shellquote("/usr/bin/" + bin) + " " + shellquote(bin));
+	if (type(out) != "string" || out == "")
 		return "";
-	return s;
+	return trim(split(out, "\n")[0] ?? "");
 };
 
 is_finded = function(name) {
@@ -1784,11 +1821,8 @@ get_final_dir = function(path) {
 get_free_space = function(dir) {
 	if (dir == null)
 		dir = "/";
-	if (sys_call("df -k " + shellquote(dir) + " >/dev/null 2>&1") != 0)
-		return 0;
-	let out = sys_exec("df -k " + shellquote(dir) + " | awk 'NR>1 {print $4}'");
-	let n = int(trim(out));
-	if (n != n)
+	let n = df_available_kb(sys_exec("df -k " + shellquote(dir) + " 2>/dev/null"));
+	if (n == null || n != n)
 		return 0;
 	return n;
 };
@@ -1798,9 +1832,8 @@ get_file_space = function(file) {
 		return 0;
 	if (!fs_access(file))
 		return 0;
-	let out = sys_exec("du -k " + shellquote(file) + " | awk 'NR==1 {print $1}'");
-	let n = int(trim(out));
-	if (n != n)
+	let n = du_kb(sys_exec("du -k " + shellquote(file) + " 2>/dev/null"));
+	if (n == null || n != n)
 		return 0;
 	return n;
 };
@@ -2284,7 +2317,7 @@ to_extract = function(app_name, file, subfix) {
 		if (isset(c.zipped_suffix) && c.zipped_suffix == "tar.gz")
 			tools_name = "tar";
 		if (tools_name != null) {
-			if (trim(sys_exec("echo -n $(command -v " + shellquote(tools_name) + ")")) == "") {
+			if (trim(sys_exec("command -v " + shellquote(tools_name))) == "") {
 				exec_argv("/bin/rm", ["-f", file], null, null);
 				return {
 					code: 1,
@@ -2298,21 +2331,27 @@ to_extract = function(app_name, file, subfix) {
 	let tmp_free_size = get_free_space("/tmp");
 	if (tmp_free_size <= 0 || tmp_free_size <= new_file_size)
 		return { code: 1, error: translatef("%s not enough space.", "/tmp") };
-	let tmp_dir = trim(sys_exec("mktemp -d -t " + app_name + "_extract.XXXXXX"));
+	let tmp_dir = "";
+	let made = command_pipe(["mktemp", "-d", "-t", app_name + "_extract.XXXXXX"], "r");
+	if (made != null) {
+		tmp_dir = trim(read_all(made));
+		made.close();
+	}
 	let output = [];
 	if (tools_name != null) {
 		if (tools_name == "unzip") {
-			let bin = trim(sys_exec("echo -n $(command -v unzip)"));
+			let bin = trim(sys_exec("command -v unzip"));
 			exec_argv(bin, ["-o", file, app_name, "-d", tmp_dir], function(chunk) {
 				push(output, chunk);
 			}, null);
 		} else if (tools_name == "tar") {
-			let bin = trim(sys_exec("echo -n $(command -v tar)"));
+			let bin = trim(sys_exec("command -v tar"));
 			if (c.zipped_suffix == "tar.gz") {
 				exec_argv(bin, ["-zxf", file, "-C", tmp_dir], function(chunk) {
 					push(output, chunk);
 				}, null);
-				sys_call("/bin/mv -f " + tmp_dir + "/*/" + lc(c.name) + " " + tmp_dir);
+				let moved = lc(c.name);
+				sys_call("/bin/mv -f " + shellquote(tmp_dir) + "/*/" + shellquote(moved) + " " + shellquote(tmp_dir));
 			}
 		}
 	}
@@ -2476,7 +2515,8 @@ to_install_self = function(id, force) {
 	}
 	chmod_755(script);
 	writefile(status, '{"installing":true}');
-	sys_call("nohup " + script + " " + dir + " " + status + " " + manager + " " + (force == "1" ? "1" : "0") + " >/dev/null 2>&1 </dev/null &");
+	let force_s = force == "1" ? "1" : "0";
+	sys_call(shellquote(script) + " " + shellquote(dir) + " " + shellquote(status) + " " + shellquote(manager) + " " + shellquote(force_s) + " >/dev/null 2>&1 </dev/null &");
 	return { code: 0 };
 };
 
@@ -2779,11 +2819,20 @@ fetch_cert_sha256 = function(host, port, sni, timeout, http3) {
 			timeout = 5;
 	}
 	let awk = "awk 'BEGIN{c=0}/BEGIN CERT/{c++} c==1{print} /END CERT/{if(c==1)exit}'";
+	let limit = "" + timeout;
+	if (match(limit, /^[0-9]+$/) == null)
+		limit = "5";
+	let port_s = "" + port;
+	if (match(port_s, /^[0-9]+$/) == null)
+		port_s = "443";
+	let connect = "" + host;
+	if (index(connect, ":") >= 0 && match(connect, /^\[.*\]$/) == null)
+		connect = "[" + connect + "]";
 	let cmd;
 	if (http3) {
-		cmd = "timeout " + timeout + " curl --http3 -k -w '%{certs}' -o /dev/null https://" + host + ":" + port + " 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
+		cmd = "timeout " + limit + " curl --http3 -k -w '%{certs}' -o /dev/null " + shellquote("https://" + connect + ":" + port_s) + " 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
 	} else {
-		cmd = "timeout " + timeout + " openssl s_client -connect " + host + ":" + port + " -servername " + sni + " -showcerts </dev/null 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
+		cmd = "timeout " + limit + " openssl s_client -connect " + shellquote(connect + ":" + port_s) + " -servername " + shellquote(sni) + " -showcerts </dev/null 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
 	}
 	let out = trim(sys_exec(cmd));
 	let m = match(out, /^([0-9a-fA-F]+)/);
@@ -3020,20 +3069,18 @@ table_remove_duplicates = function(t) {
 
 gen_wireguard_key = function() {
 	if (sys_call("command -v wg >/dev/null") == 0) {
-		let private_key = sys_exec("echo -n $(wg genkey)");
-		let public_key = sys_exec("echo -n $(echo \"" + private_key + "\" | wg pubkey)");
+		let private_key = trim(sys_exec("wg genkey"));
+		let public_key = trim(sys_exec("printf '%s\n' " + shellquote(private_key) + " | wg pubkey"));
 		return { private_key: private_key, public_key: public_key };
 	}
 	let xray = finded_com("xray");
 	if (xray != null) {
-		let result = sys_exec(xray + " wg | awk -F ': ' '{print $2}'");
-		let s = split(result, "\n");
+		let s = awk_field(sys_exec(shellquote(xray) + " wg"), ": ");
 		return { private_key: s[0], public_key: s[1] };
 	}
 	let sb = finded_com("sing-box");
 	if (sb != null) {
-		let result = sys_exec(sb + " generate wg-keypair | awk '{print $2}'");
-		let s = split(result, "\n");
+		let s = awk_field(sys_exec(shellquote(sb) + " generate wg-keypair"), null);
 		return { private_key: s[0], public_key: s[1] };
 	}
 	return null;

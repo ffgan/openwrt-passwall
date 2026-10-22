@@ -2,32 +2,8 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
-let ltruth, lor, tonumber, parse_uint, read_lines, file_size, gmatch, each_global_match, replace_all_literal, stack_string, url_list, is_ws, main;
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-lor = function(a, b) {
-	if (a == null || a === false)
-		return b;
-	return a;
-};
-
-tonumber = function(v) {
-	if (type(v) == "int")
-		return v;
-	if (type(v) == "double")
-		return (v == v) ? v : null;
-	if (type(v) != "string")
-		return null;
-	let s = trim(v);
-	if (match(s, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) == null)
-		return null;
-	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
-		return s * 1;
-	return int(s);
-};
+import { truth as ltruth, lua_or as lor, to_number as tonumber, gmatch, lines_of } from 'passwall.text';
+let parse_uint, read_lines, file_size, each_global_match, replace_all_literal, stack_string, url_list, is_ws, main;
 
 parse_uint = function(s) {
 	if (type(s) == "int")
@@ -40,16 +16,7 @@ parse_uint = function(s) {
 };
 
 read_lines = function(path) {
-	let data = api.fs.readfile(path);
-	if (data == null)
-		return null;
-	if (data == "")
-		return [];
-	if (substr(data, -1) == "\n")
-		data = substr(data, 0, length(data) - 1);
-	if (data == "")
-		return [""];
-	return split(data, "\n");
+	return lines_of(api.fs.readfile(path));
 };
 
 file_size = function(path) {
@@ -59,22 +26,6 @@ file_size = function(path) {
 	if (type(st) == "object")
 		return st.size ?? null;
 	return st;
-};
-
-gmatch = function(s, pattern) {
-	if (s == null || s === false)
-		return [];
-	let found = match("" + s, pattern);
-	if (found == null)
-		return [];
-	let out = [];
-	for (let m in found) {
-		if (type(m) == "array")
-			push(out, m[0]);
-		else
-			push(out, m);
-	}
-	return out;
 };
 
 each_global_match = function(found, fn) {

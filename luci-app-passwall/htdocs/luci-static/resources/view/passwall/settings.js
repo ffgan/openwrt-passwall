@@ -102,20 +102,6 @@ function isIpAddrPort(v) {
 	return isIPv4(host) || isIPv6(host);
 }
 
-function parseCache(text) {
-	var map = {};
-	String(text || '').split('\n').forEach(function(line) {
-		var m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-		if (!m)
-			return;
-		var val = m[2];
-		if (val.length >= 2 && val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")
-			val = val.substring(1, val.length - 1);
-		map[m[1]] = val;
-	});
-	return map;
-}
-
 function asText(v) {
 	if (typeof v === 'string')
 		return v;
@@ -1796,7 +1782,7 @@ return view.extend({
 		o.modalonly = false;
 		o.renderWidget = function(section_id) {
 			var holder = E('div', { 'id': 'pw-now-' + section_id, 'data-socks-id': section_id });
-			var cache = parseCache(cacheText);
+			var cache = pw.parseRuntime(cacheText);
 			var nid = cache[section_id];
 			remarkNode(holder, nid ? (remarks[nid] || nid) : '');
 			return holder;
@@ -2007,7 +1993,7 @@ return view.extend({
 				]).then(function(res) {
 					paintIndex(res[0]);
 					paintNowNode(res[1], remarks);
-					paintSocksRuntime(parseCache(res[2]), remarks);
+					paintSocksRuntime(pw.parseRuntime(res[2]), remarks);
 					return paintSocksPorts();
 				});
 			}, 5);

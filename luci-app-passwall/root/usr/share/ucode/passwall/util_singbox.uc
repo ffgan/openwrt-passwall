@@ -2,7 +2,8 @@
 
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
-let ltruth, lor, or_nil, tonumber, set_if, leading_int, gmatch, nonempty, has_keys, is_table, lua_quote, exec_pair, lua_tostring, finalize, drop_underscore, pem_lines, both_set, ensure_version, get_log_level, asset_dir, check_geoview, geo_convert_srs, convert_geofile, get_ech_domain, build_ech, alpn_list, hysteria2_obfs, hysteria2_idle, hysteria2_keepalive, opt_num, mb_window, collect_hop_ports, hysteria_hop_interval, hysteria2_hop_times, client_realm, server_realm, decode_reserved, masque_header_map, ws_early_data, ua_headers, http_host_path, build_client_transport, build_server_transport, build_client_mux, build_server_mux, build_client_tls, uot_obj, apply_node_dns, fill_client_protocol, gen_outbound, server_users, build_server_tls, gen_config_server, get_node_by_id, parse_rule_set, geo_rule_set, strip_at, split_ports, read_proxy_list, gen_config, gen_proto_config, print_result, dispatch, main;
+import { truth as ltruth, lua_or as lor, to_number as tonumber, leading_int, gmatch, lua_quote, quoted_option_blob } from 'passwall.text';
+let or_nil, set_if, nonempty, has_keys, is_table, exec_pair, lua_tostring, finalize, drop_underscore, pem_lines, both_set, ensure_version, get_log_level, asset_dir, check_geoview, geo_convert_srs, convert_geofile, get_ech_domain, build_ech, alpn_list, hysteria2_obfs, hysteria2_idle, hysteria2_keepalive, opt_num, mb_window, collect_hop_ports, hysteria_hop_interval, hysteria2_hop_times, client_realm, server_realm, decode_reserved, masque_header_map, ws_early_data, ua_headers, http_host_path, build_client_transport, build_server_transport, build_client_mux, build_server_mux, build_client_tls, uot_obj, apply_node_dns, fill_client_protocol, gen_outbound, server_users, build_server_tls, gen_config_server, get_node_by_id, parse_rule_set, geo_rule_set, strip_at, split_ports, read_proxy_list, gen_config, gen_proto_config, print_result, dispatch, main;
 
 let ech_domain = {};
 let local_version = null;
@@ -35,57 +36,13 @@ let hosts_predefined = null;
 let remote_server_domain_resolver = null;
 let direct_strategy = null;
 
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-lor = function(a, b) {
-	if (a == null || a === false)
-		return b;
-	return a;
-};
-
 or_nil = function(v) {
 	return ltruth(v) ? v : null;
-};
-
-tonumber = function(v) {
-	if (type(v) == "int")
-		return v;
-	if (type(v) == "double")
-		return (v == v) ? v : null;
-	if (type(v) != "string")
-		return null;
-	let s = trim(v);
-	if (match(s, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) == null)
-		return null;
-	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
-		return s * 1;
-	return int(s);
 };
 
 set_if = function(obj, key, val) {
 	if (val != null)
 		obj[key] = val;
-};
-
-leading_int = function(v) {
-	let m = match("" + v, /^[0-9]+/);
-	if (m == null)
-		return null;
-	return tonumber(m[0]);
-};
-
-gmatch = function(s, pattern) {
-	if (s == null || s === false)
-		return [];
-	let found = match("" + s, pattern);
-	if (found == null)
-		return [];
-	let out = [];
-	for (let m in found)
-		push(out, m[0]);
-	return out;
 };
 
 nonempty = function(arr) {
@@ -101,29 +58,6 @@ has_keys = function(o) {
 is_table = function(v) {
 	let t = type(v);
 	return t == "object" || t == "array";
-};
-
-lua_quote = function(s) {
-	if (s == null || s === false)
-		s = "";
-	else
-		s = "" + s;
-	let out = "\"";
-	for (let i = 0; i < length(s); i++) {
-		let c = substr(s, i, 1);
-		let b = ord(s, i);
-		if (c == "\\" || c == "\"")
-			out += "\\" + c;
-		else if (c == "\n")
-			out += "\\n";
-		else if (c == "\r")
-			out += "\\r";
-		else if (b < 32)
-			out += sprintf("\\%03d", b);
-		else
-			out += c;
-	}
-	return out + "\"";
 };
 
 exec_pair = function(cmd) {
@@ -1263,7 +1197,8 @@ gen_config_server = function(node) {
 				bind_interface: node.outbound_node_iface,
 				routing_mark: 255
 			};
-			api.sys.call(sprintf("mkdir -p %s && touch %s/%s", api.TMP_IFACE_PATH, api.TMP_IFACE_PATH, node.outbound_node_iface));
+			api.fs.mkdirr(api.TMP_IFACE_PATH);
+			api.sys.call("touch " + api.shellquote(api.TMP_IFACE_PATH + "/" + node.outbound_node_iface));
 		} else {
 			let outbound_node_t = api.uci_get_c(node.outbound_node);
 			if (node.outbound_node == "_socks" || node.outbound_node == "_http") {
@@ -1677,7 +1612,8 @@ gen_config = function(var) {
 					bind_interface: node.iface,
 					routing_mark: 255
 				};
-				api.sys.call(sprintf("mkdir -p %s && touch %s/%s", api.TMP_IFACE_PATH, api.TMP_IFACE_PATH, node.iface));
+				api.fs.mkdirr(api.TMP_IFACE_PATH);
+				api.sys.call("touch " + api.shellquote(api.TMP_IFACE_PATH + "/" + node.iface));
 			}
 		} else {
 			for (let item in outbounds) {
@@ -1805,7 +1741,7 @@ gen_config = function(var) {
 				let bin = api.finded_com("geoview");
 				if (ltruth(bin)) {
 					let geo_file = asset_dir(lor(api.uci_get_c("@global_rules[0]", "v2ray_location_asset"), "/usr/share/v2ray/")) + "/geosite.dat";
-					let cmd = "\"" + bin + "\" -type geosite -input \"" + geo_file + "\" | grep -q \"^GFW$\"";
+					let cmd = api.shellquote(bin) + " -type geosite -input " + api.shellquote(geo_file) + " | grep -q '^GFW$'";
 					if (api.sys.call(cmd) == 0)
 						domain_list = (domain_list == "") ? "geosite:gfw" : (domain_list + "\ngeosite:gfw");
 				}
@@ -2079,7 +2015,7 @@ gen_config = function(var) {
 		}
 		if (ltruth(direct_dns_udp_server) || ltruth(direct_dns_tcp_server)) {
 			let domain = [];
-			let nodes_domain_text = api.sys.exec('uci show passwall | sed -n "s/.*\\.address=\'\\([^\'\']*\\)\'/\\1/p" | sort -u');
+			let nodes_domain_text = quoted_option_blob(api.sys.exec("uci show passwall"), "address");
 			for (let raw in gmatch(nodes_domain_text, /[^\r\n]+/g)) {
 				let w = lc(lor(raw, ""));
 				if (!api.vps_domain_exclude(w) && api.datatypes.hostname(w) && !ltruth(GLOBAL.VPS_EXCLUDE[w]))
@@ -2345,7 +2281,7 @@ gen_config = function(var) {
 	});
 	for (let value in config.outbounds) {
 		if (!ltruth(value["_flag_proxy_tag"]) && !ltruth(value.detour) && ltruth(value["_id"]) && ltruth(value.server) && (ltruth(value.server_port) || ltruth(value.server_ports)) && !ltruth(NO_RUN))
-			api.sys.call(sprintf("echo '%s' >> %s", value["_id"], api.TMP_PATH + "/direct_node_list"));
+			api.sys.call("printf '%s\n' " + api.shellquote(value["_id"]) + " >> " + api.shellquote(api.TMP_PATH + "/direct_node_list"));
 		if (!ltruth(value.detour) && !ltruth(value.bind_interface) && ltruth(value.server))
 			value.detour = "direct";
 		if (ltruth(value.server) && !api.datatypes.hostname(value.server) && !ltruth(value.realm))

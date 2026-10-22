@@ -2,7 +2,9 @@
 
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
-let truthy, lua_or, nonempty, lua_tostring, is_table, to_number, tonumber_or, trim_s, nl_to_real, contains, has_prefix, split_matches, linsert, file_lines, try_parse_b64_json, strip_nulls, drop_private_keys, http_paths, gecko_packet_size, hop_interval, hysteria_idle, hysteria_keepalive, mb_window, tolerance_ratio, expected_count, probe_every, kcp_settings, mkcp_udp, hysteria_obfs, hysteria_realm, client_quic, server_quic, client_finalmask, server_finalmask, xhttp_extra, masque_headers, shadowsocks_method, vless_flow, csv_tokens, noise_rand, noise_delay, get_domain_excluded, get_log_level, need_stream_settings, client_stream_settings, apply_alpn, register_domain_resolver, decode_wireguard_reserved, gen_outbound, server_users, server_stream_settings, gen_config_server, collect_rule_items, geosite_dat_path, gen_config, gen_proto_config, print_result, dispatch, main;
+// Lua truthiness: only null and false are falsy. 0 and "" stay truthy.
+import { truth as truthy, quoted_option_blob } from 'passwall.text';
+let lua_or, nonempty, lua_tostring, is_table, to_number, tonumber_or, trim_s, nl_to_real, contains, has_prefix, split_matches, linsert, file_lines, try_parse_b64_json, strip_nulls, drop_private_keys, http_paths, gecko_packet_size, hop_interval, hysteria_idle, hysteria_keepalive, mb_window, tolerance_ratio, expected_count, probe_every, kcp_settings, mkcp_udp, hysteria_obfs, hysteria_realm, client_quic, server_quic, client_finalmask, server_finalmask, xhttp_extra, masque_headers, shadowsocks_method, vless_flow, csv_tokens, noise_rand, noise_delay, get_domain_excluded, get_log_level, need_stream_settings, client_stream_settings, apply_alpn, register_domain_resolver, decode_wireguard_reserved, gen_outbound, server_users, server_stream_settings, gen_config_server, collect_rule_items, geosite_dat_path, gen_config, gen_proto_config, print_result, dispatch, main;
 
 const xray_min_version = "26.7.11";
 
@@ -43,12 +45,6 @@ let TMP_PORT = null;
 let fragment_table = null;
 let noise_table = null;
 let inner_fakedns = null;
-
-/* Lua truthiness: only null and false are falsy. 0 and "" are truthy.
-   ucode == treats 0 and "" as false, so comparisons here stay strict. */
-truthy = function(v) {
-	return v != null && v !== false;
-};
 
 lua_or = function(val, fallback) {
 	return truthy(val) ? val : fallback;
@@ -1128,7 +1124,8 @@ gen_config_server = function(node) {
 					finalRules: [{ action: "allow" }]
 				}
 			};
-			api.sys.call(sprintf("mkdir -p %s && touch %s/%s", api.TMP_IFACE_PATH, api.TMP_IFACE_PATH, node.outbound_node_iface));
+			api.fs.mkdirr(api.TMP_IFACE_PATH);
+			api.sys.call("touch " + api.shellquote(api.TMP_IFACE_PATH + "/" + node.outbound_node_iface));
 		}
 		else {
 			let outbound_node_t = api.uci_get_c(node.outbound_node);
@@ -1683,7 +1680,8 @@ gen_config = function(vars) {
 								finalRules: [{ action: "allow" }]
 							}
 						};
-						api.sys.call(sprintf("mkdir -p %s && touch %s/%s", api.TMP_IFACE_PATH, api.TMP_IFACE_PATH, ob_node.iface));
+						api.fs.mkdirr(api.TMP_IFACE_PATH);
+						api.sys.call("touch " + api.shellquote(api.TMP_IFACE_PATH + "/" + ob_node.iface));
 					}
 				}
 				if (!outbound)
@@ -1772,7 +1770,7 @@ gen_config = function(vars) {
 				let bin = api.finded_com("geoview");
 				if (truthy(bin)) {
 					let geo_file = geosite_dat_path();
-					if (api.sys.call('"' + bin + '" -type geosite -input "' + geo_file + '" | grep -q "^GFW$"') == 0)
+					if (api.sys.call(api.shellquote(bin) + " -type geosite -input " + api.shellquote(geo_file) + " | grep -q '^GFW$'") == 0)
 						domain_list = domain_list == "" ? "geosite:gfw" : domain_list + "\ngeosite:gfw";
 				}
 				if (domain_list != "" || ip_list != "") {
@@ -2009,7 +2007,7 @@ gen_config = function(vars) {
 
 		if (truthy(dns_listen_port) && length(_direct_dns) > 0) {
 			let domain = [];
-			let nodes_domain_text = api.sys.exec("uci show passwall | sed -n \"s/.*\\.\\(address\\|download_address\\)='\\([^']*\\)'/\\2/p\" | sort -u");
+			let nodes_domain_text = quoted_option_blob(api.sys.exec("uci show passwall"));
 			for (let w in split_matches(nodes_domain_text, /[^\r\n]+/g)) {
 				w = lc(w != null ? w : "");
 				if (!api.vps_domain_exclude(w) && api.datatypes.hostname(w) && !truthy(GLOBAL.VPS_EXCLUDE[w]))
@@ -2338,7 +2336,7 @@ gen_config = function(vars) {
 		for (let value in config.outbounds) {
 			let pt = value.protocol;
 			if (!truthy(value["_flag_proxy_tag"]) && truthy(value["_id"]) && pt && !truthy(OUTBOUND_EXCLUDE[pt]) && !truthy(NO_RUN))
-				api.sys.call(sprintf("echo '%s' >> %s", value["_id"], api.TMP_PATH + "/direct_node_list"));
+				api.sys.call("printf '%s\n' " + api.shellquote(value["_id"]) + " >> " + api.shellquote(api.TMP_PATH + "/direct_node_list"));
 		}
 		drop_private_keys(config.outbounds);
 		return api.jsonc.stringify(strip_nulls(config), 1);
