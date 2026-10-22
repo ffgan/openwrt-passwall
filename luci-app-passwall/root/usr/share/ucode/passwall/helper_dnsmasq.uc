@@ -2,36 +2,10 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
-let ltruth, lua_quote, exec_pair, read_lines, file_size, gmatch, tinsert, backup_servers, restore_servers, stretch, restart, logic_restart, copy_instance, geosite_dat, foreach_geosite, tail_after_colon, add_rule, dispatch, main;
+import { truth as ltruth, lua_quote, gmatch, lines_of, quoted_option_blob } from 'passwall.text';
+let exec_pair, read_lines, file_size, tinsert, backup_servers, restore_servers, stretch, restart, logic_restart, copy_instance, geosite_dat, foreach_geosite, tail_after_colon, add_rule, dispatch, main;
 
 let seen_pairs = [];
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-lua_quote = function(s) {
-	if (s == null || s === false)
-		s = "";
-	else
-		s = "" + s;
-	let out = "\"";
-	for (let i = 0; i < length(s); i++) {
-		let c = substr(s, i, 1);
-		let b = ord(s, i);
-		if (c == "\\" || c == "\"")
-			out += "\\" + c;
-		else if (c == "\n")
-			out += "\\n";
-		else if (c == "\r")
-			out += "\\r";
-		else if (b < 32)
-			out += sprintf("\\%03d", b);
-		else
-			out += c;
-	}
-	return out + "\"";
-};
 
 exec_pair = function(cmd) {
 	let ret = api.exec_call(cmd);
@@ -43,16 +17,7 @@ exec_pair = function(cmd) {
 };
 
 read_lines = function(path) {
-	let data = api.fs.readfile(path);
-	if (data == null)
-		return null;
-	if (data == "")
-		return [];
-	if (substr(data, -1) == "\n")
-		data = substr(data, 0, length(data) - 1);
-	if (data == "")
-		return [""];
-	return split(data, "\n");
+	return lines_of(api.fs.readfile(path));
 };
 
 file_size = function(path) {
@@ -62,18 +27,6 @@ file_size = function(path) {
 	if (type(st) == "object")
 		return st.size ?? null;
 	return st;
-};
-
-gmatch = function(s, pattern) {
-	if (s == null || s === false)
-		return [];
-	let found = match("" + s, pattern);
-	if (found == null)
-		return [];
-	let out = [];
-	for (let m in found)
-		push(out, m[0]);
-	return out;
 };
 
 tinsert = function(table_name, val) {
@@ -181,7 +134,11 @@ copy_instance = function(var) {
 	let LISTEN_PORT = var["-LISTEN_PORT"];
 	let TMP_DNSMASQ_PATH = var["-TMP_DNSMASQ_PATH"];
 	let conf_lines = [];
-	let DEFAULT_DNSMASQ_CFGID = api.sys.exec("echo -n $(uci -q show dhcp.@dnsmasq[0] | awk 'NR==1 {split($0, conf, /[.=]/); print conf[2]}')");
+	let DEFAULT_DNSMASQ_CFGID = "";
+	api.uci.foreach("dhcp", "dnsmasq", function(section) {
+		if (DEFAULT_DNSMASQ_CFGID == "")
+			DEFAULT_DNSMASQ_CFGID = section[".name"] ?? "";
+	});
 	let conf_file = "/var/etc/dnsmasq.conf." + DEFAULT_DNSMASQ_CFGID;
 
 	let retry = 5;
@@ -404,8 +361,19 @@ add_rule = function(var) {
 	}
 
 	function get_dns_config_key() {
-		let address_md5 = api.md5_string(api.sys.exec("uci show passwall | grep -E '\\.(address|download_address)=' | cut -d \"'\" -f 2 | sort -u"));
-		let new_rules = api.sys.exec("for f in /usr/share/passwall/rules/chnlist /usr/share/passwall/rules/gfwlist /etc/passwall/rules/direct_host /etc/passwall/rules/proxy_host /etc/passwall/rules/block_host; do [ -f \"$f\" ] && md5sum \"$f\" | awk '{printf \"%s\", $1}'; done");
+		let address_md5 = api.md5_string(quoted_option_blob(api.sys.exec("uci show passwall")));
+		let new_rules = "";
+		let rule_files = [
+			"/usr/share/passwall/rules/chnlist",
+			"/usr/share/passwall/rules/gfwlist",
+			"/etc/passwall/rules/direct_host",
+			"/etc/passwall/rules/proxy_host",
+			"/etc/passwall/rules/block_host"
+		];
+		for (let rule_file in rule_files) {
+			if (api.fs.stat(rule_file, "type") == "reg")
+				new_rules += api.md5_file(rule_file);
+		}
 		let SHUNT_LIST = "";
 		if (IS_SHUNT_NODE) {
 			let t = api.uci_get_c(NODE);

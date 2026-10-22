@@ -1,43 +1,12 @@
 'use strict';
 
 import * as api from 'passwall.api';
-let ltruth, lor, tonumber, set_if, leading_int, obfs_of, bandwidth_of, realm_of, apply_gecko, server_users, server_listen, hop_udp, idle_timeout, keep_alive, auth_pair, gen_config_server, gen_config, print_result, dispatch, main;
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-lor = function(a, b) {
-	if (a == null || a === false)
-		return b;
-	return a;
-};
-
-tonumber = function(v) {
-	if (type(v) == "int")
-		return v;
-	if (type(v) == "double")
-		return (v == v) ? v : null;
-	if (type(v) != "string")
-		return null;
-	let s = trim(v);
-	if (match(s, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) == null)
-		return null;
-	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
-		return s * 1;
-	return int(s);
-};
+import { truth as ltruth, lua_or as lor, to_number as tonumber, leading_int } from 'passwall.text';
+let set_if, obfs_of, bandwidth_of, realm_of, apply_gecko, server_users, server_listen, hop_udp, idle_timeout, keep_alive, auth_pair, gen_config_server, gen_config, print_result, dispatch, main;
 
 set_if = function(obj, key, val) {
 	if (val != null)
 		obj[key] = val;
-};
-
-leading_int = function(v) {
-	let m = match("" + v, /^[0-9]+/);
-	if (m == null)
-		return null;
-	return tonumber(m[0]);
 };
 
 obfs_of = function(node) {

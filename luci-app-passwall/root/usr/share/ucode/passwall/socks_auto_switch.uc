@@ -2,8 +2,9 @@
 
 import * as api from 'passwall.api';
 import { readfile, unlink, lsdir } from 'fs';
+import { read_cmd, command_rc } from 'passwall.proc';
 
-let read_cmd, command_rc, words, retry_all, curl_code, check_process, test_proxy, cleanup_node, test_node, next_node, try_switch_backup, test_auto_switch, main;
+let words, retry_all, curl_code, check_process, test_proxy, cleanup_node, test_node, next_node, try_switch_backup, test_auto_switch, main;
 let id = "";
 let main_node = "";
 let socks_port = "";
@@ -13,29 +14,6 @@ let retry_num = "1";
 let restore_switch = "0";
 let probe_url = "https://www.google.com/generate_204";
 let backup_count = 0;
-
-read_cmd = function(argv) {
-	let ph = api.command_pipe(argv, "r");
-	if (ph == null)
-		return null;
-	let out = "";
-	let chunk = ph.read(4096);
-	while (chunk != null && chunk != "") {
-		out += chunk;
-		chunk = ph.read(4096);
-	}
-	let rc = ph.close();
-	return { out: out, rc: rc == null ? 255 : rc };
-};
-
-command_rc = function(argv) {
-	if (type(global.system) == "function") {
-		let rc = global.system(argv);
-		return rc == null ? 255 : rc;
-	}
-	let got = read_cmd(argv);
-	return got == null ? 255 : got.rc;
-};
 
 words = function(text) {
 	let out = [];

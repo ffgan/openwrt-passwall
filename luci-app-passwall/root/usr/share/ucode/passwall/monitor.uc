@@ -2,39 +2,14 @@
 
 import * as api from 'passwall.api';
 import { readfile, writefile, stat, unlink, lsdir } from 'fs';
-import { background, spawn, start_time_of, write_record } from 'passwall.proc';
+import { background, spawn, start_time_of, write_record, command_rc } from 'passwall.proc';
 import { parse_proc_record } from 'passwall.state';
 
-let read_cmd, command_rc, ymd, run;
-
-read_cmd = function(argv) {
-	let ph = api.command_pipe(argv, "r");
-	if (ph == null)
-		return null;
-	let out = "";
-	let chunk = ph.read(4096);
-	while (chunk != null && chunk != "") {
-		out += chunk;
-		chunk = ph.read(4096);
-	}
-	let rc = ph.close();
-	return { out: out, rc: rc == null ? 255 : rc };
-};
-
-command_rc = function(argv) {
-	if (type(global.system) == "function") {
-		let rc = global.system(argv);
-		return rc == null ? 255 : rc;
-	}
-	let got = read_cmd(argv);
-	return got == null ? 255 : got.rc;
-};
+let ymd, run;
 
 ymd = function() {
-	let got = read_cmd([ "date", "+%Y%m%d" ]);
-	if (got == null)
-		return "";
-	return trim(got.out);
+	let t = localtime();
+	return sprintf("%04d%02d%02d", t.year, t.mon, t.mday);
 };
 
 run = function() {

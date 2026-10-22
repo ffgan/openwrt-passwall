@@ -3,6 +3,7 @@
 import * as api from 'passwall.api';
 import * as fs from 'fs';
 import { parse_nft_state } from 'passwall.state';
+import { run, output } from 'passwall.utils';
 
 const TABLE = "inet passwall";
 const MARK = "0x50535731";
@@ -16,30 +17,6 @@ let pending = [];
 // ucode 2026.01.16 does not hoist functions. Names used before their
 // definition have to be declared up front.
 let wan_addresses, add_icmp_rules, flush_table;
-
-function run(argv, quiet) {
-	let rc;
-	if (type(global.system) == "function")
-		rc = global.system(argv);
-	else {
-		let p = api.command_pipe(argv, "r");
-		rc = p == null ? 255 : p.close();
-	}
-	if (rc == null)
-		rc = 255;
-	if (rc != 0 && !quiet)
-		api.log("命令执行失败 (" + rc + "): " + join(" ", argv));
-	return rc;
-}
-
-function output(argv) {
-	let p = api.command_pipe(argv, "r");
-	if (p == null)
-		return "";
-	let data = p.read("all") ?? "";
-	p.close();
-	return data;
-}
 
 function shell_join(argv) {
 	let parts = [];

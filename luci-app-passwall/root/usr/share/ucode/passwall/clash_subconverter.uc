@@ -4,15 +4,10 @@
 // Replaces lyaml with a YAML subset parser sufficient for Clash `proxies:` documents.
 
 import * as api from 'passwall.api';
-let luaOr, enc, b64, jsonStringify, host_format, build_alpn, get_first, nonemptyObj, build_common, toNumber, pushParam, finishLink, encode_vless, encode_trojan, omitNulls, encode_vmess, encode_ss, encode_hysteria, encode_hysteria2, encode_tuic, encode_anytls, encode_ssr, encode_snell, encode_node, chAt, stripInlineComment, parsePlain, utf8chr, parseQuotedText, flowDepth, parseFlow, unquoteKey, splitKey, parseYaml, parseClashNode, format_size, parse_clash_sub_info;
+import { lua_or as luaOr } from 'passwall.text';
+let enc, b64, jsonStringify, host_format, build_alpn, get_first, nonemptyObj, build_common, toNumber, pushParam, finishLink, encode_vless, encode_trojan, omitNulls, encode_vmess, encode_ss, encode_hysteria, encode_hysteria2, encode_tuic, encode_anytls, encode_ssr, encode_snell, encode_node, chAt, stripInlineComment, parsePlain, utf8chr, parseQuotedText, flowDepth, parseFlow, unquoteKey, splitKey, parseYaml, parseClashNode, format_size, parse_clash_sub_info;
 
 let domain_redir = {};
-
-luaOr = function(a, b) {
-	if (a !== null && a !== false)
-		return a;
-	return b;
-};
 
 enc = function(v) {
 	if (v === null || v === false)

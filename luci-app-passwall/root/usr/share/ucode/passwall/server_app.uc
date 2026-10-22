@@ -7,31 +7,13 @@ import { gen_config_server as ss_gen_config_server } from 'passwall.util_shadows
 import { gen_config_server as xray_gen_config_server } from 'passwall.util_xray';
 import { gen_config_server as singbox_gen_config_server } from 'passwall.util_singbox';
 import { gen_config_server as hy2_gen_config_server } from 'passwall.util_hysteria2';
-let ltruth, tonumber, log, launch_server, remove_firewall_rules, nonempty, start, lor_src, stop, main;
+import { truth as ltruth, to_number as tonumber } from 'passwall.text';
+let log, launch_server, remove_firewall_rules, nonempty, start, lor_src, stop, main;
 
 let CONFIG = api.s_config;
 let CONFIG_PATH = api.S_TMP_PATH;
 let LOG_APP_FILE = "/tmp/log/" + CONFIG + ".log";
 let TMP_BIN_PATH = CONFIG_PATH + "/bin";
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-tonumber = function(v) {
-	if (type(v) == "int")
-		return v;
-	if (type(v) == "double")
-		return (v == v) ? v : null;
-	if (type(v) != "string")
-		return null;
-	let s = trim(v);
-	if (match(s, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) == null)
-		return null;
-	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
-		return s * 1;
-	return int(s);
-};
 
 log = function(...args) {
 	let fh = fs.open(LOG_APP_FILE, "a");

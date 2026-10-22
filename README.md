@@ -10,7 +10,7 @@
 
 ## 运行环境
 
-面向 **OpenWrt 25.12 及更新版本**。透明代理使用 **firewall4 + nftables**，包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。运行状态、nftables 参数和进程记录使用 JSON，进程按参数数组启动。
+面向 **OpenWrt 25.12 及更新版本**。透明代理使用 **firewall4 + nftables**，包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。运行状态、nftables 参数和进程记录使用 JSON，进程按参数数组启动。字符串、数值和命令输出的解析集中在同一套 ucode 函数里。UUID、磁盘空间、dnsmasq 配置段和 WireGuard 密钥在 ucode 里读取和解析。证书指纹仍调用 openssl，主机名和端口会先加引号。
 
 ## 📌如何能编译到最新代码？
 

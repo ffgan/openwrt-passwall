@@ -129,3 +129,5 @@ export function kill_matching(pattern) {
 	}
 	return 0;
 };
+
+export { read_cmd, command_rc };

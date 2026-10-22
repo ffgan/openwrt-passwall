@@ -2,35 +2,11 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
-let ltruth, lor, tonumber, set_if, gen_config_server, gen_config, print_result, dispatch, main;
+import { truth as ltruth, lua_or as lor, to_number as tonumber } from 'passwall.text';
+let set_if, gen_config_server, gen_config, print_result, dispatch, main;
 
 let plugin_sh = null;
 let plugin_bin = null;
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-lor = function(a, b) {
-	if (a == null || a === false)
-		return b;
-	return a;
-};
-
-tonumber = function(v) {
-	if (type(v) == "int")
-		return v;
-	if (type(v) == "double")
-		return (v == v) ? v : null;
-	if (type(v) != "string")
-		return null;
-	let s = trim(v);
-	if (match(s, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) == null)
-		return null;
-	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
-		return s * 1;
-	return int(s);
-};
 
 set_if = function(obj, key, val) {
 	if (val != null)
@@ -201,14 +177,14 @@ main = function(argv) {
 	if (plugin_sh != null && plugin_sh != "" && ltruth(plugin_bin)) {
 		let pidfile = replace(plugin_sh, /\.sh$/, ".pid");
 		let body = "#!/bin/sh\n"
-			+ "export PATH=/usr/sbin:/usr/bin:/sbin:/bin:/root/bin:$PATH\n"
-			+ plugin_bin + " $@ &\n"
-			+ "echo $! > " + pidfile + "\n"
+			+ "export PATH=/usr/sbin:/usr/bin:/sbin:/bin:/root/bin:\$PATH\n"
+			+ api.shellquote(plugin_bin) + " \"\$@\" &\n"
+			+ "echo \$! > " + api.shellquote(pidfile) + "\n"
 			+ "wait\n";
 		let fh = fs.open(plugin_sh, "w");
 		fh.write(body);
 		fh.close();
-		api.sys.call("chmod +x " + plugin_sh);
+		api.sys.call("chmod +x " + api.shellquote(plugin_sh));
 	}
 };
 export { gen_config_server, gen_config, main };
