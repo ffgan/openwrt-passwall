@@ -9,8 +9,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall
-PKG_VERSION:=26.10.16
-PKG_RELEASE:=19
+PKG_VERSION:=26.10.22
+PKG_RELEASE:=1
 PKG_PO_VERSION:=$(PKG_VERSION)
 PKG_LICENSE:=GPL-3.0-only
 
@@ -38,7 +38,7 @@ LUCI_PKGARCH:=all
 LUCI_URL:=https://github.com/Openwrt-Passwall/openwrt-passwall
 LUCI_MAINTAINER:=Openwrt-Passwall Organization
 PKG_MAINTAINER:=$(LUCI_MAINTAINER)
-LUCI_DEPENDS:=+coreutils +coreutils-base64 +coreutils-nohup +coreutils-timeout +curl \
+LUCI_DEPENDS:=+coreutils +coreutils-base64 +coreutils-timeout +curl \
 	+chinadns-ng +dns2socks +dnsmasq-full +ip-full \
 	+ucode +ucode-mod-digest +ucode-mod-fs +ucode-mod-math +ucode-mod-uci \
 	+microsocks +resolveip +tcping

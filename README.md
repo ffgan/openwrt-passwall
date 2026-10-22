@@ -10,7 +10,7 @@
 
 ## 运行环境
 
-面向 **OpenWrt 25.12 及更新版本**。透明代理使用 **firewall4 + nftables**，包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。
+面向 **OpenWrt 25.12 及更新版本**。透明代理使用 **firewall4 + nftables**，包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。运行状态、nftables 参数和进程记录使用 JSON，进程按参数数组启动。
 
 ## 📌如何能编译到最新代码？
 
@@ -20,7 +20,7 @@
 
 ```
 src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main
-src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main
+src-git passwall_luci https://github.com/ffgan/openwrt-passwall.git;main
 ```
 
 ### 方法2：
@@ -34,5 +34,5 @@ git clone https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/
 
 # 移除 openwrt feeds 过时的luci版本
 rm -rf feeds/luci/applications/luci-app-passwall
-git clone https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+git clone https://github.com/ffgan/openwrt-passwall package/passwall-luci
 ```

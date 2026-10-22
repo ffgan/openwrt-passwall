@@ -34,6 +34,38 @@ function isUUID(str) {
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 }
 
+function parseRuntime(text) {
+	var raw = String(text || '').replace(/^\uFEFF/, '').trim();
+	var legacy = {};
+	String(text || '').split('\n').forEach(function(line) {
+		var m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+		if (!m)
+			return;
+		var val = m[2];
+		if (val.length >= 2 && val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")
+			val = val.substring(1, val.length - 1).replace(/'\\''/g, "'");
+		legacy[m[1]] = val;
+	});
+	if (raw.charAt(0) === '{') {
+		try {
+			var obj = JSON.parse(raw);
+			if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+				var map = {};
+				Object.keys(obj).forEach(function(key) {
+					if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
+						return;
+					var value = obj[key];
+					map[key] = value == null ? '' : String(value);
+				});
+				return map;
+			}
+		}
+		catch (e) {}
+	}
+	return legacy;
+}
+/* parseRuntime:end */
+
 return baseclass.extend({
 	__init__: function() {
 		if (!validation.types.base64)
@@ -108,6 +140,10 @@ return baseclass.extend({
 		for (var i = 0; i < length; i++)
 			out += chars.charAt(Math.floor(Math.random() * chars.length));
 		return out;
+	},
+
+	parseRuntime: function(text) {
+		return parseRuntime(text);
 	},
 
 	parseBody: function(x) {

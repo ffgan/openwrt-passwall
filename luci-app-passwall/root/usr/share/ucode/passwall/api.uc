@@ -2476,7 +2476,8 @@ to_install_self = function(id, force) {
 	}
 	chmod_755(script);
 	writefile(status, '{"installing":true}');
-	sys_call("nohup " + script + " " + dir + " " + status + " " + manager + " " + (force == "1" ? "1" : "0") + " >/dev/null 2>&1 </dev/null &");
+	let force_s = force == "1" ? "1" : "0";
+	sys_call(shellquote(script) + " " + shellquote(dir) + " " + shellquote(status) + " " + shellquote(manager) + " " + shellquote(force_s) + " >/dev/null 2>&1 </dev/null &");
 	return { code: 0 };
 };
 

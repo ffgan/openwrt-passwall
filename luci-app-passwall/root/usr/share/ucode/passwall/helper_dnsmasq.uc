@@ -765,7 +765,8 @@ add_rule = function(var) {
 			}
 			api.fs.writefile(CACHE_DNS_PATH + "/000-address.conf", join("\n", address_lines) + (length(address_lines) > 0 ? "\n" : ""));
 			api.fs.writefile(CACHE_DNS_PATH + "/001-server.conf", join("\n", server_lines) + (length(server_lines) > 0 ? "\n" : ""));
-			api.fs.writefile(CACHE_DNS_PATH + "/ipset.conf", join("\n", ipset_lines) + (length(ipset_lines) > 0 ? "\n" : ""));
+			fs.unlink(CACHE_DNS_PATH + "/ipset.conf");
+			api.fs.writefile(CACHE_DNS_PATH + "/nftset.conf", join("\n", ipset_lines) + (length(ipset_lines) > 0 ? "\n" : ""));
 		}
 
 		if (!GEO_SUCCESS)

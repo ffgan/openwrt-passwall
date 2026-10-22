@@ -1,0 +1,31 @@
+name: Runtime tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  state:
+    name: JSON runtime state
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: JavaScript runtime parser
+        run: node --test tests/parse-runtime.test.mjs
+
+      - name: Install ucode build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake libjson-c-dev pkg-config build-essential
+
+      - name: Build OpenWrt 25.12 ucode
+        run: |
+          git clone --depth 1 https://github.com/jow-/ucode.git /tmp/ucode
+          git -C /tmp/ucode fetch --depth 1 origin 85922056ef7abeace3cca3ab28bc1ac2d88e31b1
+          git -C /tmp/ucode checkout 85922056ef7abeace3cca3ab28bc1ac2d88e31b1
+          cmake -S /tmp/ucode -B /tmp/ucode/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/ucode/build --target ucode -j"$(nproc)"
+
+      - name: ucode runtime state
+        run: /tmp/ucode/build/ucode -L "${GITHUB_WORKSPACE}/luci-app-passwall/root/usr/share/ucode" tests/runtime_state.uc

@@ -2,11 +2,12 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+import { spawn, kill_matching } from 'passwall.proc';
 import { gen_config_server as ss_gen_config_server } from 'passwall.util_shadowsocks';
 import { gen_config_server as xray_gen_config_server } from 'passwall.util_xray';
 import { gen_config_server as singbox_gen_config_server } from 'passwall.util_singbox';
 import { gen_config_server as hy2_gen_config_server } from 'passwall.util_hysteria2';
-let ltruth, tonumber, log, cmd, ln_run, remove_firewall_rules, nonempty, start, lor_src, stop, main;
+let ltruth, tonumber, log, launch_server, remove_firewall_rules, nonempty, start, lor_src, stop, main;
 
 let CONFIG = api.s_config;
 let CONFIG_PATH = api.S_TMP_PATH;
@@ -49,16 +50,14 @@ log = function(...args) {
 	fh.close();
 };
 
-cmd = function(command) {
-	api.sys.call(command);
-};
-
-ln_run = function(s, d, command, output) {
-	if (output == null || output === false)
-		output = "/dev/null";
-	d = TMP_BIN_PATH + "/" + d;
-	cmd(sprintf('[ ! -f "%s" ] && ln -s %s %s 2>/dev/null', d, s, d));
-	return sprintf("%s >%s 2>&1 &", d + " " + command, output);
+launch_server = function(file, name, args, output) {
+	return spawn({
+		file: file ?? "",
+		name: name,
+		args: args,
+		output: output ?? "/dev/null",
+		bindir: TMP_BIN_PATH
+	});
 };
 
 remove_firewall_rules = function(defer_commit) {
@@ -98,8 +97,12 @@ start = function() {
 	let fw_changed = remove_firewall_rules(true);
 	let uci = api.uci;
 
-	cmd(sprintf("mkdir -p %s %s", CONFIG_PATH, TMP_BIN_PATH));
-	cmd(sprintf("touch %s", LOG_APP_FILE));
+	api.fs.mkdirr(CONFIG_PATH);
+	api.fs.mkdirr(TMP_BIN_PATH);
+	if (fs.stat(LOG_APP_FILE) == null) {
+		api.fs.mkdirr("/tmp/log");
+		fs.writefile(LOG_APP_FILE, "");
+	}
 	let firewall_num = 0;
 	api.uci_foreach_s("server", (server) => {
 		let id = server[".name"];
@@ -111,7 +114,7 @@ start = function() {
 				log_path = CONFIG_PATH + "/" + id + ".log";
 			let remarks = server.remarks;
 			let port = tonumber(server.port);
-			let bin = null;
+			let launch = null;
 			let config = {};
 			let config_file = CONFIG_PATH + "/" + id + ".json";
 			let server_type = server.type;
@@ -119,7 +122,7 @@ start = function() {
 				server_type = "";
 
 			if (server_type == "Socks") {
-				let auth = "";
+				let args = ["-i", "::", "-p", port == null ? "" : "" + port];
 				if (ltruth(server.auth) && server.auth == "1") {
 					let user = null;
 					if (ltruth(server.user))
@@ -127,31 +130,30 @@ start = function() {
 					let username = (ltruth(user) && user.username != null && user.username !== false) ? user.username : "";
 					let password = (ltruth(user) && user.password != null && user.password !== false) ? user.password : "";
 					if (username != "" && password != "") {
-						username = "-u " + username;
-						password = "-P " + password;
-						auth = username + " " + password;
+						push(args, "-u", username);
+						push(args, "-P", password);
 					}
 				}
-				bin = ln_run("/usr/bin/microsocks", "microsocks_" + id, sprintf("-i :: -p %s %s", port, auth), log_path);
+				launch = { file: "/usr/bin/microsocks", name: "microsocks_" + id, args: args };
 			} else if (server_type == "SSR") {
 				if (server.custom === "1" && ltruth(server.config_str))
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
 				else
 					config = ss_gen_config_server(server);
-				let udp_param = "";
+				let args = ["-c", config_file];
 				let udp_forward = tonumber(server.udp_forward);
 				if (udp_forward == null)
 					udp_forward = 1;
 				if (udp_forward == 1)
-					udp_param = "-u";
+					push(args, "-u");
 				let bin_type = lc(server_type);
-				bin = ln_run("/usr/bin/" + bin_type + "-server", bin_type + "-server", "-c " + config_file + " " + udp_param, log_path);
+				launch = { file: "/usr/bin/" + bin_type + "-server", name: bin_type + "-server", args: args };
 			} else if (server_type == "SS-Rust") {
 				if (server.custom === "1" && ltruth(server.config_str))
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
 				else
 					config = ss_gen_config_server(server);
-				bin = ln_run("/usr/bin/ssserver", "ssserver", "-c " + config_file, log_path);
+				launch = { file: "/usr/bin/ssserver", name: "ssserver", args: ["-c", config_file] };
 			} else if (server_type == "Xray") {
 				if (server.custom === "1" && ltruth(server.config_str)) {
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
@@ -163,7 +165,7 @@ start = function() {
 				} else {
 					config = xray_gen_config_server(server);
 				}
-				bin = ln_run(api.get_app_path("xray"), "xray", "run -c " + config_file, log_path);
+				launch = { file: api.get_app_path("xray"), name: "xray", args: ["run", "-c", config_file] };
 			} else if (server_type == "sing-box") {
 				if (server.custom === "1" && ltruth(server.config_str)) {
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
@@ -178,13 +180,13 @@ start = function() {
 				} else {
 					config = singbox_gen_config_server(server);
 				}
-				bin = ln_run(api.get_app_path("sing-box"), "sing-box", "run -c " + config_file, log_path);
+				launch = { file: api.get_app_path("sing-box"), name: "sing-box", args: ["run", "-c", config_file] };
 			} else if (server_type == "Hysteria2") {
 				if (server.custom === "1" && ltruth(server.config_str))
 					config = api.jsonc.parse(api.base64Decode(server.config_str));
 				else
 					config = hy2_gen_config_server(server);
-				bin = ln_run(api.get_app_path("hysteria"), "hysteria", "-c " + config_file + " server", log_path);
+				launch = { file: api.get_app_path("hysteria"), name: "hysteria", args: ["-c", config_file, "server"] };
 			}
 
 			if (nonempty(config)) {
@@ -196,8 +198,8 @@ start = function() {
 				log(sprintf("%s 生成配置文件并运行 - %s", remarks, config_file));
 			}
 
-			if (bin != null)
-				cmd(bin);
+			if (launch != null)
+				launch_server(launch.file, launch.name, launch.args, log_path);
 
 			let firewall_allow = server.firewall_allow;
 			if (firewall_allow == "1") {
@@ -222,7 +224,7 @@ lor_src = function(v) {
 };
 
 stop = function() {
-	cmd(sprintf("/bin/busybox top -bn1 | grep -v 'grep' | grep '%s/' | awk '{print $1}' | xargs kill -9 >/dev/null 2>&1", CONFIG_PATH));
+	kill_matching(CONFIG_PATH + "/");
 	remove_firewall_rules();
 	api.remove(CONFIG_PATH, LOG_APP_FILE);
 };
