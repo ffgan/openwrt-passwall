@@ -895,7 +895,7 @@ return view.extend({
 		o = s.taboption('Main', form.Flag, 'enabled', _('Main switch'));
 		o.rmempty = false;
 
-		var nodeOpt = s.taboption('Main', form.ListValue, 'node', E('a', { 'style': 'color: red' }, _('Proxy Node')));
+		var nodeOpt = s.taboption('Main', form.ListValue, 'node', E('a', { 'class': 'pw-warn' }, _('Proxy Node')));
 		var shuntSel = s.taboption('Main', form.Value, '_node_sel_shunt', '');
 		shuntSel.depends({ node: '__always__' });
 		shuntSel.write = function() {};
@@ -927,7 +927,7 @@ return view.extend({
 			o = s.taboption('Main', form.DummyValue, 'tips', '　');
 			o.depends({ node: '', '!reverse': true });
 			o.renderWidget = function() {
-				return E('a', { 'style': 'color: red' }, _('There are no available nodes, please add or subscribe nodes first.'));
+				return E('a', { 'class': 'pw-warn' }, _('There are no available nodes, please add or subscribe nodes first.'));
 			};
 		}
 
@@ -1347,7 +1347,7 @@ return view.extend({
 		o = s.taboption('Proxy', form.DummyValue, '_proxy_tips', '　');
 		o.renderWidget = function() {
 			return E('a', {
-				'style': 'color: red',
+				'class': 'pw-warn',
 				'href': pw.pageUrl('acl')
 			}, _('Want different devices to use different proxy modes/ports/nodes? Please use access control.'));
 		};
@@ -1607,7 +1607,7 @@ return view.extend({
 				E('th', { 'class': 'cbi-section-table-cell' }, _('Rule')),
 				E('th', { 'class': 'cbi-section-table-cell' }, _('Node')),
 				E('th', { 'class': 'cbi-section-table-cell' }, E('a', { 'style': 'color:#FF8C00', 'title': fakeHead }, 'FakeDNS')),
-				E('th', { 'class': 'cbi-section-table-cell' }, E('a', { 'style': 'color:red', 'title': preTitle }, _('Preproxy')))
+				E('th', { 'class': 'cbi-section-table-cell' }, E('a', { 'class': 'pw-warn', 'title': preTitle }, _('Preproxy')))
 			])];
 			rules.forEach(function(rule) {
 				var curNode = uci.get('passwall', shuntNodeId, rule.nodeOption);
@@ -1670,7 +1670,7 @@ return view.extend({
 				});
 				applyVisibility(false);
 				var ruleCell = rule.isDefault
-					? E('font', { 'style': 'color: red' }, rule.remarks)
+					? E('span', { 'class': 'pw-warn' }, rule.remarks)
 					: E('a', { 'href': pw.pageUrl('shunt_rules', rule.id), 'target': '_blank' }, rule.remarks);
 				var edit = E('a', {
 					'href': '#',

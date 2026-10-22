@@ -1045,7 +1045,7 @@ return baseclass.extend({
 
 			var domainResolver = section.option(form.ListValue, 'domain_resolver', _('Domain DNS Resolve'));
 			domainResolver.description = _('If the node address is a domain name, this DNS will be used for resolution.') + '<br>' +
-				'<font color="red">' + _('Note: For node-specific DNS only. Keep Auto to avoid extra overhead.') + '</font>';
+				'<span class="pw-warn">' + _('Note: For node-specific DNS only. Keep Auto to avoid extra overhead.') + '</span>';
 			domainResolver.value('', _('Auto'));
 			domainResolver.value('tcp', 'TCP');
 			domainResolver.value('udp', 'UDP');

@@ -247,7 +247,7 @@ return view.extend({
 		o = s.option(form.ListValue, 'domain_resolver', _('Domain DNS Resolve'));
 		o.description = _('If the node address is a domain name, this DNS will be used for resolution.') + '<br>' +
 			_('Supports only Xray or Sing-box node types.') + '<br>' +
-			'<font color="red">' + _('Note: For node-specific DNS only. Keep Auto to avoid extra overhead.') + '</font>';
+			'<span class="pw-warn">' + _('Note: For node-specific DNS only. Keep Auto to avoid extra overhead.') + '</span>';
 		o.value('', _('Auto'));
 		o.value('tcp', 'TCP');
 		o.value('udp', 'UDP');

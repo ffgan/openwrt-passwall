@@ -257,9 +257,9 @@ main = function(argv) {
 		api.log(...args);
 	}
 
-	api.sys.call(sprintf("mkdir -p %s", FLAG_PATH));
-	api.sys.call(sprintf("mkdir -p %s", CACHE_RULES_PATH));
-	api.sys.call("mkdir -p " + api.shellquote(SMARTDNS_DATA_PATH));
+	api.fs.mkdirr(FLAG_PATH);
+	api.fs.mkdirr(CACHE_RULES_PATH);
+	api.fs.mkdirr(SMARTDNS_DATA_PATH);
 
 	let LOG_LEVELS = { off: true, fatal: true, error: true, warn: true, notice: true, info: true, debug: true };
 	if (!LOG_LEVELS[LOG_LEVEL])
@@ -278,7 +278,7 @@ main = function(argv) {
 	let ENABLE_UI = UI && api.fs.access(UI_PLUGIN);
 	let data_dir = ENABLE_UI ? UI_DATA_DIR : SMARTDNS_DATA_PATH;
 	if (data_dir != SMARTDNS_DATA_PATH)
-		api.sys.call("mkdir -p " + api.shellquote(data_dir));
+		api.fs.mkdirr(data_dir);
 
 	let DIRECT_SERVERS = [];
 	let direct_src = (DIRECT_DNS == null || DIRECT_DNS === false) ? "" : DIRECT_DNS;
@@ -750,7 +750,7 @@ main = function(argv) {
 		let new_md5 = api.md5_string(SHUNT_LIST);
 		if (cache_md5 == "" || new_md5 == "" || cache_md5 != new_md5) {
 			api.remove(CACHE_FLAG_PATH);
-			api.sys.call(sprintf("mkdir -p %s", CACHE_FLAG_PATH));
+			api.fs.mkdirr(CACHE_FLAG_PATH);
 			api.fs.writefile(MD5_FILE, new_md5);
 			USE_CACHE = false;
 		}

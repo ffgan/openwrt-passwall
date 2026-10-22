@@ -11,7 +11,7 @@ OpenWrt 25.12 及更新版本上的 PassWall。透明代理走 **firewall4 / nft
 | `luci-app-passwall/root/usr/share/ucode/passwall/` | 可复用的服务、订阅、nftables 和协议配置库。 |
 | `luci-app-passwall/root/usr/share/rpcd/ucode/luci.passwall` | LuCI 通过 ubus 调用的接口。 |
 
-运行中的变量写在 `/tmp/etc/passwall/var`。新进程把它写成 JSON 对象；启动时仍能读旧的 `KEY='value'` 行，下一次写入会换成 JSON。进程匹配直接读 `/proc/<pid>/cmdline`，不再调用 `busybox pgrep`。
+运行中的变量写在 `/tmp/etc/passwall/var`。新进程把它写成 JSON 对象；启动时仍能读旧的 `KEY='value'` 行，下一次写入会换成 JSON。进程匹配直接读 `/proc/<pid>/cmdline`。UUID、随机串、可执行文件查找、磁盘空间和 WireGuard 密钥也不再套一层 `echo $(...)`。删除路径只接受绝对路径和 `*` 通配，避免把配置内容拼进 shell。
 
 节点列表和分流规则的拖动排序由 `sortable.js` 完成，使用指针事件，不再附带 SortableJS。
 

@@ -978,8 +978,8 @@ md5_string = function(str) {
 		if (type(h) == "string" && length(h) >= 32)
 			return substr(h, 0, 32);
 	}
-	let path = trim(sys_exec("mktemp /tmp/md5.XXXXXX"));
-	if (path == "")
+	let path = "/tmp/passwall-md5-" + gen_random_char(12);
+	if (path == "/tmp/passwall-md5-")
 		return "";
 	let n = writefile(path, str);
 	let out = (n == length(str)) ? md5_file(path) : "";
@@ -1454,8 +1454,13 @@ repeat_exist = function(arr, value) {
 
 remove = function(...values) {
 	for (let value in values) {
-		if (type(value) == "string" && length(value) > 0 && value != "/")
-			sys_call("rm -rf -- " + value);
+		if (type(value) != "string" || length(value) == 0 || value == "/")
+			continue;
+		if (substr(value, 0, 1) != "/" || match(value, /(^|\/)\.\.(\/|$)/) != null)
+			continue;
+		if (match(value, /^\/[A-Za-z0-9._+\/=*,-]+$/) == null)
+			continue;
+		sys_call("rm -rf -- " + value);
 	}
 };
 
@@ -1802,13 +1807,56 @@ get_random_normal_node = function(exclude_id) {
 };
 
 gen_uuid = function() {
-	return sys_exec("echo -n $(cat /proc/sys/kernel/random/uuid)");
+	let raw = trim(readfile("/proc/sys/kernel/random/uuid") ?? "");
+	if (match(raw, /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) != null)
+		return lc(raw);
+	let fd = open("/dev/urandom", "r");
+	if (fd == null)
+		return "";
+	let buf = fd.read(16);
+	fd.close();
+	if (type(buf) != "string" || length(buf) < 16)
+		return "";
+	let hexd = "0123456789abcdef";
+	let parts = [];
+	for (let i = 0; i < 16; i++) {
+		let n = ord(buf, i);
+		let high = int(n / 16) % 16;
+		let low = n % 16;
+		if (i == 6)
+			high = 4;
+		if (i == 8)
+			high = 8 + (high % 4);
+		push(parts, substr(hexd, high, 1) + substr(hexd, low, 1));
+	}
+	return parts[0] + parts[1] + parts[2] + parts[3] + "-" + parts[4] + parts[5] + "-" +
+		parts[6] + parts[7] + "-" + parts[8] + parts[9] + "-" +
+		parts[10] + parts[11] + parts[12] + parts[13] + parts[14] + parts[15];
 };
 
 gen_random_char = function(len) {
-	if (!isset(len))
+	len = int(len);
+	if (len != len || len <= 0)
 		len = 8;
-	return sys_exec("echo -n $(head /dev/urandom | tr -dc A-Za-z0-9 | head -c " + len + ")");
+	if (len > 256)
+		len = 256;
+	let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	let fd = open("/dev/urandom", "r");
+	if (fd == null)
+		return "";
+	let out = "";
+	while (length(out) < len) {
+		let buf = fd.read(64);
+		if (type(buf) != "string" || buf == "")
+			break;
+		for (let i = 0; i < length(buf) && length(out) < len; i++) {
+			let n = ord(buf, i);
+			if (n < 248)
+				out += substr(alphabet, n % 62, 1);
+		}
+	}
+	fd.close();
+	return out;
 };
 
 chmod_755 = function(file) {
@@ -1872,22 +1920,51 @@ get_app_version = function(app_name, file) {
 	return get_bin_version_cache(file, c.cmd_version);
 };
 
+which_bin = function(name, preferred) {
+	if (name == null || ("" + name) == "")
+		return "";
+	name = "" + name;
+	if (index(name, "/") >= 0)
+		return fs_access(name, "x") ? name : "";
+	if (match(name, /^[A-Za-z0-9._+-]+$/) == null)
+		return "";
+	let dirs = [];
+	if (type(preferred) == "array") {
+		for (let dir in preferred)
+			push(dirs, dir);
+	}
+	let env = "";
+	if (type(global.getenv) == "function")
+		env = global.getenv("PATH") ?? "";
+	for (let dir in split(env, ":"))
+		push(dirs, dir);
+	let seen = {};
+	for (let dir in dirs) {
+		if (type(dir) != "string")
+			continue;
+		dir = replace(dir, /\/+$/, "");
+		if (dir == "" || seen[dir])
+			continue;
+		seen[dir] = true;
+		let path = dir + "/" + name;
+		if (fs_access(path, "x"))
+			return path;
+	}
+	return "";
+};
+
 finded_com = function(e) {
 	let bin = get_app_path(e);
 	if (!isset(bin) || bin == "")
 		return null;
-	let s = sys_exec("echo -n $(type -t -p " + shellquote(bin) + " | head -n1)");
-	if (s == null || s == "")
+	let s = which_bin(bin);
+	if (s == "")
 		return null;
 	return s;
 };
 
 finded = function(name) {
-	let bin = "" + name;
-	let s = sys_exec("echo -n $(type -t -p " + shellquote("/bin/" + bin) + " -p " + shellquote("/usr/bin/" + bin) + " " + shellquote(bin) + " | head -n1)");
-	if (s == null)
-		return "";
-	return s;
+	return which_bin(name, ["/bin", "/usr/bin"]);
 };
 
 is_finded = function(name) {
@@ -1932,25 +2009,64 @@ get_final_dir = function(path) {
 	return get_final_dir(parent);
 };
 
+split_ws = function(line) {
+	let out = [];
+	let cur = "";
+	line = line ?? "";
+	for (let i = 0; i < length(line); i++) {
+		let c = ord(line, i);
+		if (c == 32 || c == 9) {
+			if (cur != "") {
+				push(out, cur);
+				cur = "";
+			}
+		} else {
+			cur += substr(line, i, 1);
+		}
+	}
+	if (cur != "")
+		push(out, cur);
+	return out;
+};
+
+read_argv = function(argv) {
+	let ph = command_pipe(argv, "r");
+	if (ph == null)
+		return { out: "", rc: 127 };
+	let out = read_all(ph) ?? "";
+	let rc = ph.close();
+	return { out: out, rc: rc == null ? 127 : rc };
+};
+
 get_free_space = function(dir) {
-	if (dir == null)
+	if (dir == null || dir == "")
 		dir = "/";
-	if (sys_call("df -k " + shellquote(dir) + " >/dev/null 2>&1") != 0)
+	let got = read_argv(["df", "-k", "" + dir]);
+	if (got.rc != 0)
 		return 0;
-	let out = sys_exec("df -k " + shellquote(dir) + " | awk 'NR>1 {print $4}'");
-	let n = int(trim(out));
-	if (n != n)
-		return 0;
-	return n;
+	let best = 0;
+	let saw = false;
+	for (let line in split(got.out, "\n")) {
+		let fields = split_ws(line);
+		if (length(fields) < 4)
+			continue;
+		let n = int(fields[3]);
+		if (n == n) {
+			best = n;
+			saw = true;
+		}
+	}
+	return saw ? best : 0;
 };
 
 get_file_space = function(file) {
-	if (file == null)
+	if (file == null || !fs_access(file))
 		return 0;
-	if (!fs_access(file))
+	let got = read_argv(["du", "-k", "" + file]);
+	if (got.rc != 0)
 		return 0;
-	let out = sys_exec("du -k " + shellquote(file) + " | awk 'NR==1 {print $1}'");
-	let n = int(trim(out));
+	let lines = split(got.out, "\n");
+	let n = int(split_ws(lines[0] ?? "")[0] ?? "");
 	if (n != n)
 		return 0;
 	return n;
@@ -2368,7 +2484,7 @@ to_download = function(app_name, url, size, task_id, keep_files) {
 		tmp_file = "/tmp/" + app_name + "_download." + task_id;
 		remove(tmp_file);
 	} else {
-		tmp_file = trim(sys_exec("mktemp -u -t " + app_name + "_download.XXXXXX"));
+		tmp_file = "/tmp/" + app_name + "_download." + gen_random_char(8);
 	}
 	if (isset(size)) {
 		let kb1 = get_free_space("/tmp");
@@ -2434,14 +2550,12 @@ to_extract = function(app_name, file, subfix) {
 			tools_name = "unzip";
 		if (isset(c.zipped_suffix) && c.zipped_suffix == "tar.gz")
 			tools_name = "tar";
-		if (tools_name != null) {
-			if (trim(sys_exec("echo -n $(command -v " + shellquote(tools_name) + ")")) == "") {
-				exec_argv("/bin/rm", ["-f", file], null, null);
-				return {
-					code: 1,
-					error: translatef("Not installed %s, Can't unzip!", tools_name)
-				};
-			}
+		if (tools_name != null && which_bin(tools_name) == "") {
+			exec_argv("/bin/rm", ["-f", file], null, null);
+			return {
+				code: 1,
+				error: translatef("Not installed %s, Can't unzip!", tools_name)
+			};
 		}
 	}
 	remove("/tmp/" + app_name + "_extract.*");
@@ -2449,21 +2563,27 @@ to_extract = function(app_name, file, subfix) {
 	let tmp_free_size = get_free_space("/tmp");
 	if (tmp_free_size <= 0 || tmp_free_size <= new_file_size)
 		return { code: 1, error: translatef("%s not enough space.", "/tmp") };
-	let tmp_dir = trim(sys_exec("mktemp -d -t " + app_name + "_extract.XXXXXX"));
+	let tmp_dir = "/tmp/" + app_name + "_extract." + gen_random_char(8);
+	mkdir_p(tmp_dir);
 	let output = [];
 	if (tools_name != null) {
 		if (tools_name == "unzip") {
-			let bin = trim(sys_exec("echo -n $(command -v unzip)"));
+			let bin = which_bin("unzip");
 			exec_argv(bin, ["-o", file, app_name, "-d", tmp_dir], function(chunk) {
 				push(output, chunk);
 			}, null);
 		} else if (tools_name == "tar") {
-			let bin = trim(sys_exec("echo -n $(command -v tar)"));
+			let bin = which_bin("tar");
 			if (c.zipped_suffix == "tar.gz") {
 				exec_argv(bin, ["-zxf", file, "-C", tmp_dir], function(chunk) {
 					push(output, chunk);
 				}, null);
-				sys_call("/bin/mv -f " + tmp_dir + "/*/" + lc(c.name) + " " + tmp_dir);
+				let wanted = lc(c.name);
+				for (let name in fs_dir(tmp_dir)) {
+					let nested = tmp_dir + "/" + name + "/" + wanted;
+					if (fs_access(nested))
+						exec_argv("/bin/mv", ["-f", nested, tmp_dir], null, null);
+				}
 			}
 		}
 	}
@@ -2529,7 +2649,7 @@ to_move = function(app_name, file) {
 
 get_version = function() {
 	let version_file = CACHE_PATH + "/passwall_version";
-	sys_call("mkdir -p " + CACHE_PATH);
+	mkdir_p(CACHE_PATH);
 	let version = null;
 	if (fs_access(version_file)) {
 		version = readfile(version_file);
@@ -3169,23 +3289,42 @@ table_remove_duplicates = function(t) {
 	return out;
 };
 
+keyed_lines = function(text, sep) {
+	let vals = [];
+	for (let line in split(text ?? "", "\n")) {
+		let n = index(line, sep);
+		if (n >= 0)
+			push(vals, trim(substr(line, n + length(sep))));
+	}
+	return vals;
+};
+
 gen_wireguard_key = function() {
-	if (sys_call("command -v wg >/dev/null") == 0) {
-		let private_key = sys_exec("echo -n $(wg genkey)");
-		let public_key = sys_exec("echo -n $(echo \"" + private_key + "\" | wg pubkey)");
-		return { private_key: private_key, public_key: public_key };
+	let wg = finded("wg");
+	if (wg != "") {
+		let private_key = trim(read_argv([wg, "genkey"]).out);
+		if (private_key != "") {
+			let public_key = trim(read_argv(["sh", "-c", "printf '%s\\n' \"$1\" | \"$2\" pubkey", "sh", private_key, wg]).out);
+			if (public_key != "")
+				return { private_key: private_key, public_key: public_key };
+		}
 	}
 	let xray = finded_com("xray");
 	if (xray != null) {
-		let result = sys_exec(xray + " wg | awk -F ': ' '{print $2}'");
-		let s = split(result, "\n");
-		return { private_key: s[0], public_key: s[1] };
+		let vals = keyed_lines(read_argv([xray, "wg"]).out, ": ");
+		if (length(vals) >= 2)
+			return { private_key: vals[0], public_key: vals[1] };
 	}
 	let sb = finded_com("sing-box");
 	if (sb != null) {
-		let result = sys_exec(sb + " generate wg-keypair | awk '{print $2}'");
-		let s = split(result, "\n");
-		return { private_key: s[0], public_key: s[1] };
+		let vals = [];
+		for (let line in split(read_argv([sb, "generate", "wg-keypair"]).out, "\n")) {
+			let fields = split_ws(trim(line));
+			if (length(fields) >= 2)
+				push(vals, fields[length(fields) - 1]);
+		}
+		if (length(vals) >= 2)
+			return { private_key: vals[0], public_key: vals[1] };
 	}
 	return null;
 };

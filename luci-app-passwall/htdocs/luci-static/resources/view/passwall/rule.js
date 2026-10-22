@@ -465,7 +465,7 @@ return view.extend({
 				}, [
 					label,
 					' | ',
-					E('font', { 'style': 'color: red' }, String(groups[group].length))
+					E('span', { 'class': 'pw-warn' }, String(groups[group].length))
 				])
 			]);
 			tabs.appendChild(tab);
@@ -549,7 +549,7 @@ return view.extend({
 		host.appendChild(E('div', { 'class': 'cbi-section' }, [
 			E('h3', {}, [ 'Sing-Box/Xray ', _('Shunt Rule') ]),
 			E('div', { 'class': 'cbi-section-descr' }, [
-				E('a', { 'style': 'color: red' }, _('Please note attention to the priority, the higher the order, the higher the priority.'))
+				E('a', { 'class': 'pw-warn' }, _('Please note attention to the priority, the higher the order, the higher the priority.'))
 			]),
 			E('div', { 'id': 'shunt_rule_list' }, [ tabs, body ])
 		]));

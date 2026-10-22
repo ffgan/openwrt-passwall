@@ -142,6 +142,21 @@ document.pointerup();
 sortable.destroy();
 same(calls, [[20, 40, 0]], 'drag first row after the last row');
 
+const api = fs.readFileSync(path.join(root, 'luci-app-passwall/root/usr/share/ucode/passwall/api.uc'), 'utf8');
+if (api.includes('echo -n $(cat /proc/sys/kernel/random/uuid)'))
+	fail('uuid still shells out to cat');
+if (!api.includes('/proc/sys/kernel/random/uuid'))
+	fail('uuid reader missing');
+if (api.includes('echo -n $(wg genkey)'))
+	fail('wireguard key still uses echo substitution');
+for (const file of walk(viewDir, [])) {
+	if (!file.endsWith('.js'))
+		continue;
+	const text = fs.readFileSync(file, 'utf8');
+	if (text.includes('<font') || text.includes('color: red') || text.includes('color:red'))
+		fail(path.relative(root, file) + ' still has a hardcoded red font');
+}
+
 if (failed) {
 	console.error(failed + ' check(s) failed');
 	process.exit(1);

@@ -1118,7 +1118,7 @@ return view.extend({
 				E('th', { 'class': 'cbi-section-table-cell' }, _('Rule')),
 				E('th', { 'class': 'cbi-section-table-cell' }, _('Node')),
 				E('th', { 'class': 'cbi-section-table-cell' }, E('a', { 'style': 'color:#FF8C00', 'title': fakeHead }, 'FakeDNS')),
-				E('th', { 'class': 'cbi-section-table-cell' }, E('a', { 'style': 'color:red', 'title': preTitle }, _('Preproxy')))
+				E('th', { 'class': 'cbi-section-table-cell' }, E('a', { 'class': 'pw-warn', 'title': preTitle }, _('Preproxy')))
 			]) ];
 			rules.forEach(function(rule) {
 				var curNode = uci.get(APP, shuntNodeId, rule.nodeOption);
@@ -1159,7 +1159,7 @@ return view.extend({
 				nodeSel.addEventListener('change', applyVisibility);
 				applyVisibility();
 				var ruleCell = rule.isDefault
-					? E('font', { 'style': 'color: red' }, rule.remarks)
+					? E('span', { 'class': 'pw-warn' }, rule.remarks)
 					: E('a', { 'href': pw.pageUrl('shunt_rules', rule.id), 'target': '_blank' }, rule.remarks);
 				var edit = E('a', {
 					'href': '#',
