@@ -1,22 +1,9 @@
 'use strict';
 
 import * as api from 'passwall.api';
+import { read_cmd } from 'passwall.proc';
 
-let read_cmd, bracket_host, main;
-
-read_cmd = function(argv) {
-	let ph = api.command_pipe(argv, "r");
-	if (ph == null)
-		return null;
-	let out = "";
-	let chunk = ph.read(4096);
-	while (chunk != null && chunk != "") {
-		out += chunk;
-		chunk = ph.read(4096);
-	}
-	let rc = ph.close();
-	return { out: out, rc: rc == null ? 255 : rc };
-};
+let bracket_host, main;
 
 bracket_host = function(host) {
 	if (host == null)

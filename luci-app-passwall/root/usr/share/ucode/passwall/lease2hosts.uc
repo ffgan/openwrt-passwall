@@ -2,20 +2,9 @@
 
 import * as api from 'passwall.api';
 import { readfile, writefile, stat, unlink, lsdir } from 'fs';
+import { command_rc } from 'passwall.proc';
 
-let command_rc, fields, split_lines, valid_name, static_hosts, dnsmasq_hosts, odhcpd_hosts, unique_text, hup_pidfile, walk_pids, publish, run;
-
-command_rc = function(argv) {
-	if (type(global.system) == "function") {
-		let rc = global.system(argv);
-		return rc == null ? 255 : rc;
-	}
-	let ph = api.command_pipe(argv, "r");
-	if (ph == null)
-		return 255;
-	let rc = ph.close();
-	return rc == null ? 255 : rc;
-};
+let fields, split_lines, valid_name, static_hosts, dnsmasq_hosts, odhcpd_hosts, unique_text, hup_pidfile, walk_pids, publish, run;
 
 fields = function(line) {
 	let parts = [];

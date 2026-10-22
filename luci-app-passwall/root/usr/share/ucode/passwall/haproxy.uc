@@ -3,50 +3,11 @@
 import * as api from 'passwall.api';
 import * as fs from 'fs';
 import * as utils from 'passwall.utils';
-let ltruth, tonumber, gmatch, leading_int, get_ip_port_from, server_endpoint, main;
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-tonumber = function(v) {
-	if (type(v) == "int")
-		return v;
-	if (type(v) == "double")
-		return (v == v) ? v : null;
-	if (type(v) != "string")
-		return null;
-	let s = trim(v);
-	if (match(s, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) == null)
-		return null;
-	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
-		return s * 1;
-	return int(s);
-};
-
-gmatch = function(s, pattern) {
-	if (s == null || s === false)
-		return [];
-	let found = match("" + s, pattern);
-	if (found == null)
-		return [];
-	let out = [];
-	for (let m in found)
-		push(out, m[0]);
-	return out;
-};
-
-leading_int = function(v) {
-	let m = match("" + v, /^[0-9]+/);
-	if (m == null)
-		return null;
-	return tonumber(m[0]);
-};
+import { truth as ltruth, to_number as tonumber, gmatch, leading_int, host_port, processor_count } from 'passwall.text';
+let get_ip_port_from, server_endpoint, main;
 
 get_ip_port_from = function(str) {
-	let result_port = api.sys.exec("echo -n " + str + " | sed -n 's/^.*[:#]\\([0-9]*\\)$/\\1/p'");
-	let result_ip = api.sys.exec(sprintf("__host=%s;__varport=%s;", str, result_port) + "echo -n ${__host%%${__varport:+[:#]${__varport}*}}");
-	return [result_ip, result_port];
+	return host_port(str);
 };
 
 server_endpoint = function(o) {
@@ -65,9 +26,8 @@ main = function(argv) {
 	let haproxy_conf = vmap["-conf"];
 	let haproxy_dns = "127.0.0.1";
 
-	let cpu_thread = api.sys.exec('echo -n $(cat /proc/cpuinfo | grep "processor" | wc -l)');
-	if (cpu_thread == null || cpu_thread === false)
-		cpu_thread = "1";
+	let cpu_info = fs.readfile("/proc/cpuinfo");
+	let cpu_thread = "" + processor_count(type(cpu_info) == "string" ? cpu_info : "");
 	let health_check_type = api.uci_get_c("@global_haproxy[0]", "health_check_type") ?? "tcp";
 	let health_check_inter = api.uci_get_c("@global_haproxy[0]", "health_check_inter") ?? "60";
 	let balancingStrategy = api.uci_get_c("@global_haproxy[0]", "balancingStrategy") ?? "roundrobin";

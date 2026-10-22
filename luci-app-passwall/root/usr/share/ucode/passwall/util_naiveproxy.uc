@@ -1,17 +1,8 @@
 'use strict';
 
 import * as api from 'passwall.api';
-let ltruth, lor, gen_config, print_result, main;
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-lor = function(a, b) {
-	if (a == null || a === false)
-		return b;
-	return a;
-};
+import { truth as ltruth, lua_or as lor } from 'passwall.text';
+let gen_config, print_result, main;
 
 gen_config = function(var) {
 	let node_id = var["node"];

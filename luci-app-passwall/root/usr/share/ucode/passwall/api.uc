@@ -6,6 +6,8 @@ import { readfile, writefile, stat, unlink, mkdir, lsdir, popen, error, open, ac
 import { cursor } from 'uci';
 import { md5 } from 'digest';
 import * as com from 'passwall.com';
+import { df_available_kb, du_kb } from 'passwall.text';
+import { parse_runtime, render_runtime } from 'passwall.state';
 let isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, command_pipe, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
 
 export let appname = "passwall";
@@ -578,91 +580,18 @@ cache_file = function() {
 	return TMP_PATH + "/var";
 };
 
-cache_decode_legacy = function(value) {
-	if (length(value) >= 2 && substr(value, 0, 1) == "'" && substr(value, -1) == "'")
-		value = replace(substr(value, 1, length(value) - 2), /'\\''/g, "'");
-	return value;
-};
-
-cache_object = function(text) {
-	try {
-		let obj = json(text);
-		if (type(obj) == "object" && type(obj) != "array")
-			return obj;
-	} catch (e) {}
-	return null;
-};
-
-cache_fill_json = function(out, obj) {
-	for (let key, value in obj) {
-		if (type(key) != "string" || match(key, /^[A-Za-z_][A-Za-z0-9_]*$/) == null)
-			continue;
-		if (value == null || ("" + value) == "")
-			continue;
-		out[key] = "" + value;
-	}
-};
-
-cache_fill_legacy = function(out, raw) {
-	for (let line in global.split(raw, "\n")) {
-		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-		if (m == null)
-			continue;
-		let value = cache_decode_legacy(m[2]);
-		if (value != "")
-			out[m[1]] = value;
-	}
-};
-
 cache_load = function() {
-	let raw = readfile(cache_file()) ?? "";
-	let text = trim(raw);
-	let out = {};
-	if (text != "" && substr(text, 0, 1) == "{") {
-		let obj = cache_object(text);
-		let rest = "";
-		if (obj == null) {
-			let nl = index(text, "\n");
-			if (nl >= 0) {
-				obj = cache_object(substr(text, 0, nl));
-				rest = substr(text, nl + 1);
-			}
-		}
-		if (obj != null) {
-			cache_fill_json(out, obj);
-			cache_fill_legacy(out, rest);
-			return out;
-		}
-	}
-	cache_fill_legacy(out, raw);
-	return out;
+	return parse_runtime(readfile(cache_file()) ?? "");
 };
 
 cache_save = function(map) {
 	let path = cache_file();
-	let keys = [];
-	for (let key, value in map) {
-		if (type(key) != "string" || match(key, /^[A-Za-z_][A-Za-z0-9_]*$/) == null)
-			continue;
-		if (value == null || ("" + value) == "")
-			continue;
-		push(keys, key);
-	}
-	if (length(keys) == 0) {
+	let body = render_runtime(map);
+	if (body == "") {
 		unlink(path);
 		return;
 	}
-	sort(keys);
-	let obj = {};
-	for (let key in keys)
-		obj[key] = "" + map[key];
 	mkdir_p(TMP_PATH);
-	let body = null;
-	try {
-		body = json(obj);
-	} catch (e) {}
-	if (type(body) != "string" || body == "")
-		body = sprintf("%J", obj);
 	writefile(path, body + "\n");
 };
 
@@ -1460,7 +1389,10 @@ remove = function(...values) {
 			continue;
 		if (match(value, /^\/[A-Za-z0-9._+\/=*,-]+$/) == null)
 			continue;
-		sys_call("rm -rf -- " + value);
+		if (index(value, "*") >= 0)
+			sys_call("rm -rf -- " + value);
+		else
+			exec_argv("/bin/rm", ["-rf", "--", value], null, null);
 	}
 };
 
@@ -1838,24 +1770,26 @@ gen_random_char = function(len) {
 	len = int(len);
 	if (len != len || len <= 0)
 		len = 8;
-	if (len > 256)
-		len = 256;
-	let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-	let fd = open("/dev/urandom", "r");
-	if (fd == null)
+	if (len > 4096)
+		len = 4096;
+	let fh = open("/dev/urandom", "r");
+	if (fh == null)
 		return "";
 	let out = "";
-	while (length(out) < len) {
-		let buf = fd.read(64);
+	let guard = 0;
+	while (length(out) < len && guard < 32) {
+		guard++;
+		let buf = fh.read(len * 4);
 		if (type(buf) != "string" || buf == "")
 			break;
-		for (let i = 0; i < length(buf) && length(out) < len; i++) {
-			let n = ord(buf, i);
-			if (n < 248)
-				out += substr(alphabet, n % 62, 1);
+		let n = length(buf);
+		for (let i = 0; i < n && length(out) < len; i++) {
+			let c = substr(buf, i, 1);
+			if (match(c, /^[A-Za-z0-9]$/) != null)
+				out += c;
 		}
 	}
-	fd.close();
+	fh.close();
 	return out;
 };
 
@@ -1899,7 +1833,7 @@ get_bin_version_cache = function(file, cmd) {
 			if (type(cached) == "string" && trim(cached) != "")
 				return trim(cached);
 		}
-		let version = sys_exec("echo -n $(" + shellquote(file) + " " + cmd + ")");
+		let version = trim(sys_exec(shellquote(file) + " " + cmd));
 		if (isset(version) && version != "") {
 			if (cache_file != null) {
 				mkdir_p(CACHE_PATH);
@@ -2044,19 +1978,10 @@ get_free_space = function(dir) {
 	let got = read_argv(["df", "-k", "" + dir]);
 	if (got.rc != 0)
 		return 0;
-	let best = 0;
-	let saw = false;
-	for (let line in split(got.out, "\n")) {
-		let fields = split_ws(line);
-		if (length(fields) < 4)
-			continue;
-		let n = int(fields[3]);
-		if (n == n) {
-			best = n;
-			saw = true;
-		}
-	}
-	return saw ? best : 0;
+	let n = df_available_kb(got.out);
+	if (n == null || n != n)
+		return 0;
+	return n;
 };
 
 get_file_space = function(file) {
@@ -2065,9 +1990,8 @@ get_file_space = function(file) {
 	let got = read_argv(["du", "-k", "" + file]);
 	if (got.rc != 0)
 		return 0;
-	let lines = split(got.out, "\n");
-	let n = int(split_ws(lines[0] ?? "")[0] ?? "");
-	if (n != n)
+	let n = du_kb(got.out);
+	if (n == null || n != n)
 		return 0;
 	return n;
 };
@@ -2747,7 +2671,8 @@ to_install_self = function(id, force) {
 	}
 	chmod_755(script);
 	writefile(status, '{"installing":true}');
-	sys_call("nohup " + script + " " + dir + " " + status + " " + manager + " " + (force == "1" ? "1" : "0") + " >/dev/null 2>&1 </dev/null &");
+	let force_s = force == "1" ? "1" : "0";
+	sys_call(shellquote(script) + " " + shellquote(dir) + " " + shellquote(status) + " " + shellquote(manager) + " " + shellquote(force_s) + " >/dev/null 2>&1 </dev/null &");
 	return { code: 0 };
 };
 
@@ -3050,11 +2975,20 @@ fetch_cert_sha256 = function(host, port, sni, timeout, http3) {
 			timeout = 5;
 	}
 	let awk = "awk 'BEGIN{c=0}/BEGIN CERT/{c++} c==1{print} /END CERT/{if(c==1)exit}'";
+	let limit = "" + timeout;
+	if (match(limit, /^[0-9]+$/) == null)
+		limit = "5";
+	let port_s = "" + port;
+	if (match(port_s, /^[0-9]+$/) == null)
+		port_s = "443";
+	let connect = "" + host;
+	if (index(connect, ":") >= 0 && match(connect, /^\[.*\]$/) == null)
+		connect = "[" + connect + "]";
 	let cmd;
 	if (http3) {
-		cmd = "timeout " + timeout + " curl --http3 -k -w '%{certs}' -o /dev/null https://" + host + ":" + port + " 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
+		cmd = "timeout " + limit + " curl --http3 -k -w '%{certs}' -o /dev/null " + shellquote("https://" + connect + ":" + port_s) + " 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
 	} else {
-		cmd = "timeout " + timeout + " openssl s_client -connect " + host + ":" + port + " -servername " + sni + " -showcerts </dev/null 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
+		cmd = "timeout " + limit + " openssl s_client -connect " + shellquote(connect + ":" + port_s) + " -servername " + shellquote(sni) + " -showcerts </dev/null 2>/dev/null | " + awk + " | openssl x509 -outform der 2>/dev/null | sha256sum 2>/dev/null";
 	}
 	let out = trim(sys_exec(cmd));
 	let m = match(out, /^([0-9a-fA-F]+)/);

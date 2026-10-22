@@ -6,7 +6,6 @@
 'require poll';
 'require fs';
 'require view.passwall.tools as pw';
-'require view.passwall.runtime as runtime';
 
 var TMP = '/tmp/etc/passwall';
 var LOG_GLOBAL = TMP + '/acl/default/global.log';
@@ -90,11 +89,6 @@ function isIpAddrPort(v) {
 	if (host.charAt(0) === '[' && host.charAt(host.length - 1) === ']')
 		host = host.substring(1, host.length - 1);
 	return isIPv4(host) || isIPv6(host);
-}
-
-function parseCache(text) {
-	var fn = runtime.parseCache || (runtime.prototype && runtime.prototype.parseCache);
-	return fn ? fn(text) : {};
 }
 
 function asText(v) {
@@ -1762,7 +1756,7 @@ return view.extend({
 		o.modalonly = false;
 		o.renderWidget = function(section_id) {
 			var holder = E('div', { 'id': 'pw-now-' + section_id, 'data-socks-id': section_id });
-			var cache = parseCache(cacheText);
+			var cache = pw.parseRuntime(cacheText);
 			var nid = cache[section_id];
 			remarkNode(holder, nid ? (remarks[nid] || nid) : '');
 			return holder;
@@ -1973,7 +1967,7 @@ return view.extend({
 				]).then(function(res) {
 					paintIndex(res[0]);
 					paintNowNode(res[1], remarks);
-					paintSocksRuntime(parseCache(res[2]), remarks);
+					paintSocksRuntime(pw.parseRuntime(res[2]), remarks);
 					return paintSocksPorts();
 				});
 			}, 5);

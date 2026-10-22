@@ -48,10 +48,11 @@ for (const name of fs.readdirSync(ucodeDir)) {
 		fail(name + ' still shells out to busybox process listing');
 }
 
-const baseclass = { extend(obj) { return obj; } };
-const runtimeSrc = fs.readFileSync(path.join(viewDir, 'runtime.js'), 'utf8').replace(/'require [^']+';\n/g, '');
-const runtime = new Function('baseclass', runtimeSrc)(baseclass);
-const parseCache = runtime.parseCache;
+const toolsSrc = fs.readFileSync(path.join(viewDir, 'tools.js'), 'utf8');
+const parseMatch = toolsSrc.match(/function parseRuntime\(text\) \{[\s\S]*?\n\}\n\/\* parseRuntime:end \*\//);
+if (!parseMatch)
+	fail('parseRuntime was not found in tools.js');
+const parseRuntime = parseMatch ? new Function(`${parseMatch[0]}\nreturn parseRuntime;`)() : () => ({});
 
 function same(actual, expected, label) {
 	const a = JSON.stringify(actual);
@@ -60,13 +61,14 @@ function same(actual, expected, label) {
 		fail(label + ' => ' + a + ' expected ' + b);
 }
 
-same(parseCache(''), {}, 'empty');
-same(parseCache("FOO='bar'\nBAZ=0\n"), { FOO: 'bar', BAZ: '0' }, 'legacy');
-same(parseCache("Q='a'\\''b'\n"), { Q: "a'b" }, 'legacy quote');
-same(parseCache('{"FOO":"bar","N":"0","skip":""}\n'), { FOO: 'bar', N: '0' }, 'json');
-same(parseCache('{not json'), {}, 'broken json');
-same(parseCache('{"bad-key":"x","OK":"y"}'), { OK: 'y' }, 'json key');
-same(parseCache('{"FOO":"old"}\nFOO=\'new\'\nBAR=1\n'), { FOO: 'new', BAR: '1' }, 'mixed');
+same(parseRuntime(''), {}, 'empty');
+same(parseRuntime("FOO='bar'\nBAZ=0\n"), { FOO: 'bar', BAZ: '0' }, 'legacy');
+same(parseRuntime("Q='a'\\''b'\n"), { Q: "a'b" }, 'legacy quote');
+same(parseRuntime('{"FOO":"bar","N":"0","skip":""}\n'), { FOO: 'bar', N: '0', skip: '' }, 'json');
+same(parseRuntime('{not json'), {}, 'broken json');
+same(parseRuntime('{"bad-key":"x","OK":"y"}'), { OK: 'y' }, 'json key');
+same(parseRuntime('{"FOO":"old"}\nFOO=\'new\'\nBAR=1\n'), { FOO: 'new', BAR: '1' }, 'mixed');
+same(parseRuntime("{not json\nMODE='direct'\n"), { MODE: 'direct' }, 'truncated json');
 
 class Node {
 	constructor(selector, top) {
@@ -81,6 +83,15 @@ class Node {
 			add: (name) => this.classes.add(name),
 			remove: (name) => this.classes.delete(name)
 		};
+	}
+	get firstChild() {
+		return this.first || null;
+	}
+	get firstElementChild() {
+		return this.first || null;
+	}
+	get nextElementSibling() {
+		return this.nextSibling;
 	}
 	matches(selector) {
 		return this.selector === selector;

@@ -2,6 +2,8 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+import { parse_nft_state } from 'passwall.state';
+import { run, output } from 'passwall.utils';
 
 const TABLE = "inet passwall";
 const MARK = "0x50535731";
@@ -15,30 +17,6 @@ let pending = [];
 // ucode 2026.01.16 does not hoist functions. Names used before their
 // definition have to be declared up front.
 let wan_addresses, add_icmp_rules, flush_table;
-
-function run(argv, quiet) {
-	let rc;
-	if (type(global.system) == "function")
-		rc = global.system(argv);
-	else {
-		let p = api.command_pipe(argv, "r");
-		rc = p == null ? 255 : p.close();
-	}
-	if (rc == null)
-		rc = 255;
-	if (rc != 0 && !quiet)
-		api.log("命令执行失败 (" + rc + "): " + join(" ", argv));
-	return rc;
-}
-
-function output(argv) {
-	let p = api.command_pipe(argv, "r");
-	if (p == null)
-		return "";
-	let data = p.read("all") ?? "";
-	p.close();
-	return data;
-}
 
 function shell_join(argv) {
 	let parts = [];
@@ -94,21 +72,11 @@ function words(data) {
 	return out;
 }
 
-/* passwall.app writes POSIX single-quoted assignments. Decode that deliberately
- * small format without evaluating it. */
 function load_env() {
-	let data = read(TMP + "/nft.env");
-	for (let line in split(data, "\n")) {
-		let m = match(line, /^([A-Z0-9_]+)=(.*)$/);
-		if (m == null)
-			continue;
-		let value = m[2];
-		if (length(value) >= 2 && substr(value, 0, 1) == "'" && substr(value, -1) == "'") {
-			value = substr(value, 1, length(value) - 2);
-			value = replace(value, /'\\''/g, "'");
-		}
-		env[m[1]] = value;
-	}
+	let data = read(TMP + "/nft.json");
+	if (trim(data) == "")
+		data = read(TMP + "/nft.env");
+	env = parse_nft_state(data);
 }
 
 function e(name, fallback) {
@@ -1136,17 +1104,30 @@ flush_table = function() {
 };
 
 function flush_include() {
-	write(include_path(), "#!/bin/sh\n");
+	let path = include_path();
+	write(path, "#!/bin/sh\nexit 0\n");
+	fs.chmod(path, 0o755);
+}
+
+function rules_loaded() {
+	return index(quiet_output(["nft", "list", "chain", "inet", "passwall", "mangle_prerouting"]), "PSW_DIVERT") >= 0;
+}
+
+function fw4_reload() {
+	load_env();
+	let snapshot = TMP + "/PSW_RULE.nft";
+	if (!rules_loaded() && exists(snapshot))
+		run(["nft", "-f", snapshot], true);
+	update_wan_sets();
+	return 0;
 }
 
 function gen_include() {
 	let snapshot = TMP + "/PSW_RULE.nft";
 	write(snapshot, nft_output(["list", "table", "inet", "passwall"]));
-	write(include_path(),
-		"#!/bin/sh\n" +
-		"nft list chain inet passwall mangle_prerouting 2>/dev/null | grep -q PSW_DIVERT || nft -f " + snapshot + "\n" +
-		LIBEXEC + " update_wan_sets\n" +
-		"return 0\n");
+	let path = include_path();
+	write(path, "#!/bin/sh\nexec /usr/bin/ucode " + LIBEXEC + " fw4_reload\n");
+	fs.chmod(path, 0o755);
 }
 
 function start() {
@@ -1211,6 +1192,8 @@ function main(argv) {
 		rc = mwan3_start();
 	else if (action == "mwan3_stop")
 		rc = mwan3_stop();
+	else if (action == "fw4_reload")
+		rc = fw4_reload();
 	exit(rc ?? 0);
 }
 

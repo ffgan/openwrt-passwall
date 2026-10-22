@@ -1,20 +1,9 @@
 'use strict';
 
 import * as api from 'passwall.api';
+import { command_rc, background } from 'passwall.proc';
 
-let command_rc, number_or_null, launch, run;
-
-command_rc = function(argv) {
-	if (type(global.system) == "function") {
-		let rc = global.system(argv);
-		return rc == null ? 255 : rc;
-	}
-	let ph = api.command_pipe(argv, "r");
-	if (ph == null)
-		return 255;
-	let rc = ph.close();
-	return rc == null ? 255 : rc;
-};
+let number_or_null, launch, run;
 
 number_or_null = function(value) {
 	value = trim(value == null ? "" : ("" + value));
@@ -24,13 +13,10 @@ number_or_null = function(value) {
 };
 
 launch = function(argv) {
-	let script = "";
-	for (let i = 0; i < length(argv); i++) {
-		if (i > 0)
-			script += " ";
-		script += api.shellquote(argv[i]);
-	}
-	command_rc(["/bin/sh", "-c", script + " >/dev/null 2>&1 &"]);
+	let parts = [];
+	for (let arg in argv)
+		push(parts, api.shellquote(arg));
+	background(join(" ", parts) + " >/dev/null 2>&1");
 };
 
 run = function() {

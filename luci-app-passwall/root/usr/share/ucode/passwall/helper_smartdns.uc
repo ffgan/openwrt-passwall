@@ -2,49 +2,8 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
-let ltruth, tonumber, lua_quote, exec_pair, read_lines, gmatch, is_file_nonzero, insert_unique, merge_array, insert_array_before, insert_array_after, tail_after_colon, geosite_file, get_geosite, write_lines, ucfirst, make_server_param, main;
-
-ltruth = function(v) {
-	return v != null && v !== false;
-};
-
-tonumber = function(v) {
-	if (type(v) == "int")
-		return v;
-	if (type(v) == "double")
-		return (v == v) ? v : null;
-	if (type(v) != "string")
-		return null;
-	let s = trim(v);
-	if (match(s, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/) == null)
-		return null;
-	if (index(s, ".") >= 0 || index(lc(s), "e") >= 0)
-		return s * 1;
-	return int(s);
-};
-
-lua_quote = function(s) {
-	if (s == null || s === false)
-		s = "";
-	else
-		s = "" + s;
-	let out = "\"";
-	for (let i = 0; i < length(s); i++) {
-		let c = substr(s, i, 1);
-		let b = ord(s, i);
-		if (c == "\\" || c == "\"")
-			out += "\\" + c;
-		else if (c == "\n")
-			out += "\\n";
-		else if (c == "\r")
-			out += "\\r";
-		else if (b < 32)
-			out += sprintf("\\%03d", b);
-		else
-			out += c;
-	}
-	return out + "\"";
-};
+import { truth as ltruth, to_number as tonumber, lua_quote, gmatch, lines_of } from 'passwall.text';
+let exec_pair, read_lines, is_file_nonzero, insert_unique, merge_array, insert_array_before, insert_array_after, tail_after_colon, geosite_file, get_geosite, write_lines, ucfirst, make_server_param, main;
 
 exec_pair = function(cmd) {
 	let ret = api.exec_call(cmd);
@@ -56,36 +15,18 @@ exec_pair = function(cmd) {
 };
 
 read_lines = function(path) {
-	let data = api.fs.readfile(path);
-	if (data == null)
-		return null;
-	if (data == "")
-		return [];
-	if (substr(data, -1) == "\n")
-		data = substr(data, 0, length(data) - 1);
-	if (data == "")
-		return [""];
-	return split(data, "\n");
-};
-
-gmatch = function(s, pattern) {
-	if (s == null || s === false)
-		return [];
-	let found = match("" + s, pattern);
-	if (found == null)
-		return [];
-	let out = [];
-	for (let m in found)
-		push(out, m[0]);
-	return out;
+	return lines_of(api.fs.readfile(path));
 };
 
 is_file_nonzero = function(path) {
-	if (path != null && type(path) == "string" && length(path) > 1) {
-		if (api.sys.exec(sprintf('[ -s "%s" ] && echo -n 1', path)) == "1")
-			return true;
-	}
-	return null;
+	if (type(path) != "string" || length(path) <= 1)
+		return null;
+	let size = api.fs.stat(path, "size");
+	if (type(size) != "int" && type(size) != "double")
+		return null;
+	if (size <= 0)
+		return null;
+	return true;
 };
 
 insert_unique = function(dest_table, value, lookup_table) {

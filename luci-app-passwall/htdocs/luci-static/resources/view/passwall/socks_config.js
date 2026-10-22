@@ -29,20 +29,6 @@ function groupName(v) {
 	return (v && v.group && v.group !== '') ? v.group : _('default');
 }
 
-function parseCache(text) {
-	var map = {};
-	String(text || '').split('\n').forEach(function(line) {
-		var m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-		if (!m)
-			return;
-		var val = m[2];
-		if (val.length >= 2 && val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")
-			val = val.substring(1, val.length - 1);
-		map[m[1]] = val;
-	});
-	return map;
-}
-
 function asText(v) {
 	if (typeof v === 'string')
 		return v;
@@ -222,7 +208,7 @@ return view.extend({
 		var caps = data[1] || {};
 		var nodes = caps.nodes || [];
 		var hasCore = present(caps.singbox) || present(caps.xray);
-		var cache = parseCache(data[2] || '');
+		var cache = pw.parseRuntime(data[2] || '');
 		var byId = {};
 		nodes.forEach(function(n) {
 			byId[nodeIdOf(n)] = n;

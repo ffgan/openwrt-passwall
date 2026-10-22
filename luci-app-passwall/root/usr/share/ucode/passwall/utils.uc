@@ -2,6 +2,7 @@
 
 import * as fs from 'fs';
 import * as api from 'passwall.api';
+import { parse_runtime, render_runtime } from 'passwall.state';
 
 export const CONFIG = 'passwall';
 export const DIRECT_GID = 9911;
@@ -47,13 +48,24 @@ export function output(argv) {
 };
 
 export function launch(argv, name, logfile, env) {
-	let args = ['/usr/bin/ucode', UCODE_BIN + '/ln_run.uc', argv[0], name ?? argv[0], logfile ?? '/dev/null'];
+	let clean = {};
+	if (type(env) == 'object' && env != null) {
+		for (let key, value in env) {
+			if (match(key, /^[A-Za-z_][A-Za-z0-9_]*$/) == null)
+				continue;
+			clean[key] = str(value);
+		}
+	}
+	let args = [
+		'/usr/bin/ucode', UCODE_BIN + '/ln_run.uc', argv[0], name ?? argv[0],
+		logfile ?? '/dev/null', sprintf('%J', clean)
+	];
 	for (let i = 1; i < length(argv); i++)
 		push(args, str(argv[i]));
-	if (type(env) == 'object' && length(keys(env))) {
+	if (length(keys(clean))) {
 		let with_env = ['/usr/bin/env'];
-		for (let key, value in env)
-			push(with_env, key + '=' + str(value));
+		for (let key, value in clean)
+			push(with_env, key + '=' + value);
 		for (let arg in args)
 			push(with_env, arg);
 		args = with_env;
@@ -94,16 +106,38 @@ export function config_t_get(type_name, option, fallback, index) {
 	return config_n_get('@' + type_name + '[' + (index ?? 0) + ']', option, fallback);
 };
 
-export function del_cache_var(key) {
-	api.del_cache_var(key);
+export function cache_all() {
+	return parse_runtime(fs.readfile(TMP_PATH + '/var') ?? '');
 };
 
-export function cache_all() {
-	return api.cache_map();
+function save_cache(map) {
+	let text = render_runtime(map);
+	if (text == '')
+		fs.unlink(TMP_PATH + '/var');
+	else {
+		api.fs.mkdirr(TMP_PATH);
+		fs.writefile(TMP_PATH + '/var', text + '\n');
+	}
+}
+
+export function del_cache_var(key) {
+	if (key == null || key == '')
+		return;
+	let map = cache_all();
+	delete map[key];
+	save_cache(map);
 };
 
 export function set_cache_var(key, value) {
-	api.set_cache_var(key, value);
+	if (key == null || key == '')
+		return;
+	let map = cache_all();
+	value = str(value);
+	if (value == '')
+		delete map[key];
+	else
+		map[key] = value;
+	save_cache(map);
 };
 
 export function get_cache_var(key) {
@@ -384,7 +418,10 @@ export function shell_quote(value) {
 export function ln_run(argv) {
 	if (type(argv) != 'array' || length(argv) < 3)
 		return 1;
-	return run(['/usr/bin/ucode', UCODE_BIN + '/ln_run.uc', ...argv], true);
+	let args = [ argv[0], argv[1], argv[2], '{}' ];
+	for (let i = 3; i < length(argv); i++)
+		push(args, argv[i]);
+	return run([ '/usr/bin/ucode', UCODE_BIN + '/ln_run.uc', ...args ], true);
 };
 
 export function kill_all(names) {

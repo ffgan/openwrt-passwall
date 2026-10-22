@@ -30,6 +30,15 @@
 			var handle = options.handle || null;
 			var ghostClass = options.ghostClass || 'dragging-row';
 			var dragging = null;
+			var moved = false;
+
+			function originOf(target) {
+				if (!target)
+					return null;
+				if (target.nodeType === 1)
+					return target;
+				return target.parentElement || target.parentNode || null;
+			}
 
 			function finish() {
 				if (!dragging)
@@ -37,19 +46,22 @@
 				dragging.classList.remove(ghostClass);
 				host.classList.remove('pw-sorting');
 				dragging = null;
-				if (typeof options.onEnd === 'function')
+				if (moved && typeof options.onEnd === 'function')
 					options.onEnd();
+				moved = false;
 			}
 
 			function down(ev) {
 				if (ev.button != null && ev.button !== 0)
 					return;
-				if (handle && !(ev.target && ev.target.closest && ev.target.closest(handle)))
+				var origin = originOf(ev.target);
+				if (handle && !(origin && origin.closest && origin.closest(handle)))
 					return;
-				var row = rowFrom(host, selector, ev.target);
+				var row = rowFrom(host, selector, origin);
 				if (!row)
 					return;
 				dragging = row;
+				moved = false;
 				row.classList.add(ghostClass);
 				host.classList.add('pw-sorting');
 				if (ev.cancelable)
@@ -59,19 +71,30 @@
 			function move(ev) {
 				if (!dragging)
 					return;
-				var point = document.elementFromPoint(ev.clientX, ev.clientY);
-				var over = rowFrom(host, selector, point);
-				if (!over || over === dragging)
+				var target = null;
+				var placeAfter = false;
+				var child = host.firstElementChild || host.firstChild;
+				while (child) {
+					if (child !== dragging && child.nodeType === 1 && matches(child, selector)) {
+						var rect = child.getBoundingClientRect();
+						var mid = rect.top + rect.height / 2;
+						if (ev.clientY < mid) {
+							target = child;
+							placeAfter = false;
+							break;
+						}
+						target = child;
+						placeAfter = true;
+					}
+					child = child.nextElementSibling || child.nextSibling;
+				}
+				if (!target)
 					return;
-				var rect = over.getBoundingClientRect();
-				var after = ev.clientY > rect.top + rect.height / 2;
-				if (after) {
-					if (over.nextSibling !== dragging)
-						host.insertBefore(dragging, over.nextSibling);
-				}
-				else if (over !== dragging.nextSibling) {
-					host.insertBefore(dragging, over);
-				}
+				var next = placeAfter ? target.nextSibling : target;
+				if (next === dragging)
+					return;
+				host.insertBefore(dragging, next);
+				moved = true;
 			}
 
 			host.addEventListener('pointerdown', down);

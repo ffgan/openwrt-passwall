@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
+import { render_nft_state } from 'passwall.state';
 
 const TMP = utils.TMP_PATH;
 const ACL = utils.TMP_ACL_PATH;
@@ -1182,9 +1183,10 @@ export function write_nft_env() {
 		'CHN_LIST','DNS_REDIRECT_PORT','DIRECT_DNSMASQ_PORT','USE_FAKEDNS','PROXY_IPV6','TCP_PROXY_WAY',
 		'LOCALHOST_TCP_PROXY_MODE','LOCALHOST_UDP_PROXY_MODE','LOCALHOST_PROXY','REDIR_PORT','TCP_PROXY_DNS',
 		'UDP_PROXY_DNS','REMOTE_DNS','IPT_APPEND_DNS','ISP_DNS','ISP_DNS6','DNS_REDIRECT','FILTER_PROXY_IPV6'];
-	let lines = [];
-	for (let name in names) push(lines, name + '=' + api.shellquote(state[name] ?? ''));
-	fs.writefile(TMP + '/nft.env', join('\n', lines) + '\n');
+	let picked = {};
+	for (let name in names) picked[name] = state[name] ?? '';
+	if (fs.writefile(TMP + '/nft.json', render_nft_state(picked) + '\n') != null)
+		fs.unlink(TMP + '/nft.env');
 };
 
 export function start(mode) {
