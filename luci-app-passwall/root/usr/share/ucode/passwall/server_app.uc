@@ -206,7 +206,8 @@ lor_src = function(v) {
 };
 
 stop = function() {
-	kill_matching(CONFIG_PATH + "/");
+	let pattern = replace(CONFIG_PATH + "/", /[][(){}.^$*+?|\\]/g, "\\$&");
+	kill_matching(pattern);
 	remove_firewall_rules();
 	api.remove(CONFIG_PATH, LOG_APP_FILE);
 };

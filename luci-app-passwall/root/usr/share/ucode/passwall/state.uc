@@ -84,6 +84,19 @@ export function parse_runtime(text) {
 	let obj = parse_json_object(text);
 	if (obj != null)
 		return string_map(obj, false);
+	if (type(text) == "string") {
+		let nl = index(text, "\n");
+		if (nl > 0 && substr(trim(text), 0, 1) == "{") {
+			let head = parse_json_object(substr(text, 0, nl));
+			if (head != null) {
+				let out = string_map(head, false);
+				let rest = parse_assignments(substr(text, nl + 1));
+				for (let key, value in rest)
+					out[key] = value;
+				return out;
+			}
+		}
+	}
 	return parse_assignments(text);
 };
 

@@ -118,14 +118,14 @@ export function write_record(path, spec) {
 };
 
 export function kill_matching(pattern) {
-	let got = read_cmd([ "busybox", "pgrep", "-f", pattern ]);
-	if (got == null || got.rc != 0)
+	let got = api.proc_lines(pattern);
+	if (type(got) != "string" || got == "")
 		return 0;
-	for (let line in split(got.out, "\n")) {
-		let pid = trim(line);
-		if (match(pid, /^[0-9]+$/) == null)
+	for (let line in split(got, "\n")) {
+		let pid = match(line, /^([0-9]+) /);
+		if (pid == null)
 			continue;
-		command_rc([ "kill", "-9", pid ]);
+		command_rc([ "kill", "-9", pid[1] ]);
 	}
 	return 0;
 };

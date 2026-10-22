@@ -125,7 +125,7 @@ return view.extend({
 		o.value('1:65535', _('All'));
 
 		o = portOption(s, 'udp_no_redir_ports', _('UDP No Redir Ports'),
-			'<font color="red">' + _('Fill in the ports you don\'t want to be forwarded by the agent, with the highest priority.') + '</font>');
+			'<span class="pw-warn">' + _('Fill in the ports you don\'t want to be forwarded by the agent, with the highest priority.') + '</span>');
 		o.default = 'disable';
 		o.value('disable', _('No patterns are used'));
 		o.value('1:65535', _('All'));
@@ -153,7 +153,7 @@ return view.extend({
 		o = s.option(form.DummyValue, 'tips', '　');
 		o.rawhtml = true;
 		o.cfgvalue = function() {
-			return '<font color="red">' + _('The port settings support single ports and ranges.<br>Separate multiple ports with commas (,).<br>Example: 21,80,443,1000:2000.') + '</font>';
+			return '<span class="pw-warn">' + _('The port settings support single ports and ranges.<br>Separate multiple ports with commas (,).<br>Example: 21,80,443,1000:2000.') + '</span>';
 		};
 		o.renderWidget = function(section_id, option_index, cfgvalue) {
 			var el = E('div');
@@ -186,7 +186,7 @@ return view.extend({
 				o.retain = true;
 
 				o = flag(s, 'ipv6_tproxy', _('IPv6 TProxy'),
-					'<font color="red">' + _('Experimental feature. Make sure that your node supports IPv6.') + '</font>');
+					'<span class="pw-warn">' + _('Experimental feature. Make sure that your node supports IPv6.') + '</span>');
 				o.default = '0';
 				o.rmempty = false;
 			}
@@ -253,7 +253,7 @@ return view.extend({
 			o.datatype = 'uinteger';
 
 			var noise = m.section(form.TableSection, 'xray_noise_packets', _('Xray Noise Packets'),
-				'<font color="red">' + _('To send noise packets, select "Noise" in Xray Settings.') + '</font>');
+				'<span class="pw-warn">' + _('To send noise packets, select "Noise" in Xray Settings.') + '</span>');
 			noise.anonymous = true;
 			noise.addremove = true;
 			noise.sortable = true;

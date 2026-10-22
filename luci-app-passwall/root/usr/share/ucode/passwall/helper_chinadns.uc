@@ -181,8 +181,8 @@ main = function(argv) {
 			api.sys.call("touch " + file_host + "_ok");
 	}
 
-	api.sys.call(sprintf("mkdir -p %s", FLAG_PATH));
-	api.sys.call(sprintf("mkdir -p %s", CACHE_RULES_PATH));
+	api.fs.mkdirr(FLAG_PATH);
+	api.fs.mkdirr(CACHE_RULES_PATH);
 
 	let setflag = (NFTFLAG == "1") ? "inet@passwall@" : "";
 	let only_global = (DEFAULT_MODE == "proxy" && CHNLIST == "0" && GFWLIST == "0") ? 1 : false;
@@ -443,7 +443,7 @@ main = function(argv) {
 		let new_md5 = api.md5_string(SHUNT_LIST);
 		if (cache_md5 == "" || new_md5 == "" || cache_md5 != new_md5) {
 			api.remove(CACHE_FLAG_PATH);
-			api.sys.call(sprintf("mkdir -p %s", CACHE_FLAG_PATH));
+			api.fs.mkdirr(CACHE_FLAG_PATH);
 			api.fs.writefile(MD5_FILE, new_md5);
 			USE_CACHE = false;
 		}

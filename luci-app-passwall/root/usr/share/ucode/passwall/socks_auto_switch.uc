@@ -81,8 +81,8 @@ curl_code = function(url, tries, timeout, proxy, repeat) {
 
 check_process = function() {
 	while (true) {
-		let got = read_cmd(["busybox", "pgrep", "-af", "passwall/"]);
-		if (got == null || match(got.out, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc|subscribe\.uc/) == null)
+		let got = api.proc_lines("passwall/");
+		if (match(got, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc|subscribe\.uc/) == null)
 			return;
 		command_rc(["sleep", "6s"]);
 	}
@@ -108,9 +108,9 @@ cleanup_node = function(flag) {
 		if (pid != null)
 			command_rc(["kill", "-9", pid[1]]);
 	}
-	let listed = read_cmd(["busybox", "pgrep", "-af", tmp + "/" + flag + "[._]"]);
-	if (listed != null) {
-		let text = listed.out;
+	let listed = api.proc_lines(tmp + "/" + flag + "[._]");
+	if (listed != "") {
+		let text = listed;
 		let start = 0;
 		let n = length(text);
 		for (let i = 0; i <= n; i++) {

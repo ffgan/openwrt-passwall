@@ -6,7 +6,8 @@ import { readfile, writefile, stat, unlink, mkdir, lsdir, popen, error, open, ac
 import { cursor } from 'uci';
 import { md5 } from 'digest';
 import * as com from 'passwall.com';
-import { awk_field, df_available_kb, du_kb } from 'passwall.text';
+import { df_available_kb, du_kb } from 'passwall.text';
+import { parse_runtime, render_runtime } from 'passwall.state';
 let isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, command_pipe, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
 
 export let appname = "passwall";
@@ -575,43 +576,121 @@ sh_uci_add_list = function(config, section, option, val, commit_flag) {
 		sh_uci_commit(config);
 };
 
-del_cache_var = function(key) {
-	let path = TMP_PATH + "/var";
-	let kept = [];
-	for (let line in global.split(readfile(path) ?? "", "\n")) {
-		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=/);
-		if (line != "" && (m == null || m[1] != ("" + key)))
-			push(kept, line);
-	}
-	if (length(kept))
-		writefile(path, join("\n", kept) + "\n");
-	else
+cache_file = function() {
+	return TMP_PATH + "/var";
+};
+
+cache_load = function() {
+	return parse_runtime(readfile(cache_file()) ?? "");
+};
+
+cache_save = function(map) {
+	let path = cache_file();
+	let body = render_runtime(map);
+	if (body == "") {
 		unlink(path);
+		return;
+	}
+	mkdir_p(TMP_PATH);
+	writefile(path, body + "\n");
+};
+
+cache_map = function() {
+	return cache_load();
+};
+
+del_cache_var = function(key) {
+	if (key == null || ("" + key) == "")
+		return;
+	let map = cache_load();
+	map["" + key] = null;
+	delete map["" + key];
+	cache_save(map);
 };
 
 set_cache_var = function(key, val) {
-	del_cache_var(key);
-	if (val == null || ("" + val) == "")
+	if (key == null || ("" + key) == "")
 		return;
-	mkdir_p(TMP_PATH);
-	let fh = open(TMP_PATH + "/var", "a");
-	if (fh != null) {
-		fh.write(key + "=" + shellquote("" + val) + "\n");
-		fh.close();
-	}
+	key = "" + key;
+	if (match(key, /^[A-Za-z_][A-Za-z0-9_]*$/) == null)
+		return;
+	let map = cache_load();
+	if (val == null || ("" + val) == "")
+		delete map[key];
+	else
+		map[key] = "" + val;
+	cache_save(map);
 };
 
 get_cache_var = function(key) {
-	for (let line in global.split(readfile(TMP_PATH + "/var") ?? "", "\n")) {
-		let m = match(line, /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-		if (m == null || m[1] != ("" + key))
-			continue;
-		let val = m[2];
-		if (length(val) >= 2 && substr(val, 0, 1) == "'" && substr(val, -1) == "'")
-			val = replace(substr(val, 1, length(val) - 2), /'\\''/g, "'");
-		return val == "" ? null : val;
+	if (key == null)
+		return null;
+	let value = cache_load()["" + key];
+	if (value == null || value == "")
+		return null;
+	return value;
+};
+
+proc_self = function() {
+	let stat = readfile("/proc/self/stat") ?? "";
+	let m = match(stat, /^([0-9]+)/);
+	return m == null ? "" : m[1];
+};
+
+proc_text = function(pid) {
+	let raw = readfile("/proc/" + pid + "/cmdline");
+	let blank = type(raw) != "string" || raw == "";
+	if (!blank) {
+		blank = true;
+		for (let i = 0; i < length(raw); i++) {
+			if (ord(raw, i) != 0) {
+				blank = false;
+				break;
+			}
+		}
 	}
-	return null;
+	if (blank)
+		raw = readfile("/proc/" + pid + "/comm") ?? "";
+	if (type(raw) != "string")
+		return "";
+	let out = "";
+	for (let i = 0; i < length(raw); i++) {
+		let c = ord(raw, i);
+		if (c == 0)
+			out += " ";
+		else if (c != 10 && c != 13)
+			out += substr(raw, i, 1);
+	}
+	return trim(out);
+};
+
+proc_lines = function(pattern) {
+	if (pattern == null || ("" + pattern) == "")
+		return "";
+	let re = null;
+	try {
+		re = regexp("" + pattern);
+	} catch (e) {
+		return "";
+	}
+	let self = proc_self();
+	let names = lsdir("/proc");
+	if (names == null)
+		return "";
+	let lines = [];
+	for (let name in names) {
+		if (name == self || match(name, /^[0-9]+$/) == null)
+			continue;
+		let cmd = proc_text(name);
+		if (cmd == "" || match(cmd, re) == null)
+			continue;
+		push(lines, name + " " + cmd);
+	}
+	return join("\n", lines);
+};
+
+proc_running = function(pattern) {
+	return proc_lines(pattern) != "";
 };
 
 get_new_port = function(start_port, protocol) {
@@ -828,8 +907,8 @@ md5_string = function(str) {
 		if (type(h) == "string" && length(h) >= 32)
 			return substr(h, 0, 32);
 	}
-	let path = trim(sys_exec("mktemp /tmp/md5.XXXXXX"));
-	if (path == "")
+	let path = "/tmp/passwall-md5-" + gen_random_char(12);
+	if (path == "/tmp/passwall-md5-")
 		return "";
 	let n = writefile(path, str);
 	let out = (n == length(str)) ? md5_file(path) : "";
@@ -1306,12 +1385,14 @@ remove = function(...values) {
 	for (let value in values) {
 		if (type(value) != "string" || length(value) == 0 || value == "/")
 			continue;
-		if (index(value, "*") >= 0 || index(value, "?") >= 0 || index(value, "[") >= 0) {
-			if (match(value, /^\/tmp\/[A-Za-z0-9._+-]+\.\*$/) != null)
-				sys_call("rm -rf -- " + value);
+		if (substr(value, 0, 1) != "/" || match(value, /(^|\/)\.\.(\/|$)/) != null)
 			continue;
-		}
-		exec_argv("/bin/rm", ["-rf", "--", value], null, null);
+		if (match(value, /^\/[A-Za-z0-9._+\/=*,-]+$/) == null)
+			continue;
+		if (index(value, "*") >= 0)
+			sys_call("rm -rf -- " + value);
+		else
+			exec_argv("/bin/rm", ["-rf", "--", value], null, null);
 	}
 };
 
@@ -1658,18 +1739,36 @@ get_random_normal_node = function(exclude_id) {
 };
 
 gen_uuid = function() {
-	let raw = readfile("/proc/sys/kernel/random/uuid");
-	if (type(raw) != "string")
+	let raw = trim(readfile("/proc/sys/kernel/random/uuid") ?? "");
+	if (match(raw, /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) != null)
+		return lc(raw);
+	let fd = open("/dev/urandom", "r");
+	if (fd == null)
 		return "";
-	return trim(raw);
+	let buf = fd.read(16);
+	fd.close();
+	if (type(buf) != "string" || length(buf) < 16)
+		return "";
+	let hexd = "0123456789abcdef";
+	let parts = [];
+	for (let i = 0; i < 16; i++) {
+		let n = ord(buf, i);
+		let high = int(n / 16) % 16;
+		let low = n % 16;
+		if (i == 6)
+			high = 4;
+		if (i == 8)
+			high = 8 + (high % 4);
+		push(parts, substr(hexd, high, 1) + substr(hexd, low, 1));
+	}
+	return parts[0] + parts[1] + parts[2] + parts[3] + "-" + parts[4] + parts[5] + "-" +
+		parts[6] + parts[7] + "-" + parts[8] + parts[9] + "-" +
+		parts[10] + parts[11] + parts[12] + parts[13] + parts[14] + parts[15];
 };
 
 gen_random_char = function(len) {
-	if (!isset(len))
-		len = 8;
-	if (type(len) == "string" && match(len, /^[0-9]+$/) != null)
-		len = int(len);
-	if (type(len) != "int" || len <= 0)
+	len = int(len);
+	if (len != len || len <= 0)
 		len = 8;
 	if (len > 4096)
 		len = 4096;
@@ -1755,25 +1854,51 @@ get_app_version = function(app_name, file) {
 	return get_bin_version_cache(file, c.cmd_version);
 };
 
+which_bin = function(name, preferred) {
+	if (name == null || ("" + name) == "")
+		return "";
+	name = "" + name;
+	if (index(name, "/") >= 0)
+		return fs_access(name, "x") ? name : "";
+	if (match(name, /^[A-Za-z0-9._+-]+$/) == null)
+		return "";
+	let dirs = [];
+	if (type(preferred) == "array") {
+		for (let dir in preferred)
+			push(dirs, dir);
+	}
+	let env = "";
+	if (type(global.getenv) == "function")
+		env = global.getenv("PATH") ?? "";
+	for (let dir in split(env, ":"))
+		push(dirs, dir);
+	let seen = {};
+	for (let dir in dirs) {
+		if (type(dir) != "string")
+			continue;
+		dir = replace(dir, /\/+$/, "");
+		if (dir == "" || seen[dir])
+			continue;
+		seen[dir] = true;
+		let path = dir + "/" + name;
+		if (fs_access(path, "x"))
+			return path;
+	}
+	return "";
+};
+
 finded_com = function(e) {
 	let bin = get_app_path(e);
 	if (!isset(bin) || bin == "")
 		return null;
-	let out = sys_exec("type -t -p " + shellquote(bin));
-	let s = "";
-	if (type(out) == "string" && out != "")
-		s = trim(split(out, "\n")[0] ?? "");
+	let s = which_bin(bin);
 	if (s == "")
 		return null;
 	return s;
 };
 
 finded = function(name) {
-	let bin = "" + name;
-	let out = sys_exec("type -t -p " + shellquote("/bin/" + bin) + " -p " + shellquote("/usr/bin/" + bin) + " " + shellquote(bin));
-	if (type(out) != "string" || out == "")
-		return "";
-	return trim(split(out, "\n")[0] ?? "");
+	return which_bin(name, ["/bin", "/usr/bin"]);
 };
 
 is_finded = function(name) {
@@ -1818,21 +1943,54 @@ get_final_dir = function(path) {
 	return get_final_dir(parent);
 };
 
+split_ws = function(line) {
+	let out = [];
+	let cur = "";
+	line = line ?? "";
+	for (let i = 0; i < length(line); i++) {
+		let c = ord(line, i);
+		if (c == 32 || c == 9) {
+			if (cur != "") {
+				push(out, cur);
+				cur = "";
+			}
+		} else {
+			cur += substr(line, i, 1);
+		}
+	}
+	if (cur != "")
+		push(out, cur);
+	return out;
+};
+
+read_argv = function(argv) {
+	let ph = command_pipe(argv, "r");
+	if (ph == null)
+		return { out: "", rc: 127 };
+	let out = read_all(ph) ?? "";
+	let rc = ph.close();
+	return { out: out, rc: rc == null ? 127 : rc };
+};
+
 get_free_space = function(dir) {
-	if (dir == null)
+	if (dir == null || dir == "")
 		dir = "/";
-	let n = df_available_kb(sys_exec("df -k " + shellquote(dir) + " 2>/dev/null"));
+	let got = read_argv(["df", "-k", "" + dir]);
+	if (got.rc != 0)
+		return 0;
+	let n = df_available_kb(got.out);
 	if (n == null || n != n)
 		return 0;
 	return n;
 };
 
 get_file_space = function(file) {
-	if (file == null)
+	if (file == null || !fs_access(file))
 		return 0;
-	if (!fs_access(file))
+	let got = read_argv(["du", "-k", "" + file]);
+	if (got.rc != 0)
 		return 0;
-	let n = du_kb(sys_exec("du -k " + shellquote(file) + " 2>/dev/null"));
+	let n = du_kb(got.out);
 	if (n == null || n != n)
 		return 0;
 	return n;
@@ -2250,7 +2408,7 @@ to_download = function(app_name, url, size, task_id, keep_files) {
 		tmp_file = "/tmp/" + app_name + "_download." + task_id;
 		remove(tmp_file);
 	} else {
-		tmp_file = trim(sys_exec("mktemp -u -t " + app_name + "_download.XXXXXX"));
+		tmp_file = "/tmp/" + app_name + "_download." + gen_random_char(8);
 	}
 	if (isset(size)) {
 		let kb1 = get_free_space("/tmp");
@@ -2316,14 +2474,12 @@ to_extract = function(app_name, file, subfix) {
 			tools_name = "unzip";
 		if (isset(c.zipped_suffix) && c.zipped_suffix == "tar.gz")
 			tools_name = "tar";
-		if (tools_name != null) {
-			if (trim(sys_exec("command -v " + shellquote(tools_name))) == "") {
-				exec_argv("/bin/rm", ["-f", file], null, null);
-				return {
-					code: 1,
-					error: translatef("Not installed %s, Can't unzip!", tools_name)
-				};
-			}
+		if (tools_name != null && which_bin(tools_name) == "") {
+			exec_argv("/bin/rm", ["-f", file], null, null);
+			return {
+				code: 1,
+				error: translatef("Not installed %s, Can't unzip!", tools_name)
+			};
 		}
 	}
 	remove("/tmp/" + app_name + "_extract.*");
@@ -2331,27 +2487,27 @@ to_extract = function(app_name, file, subfix) {
 	let tmp_free_size = get_free_space("/tmp");
 	if (tmp_free_size <= 0 || tmp_free_size <= new_file_size)
 		return { code: 1, error: translatef("%s not enough space.", "/tmp") };
-	let tmp_dir = "";
-	let made = command_pipe(["mktemp", "-d", "-t", app_name + "_extract.XXXXXX"], "r");
-	if (made != null) {
-		tmp_dir = trim(read_all(made));
-		made.close();
-	}
+	let tmp_dir = "/tmp/" + app_name + "_extract." + gen_random_char(8);
+	mkdir_p(tmp_dir);
 	let output = [];
 	if (tools_name != null) {
 		if (tools_name == "unzip") {
-			let bin = trim(sys_exec("command -v unzip"));
+			let bin = which_bin("unzip");
 			exec_argv(bin, ["-o", file, app_name, "-d", tmp_dir], function(chunk) {
 				push(output, chunk);
 			}, null);
 		} else if (tools_name == "tar") {
-			let bin = trim(sys_exec("command -v tar"));
+			let bin = which_bin("tar");
 			if (c.zipped_suffix == "tar.gz") {
 				exec_argv(bin, ["-zxf", file, "-C", tmp_dir], function(chunk) {
 					push(output, chunk);
 				}, null);
-				let moved = lc(c.name);
-				sys_call("/bin/mv -f " + shellquote(tmp_dir) + "/*/" + shellquote(moved) + " " + shellquote(tmp_dir));
+				let wanted = lc(c.name);
+				for (let name in fs_dir(tmp_dir)) {
+					let nested = tmp_dir + "/" + name + "/" + wanted;
+					if (fs_access(nested))
+						exec_argv("/bin/mv", ["-f", nested, tmp_dir], null, null);
+				}
 			}
 		}
 	}
@@ -2386,7 +2542,7 @@ to_move = function(app_name, file) {
 			error: translate("The client file is not suitable for current device.") + app_name + "__" + bin_path
 		};
 	}
-	let flag = sys_call("busybox pgrep -af \"passwall/.*" + app_name + "\" >/dev/null");
+	let flag = proc_running("passwall/.*" + app_name) ? 0 : 1;
 	if (flag == 0)
 		sys_call("/etc/init.d/passwall stop");
 	let old_app_size = 0;
@@ -2417,7 +2573,7 @@ to_move = function(app_name, file) {
 
 get_version = function() {
 	let version_file = CACHE_PATH + "/passwall_version";
-	sys_call("mkdir -p " + CACHE_PATH);
+	mkdir_p(CACHE_PATH);
 	let version = null;
 	if (fs_access(version_file)) {
 		version = readfile(version_file);
@@ -3067,21 +3223,42 @@ table_remove_duplicates = function(t) {
 	return out;
 };
 
+keyed_lines = function(text, sep) {
+	let vals = [];
+	for (let line in split(text ?? "", "\n")) {
+		let n = index(line, sep);
+		if (n >= 0)
+			push(vals, trim(substr(line, n + length(sep))));
+	}
+	return vals;
+};
+
 gen_wireguard_key = function() {
-	if (sys_call("command -v wg >/dev/null") == 0) {
-		let private_key = trim(sys_exec("wg genkey"));
-		let public_key = trim(sys_exec("printf '%s\n' " + shellquote(private_key) + " | wg pubkey"));
-		return { private_key: private_key, public_key: public_key };
+	let wg = finded("wg");
+	if (wg != "") {
+		let private_key = trim(read_argv([wg, "genkey"]).out);
+		if (private_key != "") {
+			let public_key = trim(read_argv(["sh", "-c", "printf '%s\\n' \"$1\" | \"$2\" pubkey", "sh", private_key, wg]).out);
+			if (public_key != "")
+				return { private_key: private_key, public_key: public_key };
+		}
 	}
 	let xray = finded_com("xray");
 	if (xray != null) {
-		let s = awk_field(sys_exec(shellquote(xray) + " wg"), ": ");
-		return { private_key: s[0], public_key: s[1] };
+		let vals = keyed_lines(read_argv([xray, "wg"]).out, ": ");
+		if (length(vals) >= 2)
+			return { private_key: vals[0], public_key: vals[1] };
 	}
 	let sb = finded_com("sing-box");
 	if (sb != null) {
-		let s = awk_field(sys_exec(shellquote(sb) + " generate wg-keypair"), null);
-		return { private_key: s[0], public_key: s[1] };
+		let vals = [];
+		for (let line in split(read_argv([sb, "generate", "wg-keypair"]).out, "\n")) {
+			let fields = split_ws(trim(line));
+			if (length(fields) >= 2)
+				push(vals, fields[length(fields) - 1]);
+		}
+		if (length(vals) >= 2)
+			return { private_key: vals[0], public_key: vals[1] };
 	}
 	return null;
 };
@@ -3093,4 +3270,4 @@ get_socks_port_by_cache = function(node_id) {
 set_socks_port_to_cache = function(node_id, v) {
 	set_cache_var(sprintf("node_%s_socks_port", node_id), v);
 };
-export { command_pipe, shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };
+export { cache_map, proc_lines, proc_running, command_pipe, shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };

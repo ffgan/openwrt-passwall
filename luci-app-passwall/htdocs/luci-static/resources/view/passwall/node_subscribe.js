@@ -172,7 +172,7 @@ function addCoreOption(section, name, label, values, last) {
 		o.value(value);
 	});
 	if (last)
-		o.description = '<font color="red">' + _('The configured type also applies to the core specified when manually importing nodes.') + '</font>';
+		o.description = '<span class="pw-warn">' + _('The configured type also applies to the core specified when manually importing nodes.') + '</span>';
 	return o;
 }
 
@@ -281,7 +281,7 @@ return view.extend({
 		};
 
 		grid = m.section(form.GridSection, 'subscribe_list', '',
-			'<font color="red">' + _('When adding a new subscription, please save and apply before manually subscribing. If you only change the subscription URL, you can subscribe manually, and the system will save it automatically.') + '</font>');
+			'<span class="pw-warn">' + _('When adding a new subscription, please save and apply before manually subscribing. If you only change the subscription URL, you can subscribe manually, and the system will save it automatically.') + '</span>');
 		grid.anonymous = true;
 		grid.addremove = true;
 		grid.sortable = true;

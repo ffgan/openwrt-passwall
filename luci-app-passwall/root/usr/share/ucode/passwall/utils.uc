@@ -141,7 +141,7 @@ export function set_cache_var(key, value) {
 };
 
 export function get_cache_var(key) {
-	return cache_all()[key];
+	return api.get_cache_var(key);
 };
 
 export function first_type(primary, fallback) {

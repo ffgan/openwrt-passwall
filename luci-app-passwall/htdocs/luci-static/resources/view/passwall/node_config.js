@@ -1707,8 +1707,8 @@ return view.extend({
 			if (!url)
 				return false;
 			var done = function(ok) {
-				status(ok ? '<font color="green">' + _('Share URL to clipboard successfully.') + '</font>' :
-					'<font color="red">' + _('Share URL to clipboard unable.') + '</font>');
+				status(ok ? '<span class="pw-ok">' + _('Share URL to clipboard successfully.') + '</span>' :
+					'<span class="pw-warn">' + _('Share URL to clipboard unable.') + '</span>');
 			};
 			if (navigator.clipboard && navigator.clipboard.writeText) {
 				navigator.clipboard.writeText(url).then(function() { done(true); }).catch(function() { done(false); });
@@ -1792,14 +1792,14 @@ return view.extend({
 					setOpt(key, parsed.values[key]);
 			});
 			applying = false;
-			status('<font color="green">' + _('Import Finished ') + '</font>');
+			status('<span class="pw-ok">' + _('Import Finished ') + '</span>');
 			sessionStorage.removeItem('fromUrl');
 		}
 
 		function fromUrl(link) {
 			var parsed = parseLink(link, caps);
 			if (!parsed || parsed.error) {
-				status('<font color="red">' + (parsed && parsed.error ? parsed.error : _('Invalid Share URL Format')) + '</font>');
+				status('<span class="pw-warn">' + (parsed && parsed.error ? parsed.error : _('Invalid Share URL Format')) + '</span>');
 				sessionStorage.removeItem('fromUrl');
 				return false;
 			}

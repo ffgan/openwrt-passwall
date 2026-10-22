@@ -243,7 +243,7 @@ function versionBlock(localVersion, comps) {
 			detail.removeChild(detail.firstChild);
 		if (!json.remote_version)
 			return;
-		var label = E('em', { 'style': 'color:red' }, String(json.remote_version));
+		var label = E('em', { 'class': 'pw-warn' }, String(json.remote_version));
 		if (json.html_url && /^https?:\/\//i.test(String(json.html_url)))
 			detail.appendChild(E('a', { 'href': String(json.html_url), 'target': '_blank' }, [ label ]));
 		else
@@ -589,7 +589,7 @@ return view.extend({
 
 		o = s.option(form.DummyValue, 'tips', '　');
 		o.cfgvalue = function() {
-			return '<font color="red">' + _('if you want to run from memory, change the path, /tmp beginning then save the application and update it manually.') + '</font>';
+			return '<span class="pw-warn">' + _('if you want to run from memory, change the path, /tmp beginning then save the application and update it manually.') + '</span>';
 		};
 		o.rawhtml = true;
 		o.renderWidget = function(section_id, option_index, cfgvalue) {

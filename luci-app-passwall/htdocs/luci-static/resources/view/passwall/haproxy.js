@@ -278,7 +278,7 @@ return view.extend({
 		o = s.option(form.DummyValue, 'health_check_tips', '　');
 		o.depends('health_check_type', 'script_logic');
 		o.cfgvalue = function() {
-			return '<span style="color: red">' + _('When the URL test is used, the load balancing node will be converted into a Socks node. when node list set customizing, must be a Socks node, otherwise the health check will be invalid.') + '</span>';
+			return '<span class="pw-warn">' + _('When the URL test is used, the load balancing node will be converted into a Socks node. when node list set customizing, must be a Socks node, otherwise the health check will be invalid.') + '</span>';
 		};
 		o.rawhtml = true;
 		o.renderWidget = function(section_id, option_index, cfgvalue) {
@@ -288,10 +288,10 @@ return view.extend({
 		};
 
 		var grid = m.section(form.GridSection, 'haproxy_config', _('Node List'),
-			'<font color="red">' +
+			'<span class="pw-warn">' +
 			_('Add a node, Export Of Multi WAN Only support Multi Wan. Load specific gravity range 1-256. Multiple primary servers can be load balanced, standby will only be enabled when the primary server is offline! Multiple groups can be set, Haproxy port same one for each group.') + '<br>' +
 			_('Note that the node configuration parameters for load balancing must be consistent when use TCP health check type, otherwise it cannot be used normally!') +
-			'</font>');
+			'</span>');
 		grid.anonymous = true;
 		grid.addremove = true;
 		grid.sortable = true;

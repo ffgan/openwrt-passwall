@@ -7,8 +7,7 @@ return view.extend({
 	render: function() {
 		var textarea = E('textarea', {
 			'id': 'log_textarea',
-			'class': 'cbi-input-textarea',
-			'style': 'width:100%;margin-top:10px',
+			'class': 'cbi-input-textarea pw-log',
 			'rows': 40,
 			'wrap': 'off',
 			'readonly': 'readonly'

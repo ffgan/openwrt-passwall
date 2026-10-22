@@ -37,6 +37,9 @@ eq("nft quote", nft.NODE, "x'y");
 eq("nft enabled", nft.ENABLED, "0");
 eq("legacy nft", parse_nft_state("TCP_PROXY_WAY='tproxy'\n").TCP_PROXY_WAY, "tproxy");
 eq("bad json falls back", parse_runtime("{not json\nMODE='direct'\n").MODE, "direct");
+let mixed = parse_runtime("{\"FOO\":\"old\"}\nFOO='new'\nBAR=1\n");
+eq("mixed override", mixed.FOO, "new");
+eq("mixed extra", mixed.BAR, "1");
 eq("empty runtime", length(keys(parse_runtime(""))), 0);
 eq("empty render", render_runtime({}), "");
 

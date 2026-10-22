@@ -34,56 +34,97 @@ function isUUID(str) {
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 }
 
+function installValidators() {
+	if (!validation.types.base64)
+		validation.types.base64 = function() {
+			return this.assert(isBase64(this.value), _('Must be Base64 text!'));
+		};
+	if (!validation.types.json)
+		validation.types.json = function() {
+			return this.assert(isJsonText(this.value), _('Must be JSON text!'));
+		};
+	if (!validation.types.timehhmm)
+		validation.types.timehhmm = function() {
+			return this.assert(isTimeHHMM(this.value), _('valid time (hh:mm)'));
+		};
+	if (!validation.types.uuid)
+		validation.types.uuid = function() {
+			return this.assert(isUUID(this.value), _('Must be UUID format!'));
+		};
+}
+
+function installTheme() {
+	if (typeof document === 'undefined' || !document.head || document.getElementById('pw-theme'))
+		return;
+	var link = document.createElement('link');
+	link.id = 'pw-theme';
+	link.rel = 'stylesheet';
+	link.href = L.resource('view/passwall/passwall.css');
+	document.head.appendChild(link);
+}
+
+installValidators();
+installTheme();
+
 function parseRuntime(text) {
+	function assignmentMap(body) {
+		var legacy = {};
+		String(body || '').split('\n').forEach(function(line) {
+			var m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+			if (!m)
+				return;
+			var val = m[2];
+			if (val.length >= 2 && val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")
+				val = val.substring(1, val.length - 1).replace(/'\\''/g, "'");
+			legacy[m[1]] = val;
+		});
+		return legacy;
+	}
+
+	function jsonMap(obj) {
+		var map = {};
+		Object.keys(obj).forEach(function(key) {
+			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
+				return;
+			var value = obj[key];
+			map[key] = value == null ? '' : String(value);
+		});
+		return map;
+	}
+
 	var raw = String(text || '').replace(/^\uFEFF/, '').trim();
-	var legacy = {};
-	String(text || '').split('\n').forEach(function(line) {
-		var m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-		if (!m)
-			return;
-		var val = m[2];
-		if (val.length >= 2 && val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")
-			val = val.substring(1, val.length - 1).replace(/'\\''/g, "'");
-		legacy[m[1]] = val;
-	});
 	if (raw.charAt(0) === '{') {
 		try {
 			var obj = JSON.parse(raw);
-			if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-				var map = {};
-				Object.keys(obj).forEach(function(key) {
-					if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
-						return;
-					var value = obj[key];
-					map[key] = value == null ? '' : String(value);
-				});
-				return map;
+			if (obj && typeof obj === 'object' && !Array.isArray(obj))
+				return jsonMap(obj);
+		}
+		catch (e) {
+			var nl = raw.indexOf('\n');
+			if (nl > 0) {
+				try {
+					var head = JSON.parse(raw.slice(0, nl));
+					if (head && typeof head === 'object' && !Array.isArray(head)) {
+						var map = jsonMap(head);
+						var rest = assignmentMap(raw.slice(nl + 1));
+						Object.keys(rest).forEach(function(key) {
+							map[key] = rest[key];
+						});
+						return map;
+					}
+				}
+				catch (err) {}
 			}
 		}
-		catch (e) {}
 	}
-	return legacy;
+	return assignmentMap(text);
 }
 /* parseRuntime:end */
 
 return baseclass.extend({
 	__init__: function() {
-		if (!validation.types.base64)
-			validation.types.base64 = function() {
-				return this.assert(isBase64(this.value), _('Must be Base64 text!'));
-			};
-		if (!validation.types.json)
-			validation.types.json = function() {
-				return this.assert(isJsonText(this.value), _('Must be JSON text!'));
-			};
-		if (!validation.types.timehhmm)
-			validation.types.timehhmm = function() {
-				return this.assert(isTimeHHMM(this.value), _('valid time (hh:mm)'));
-			};
-		if (!validation.types.uuid)
-			validation.types.uuid = function() {
-				return this.assert(isUUID(this.value), _('Must be UUID format!'));
-			};
+		installValidators();
+		installTheme();
 	},
 
 	appname: 'passwall',

@@ -526,7 +526,7 @@ export function socks_node_switch(raw) {
 		let pid = match(text, /^([0-9]+)/)?.[1];
 		if (pid) command(['kill', '-9', pid], true);
 	}
-	let listed = command_output(['busybox', 'pgrep', '-af', utils.TMP_BIN_PATH]);
+	let listed = api.proc_lines(utils.TMP_BIN_PATH);
 	for (let line in split(listed, '\n')) {
 		if (index(lower(line), lower(o.flag)) < 0 || match(line, /acl\/|acl_/) != null) continue;
 		let pid = match(line, /^([0-9]+)/)?.[1];
@@ -1100,7 +1100,7 @@ function clean_cron_lines() {
 export function clean_crontab() {
 	api.fs.mkdirr('/etc/crontabs');
 	clean_cron_lines();
-	let listed = command_output(['busybox', 'pgrep', '-af', 'passwall/']);
+	let listed = api.proc_lines('passwall/');
 	for (let line in split(listed, '\n')) {
 		if (match(line, /tasks\.uc/) == null) continue;
 		let pid = match(line, /^([0-9]+)/)?.[1];
@@ -1190,7 +1190,7 @@ export function write_nft_env() {
 };
 
 export function start(mode) {
-	let residues = command_output(['busybox', 'pgrep', '-f', TMP + '/bin']);
+	let residues = api.proc_lines(TMP + '/bin');
 	if (trim(residues) != '') {
 		command(['logger', '-t', 'PSW-RESTART', 'Upgrade or overload residue is detected, and the subprocess is being called to perform complete cleaning...'], true);
 		stop(mode, true);
@@ -1251,7 +1251,7 @@ export function start(mode) {
 };
 
 function kill_matching(pattern, excludes) {
-	let got = command_output(['busybox', 'pgrep', '-af', pattern]);
+	let got = api.proc_lines(pattern);
 	for (let line in split(got, '\n')) {
 		let skip = false;
 		for (let exclude in excludes ?? [])
