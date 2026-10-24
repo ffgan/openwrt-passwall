@@ -935,8 +935,6 @@ function base_rules(tproxy) {
 }
 
 function set_sysctl() {
-	run(["sysctl", "-w", "net.ipv4.conf.all.rp_filter=0"], true);
-	run(["sysctl", "-w", "net.ipv4.conf.default.rp_filter=0"], true);
 	for (let name in fs.lsdir("/proc/sys/net/ipv4/conf") ?? [])
 		write("/proc/sys/net/ipv4/conf/" + name + "/rp_filter", "0\n");
 }
@@ -1001,10 +999,11 @@ function filter_server_port(address, port, stream, tproxy) {
 	let proto = lc(stream);
 	let pexpr = factor(replace(port, /:/g, "-"), proto + " dport");
 	let comment = quote_comment(address + ":" + replace(port, /:/g, "-") + ":" + proto);
+	let v6 = index(address, ":") >= 0;
 	let chain4 = (proto == "udp" || tproxy) ? "PSW_OUTPUT_MANGLE" : "PSW_OUTPUT_NAT";
-	if (index(nft_output(["list", "chain", "inet", "passwall", chain4]), "comment " + comment) < 0)
+	if (!v6 && index(nft_output(["list", "chain", "inet", "passwall", chain4]), "comment " + comment) < 0)
 		nft("insert rule " + TABLE + " " + chain4 + " meta l4proto " + proto + " ip daddr " + address + " " + pexpr + " return comment " + comment);
-	if (index(nft_output(["list", "chain", "inet", "passwall", "PSW_OUTPUT_MANGLE_V6"]), "comment " + comment) < 0)
+	if (v6 && index(nft_output(["list", "chain", "inet", "passwall", "PSW_OUTPUT_MANGLE_V6"]), "comment " + comment) < 0)
 		nft("insert rule " + TABLE + " PSW_OUTPUT_MANGLE_V6 meta l4proto " + proto + " ip6 daddr " + address + " " + pexpr + " return comment " + comment);
 }
 

@@ -73,7 +73,9 @@ export function shell_launch(file, args, output, env) {
 };
 
 export function background(script) {
-	let started = read_cmd([ "/bin/sh", "-c", script + " & echo $!" ]);
+	// Ignore SIGHUP before exec. Otherwise the process dies with the init
+	// script and nftables keeps redirecting into a closed port.
+	let started = read_cmd([ "/bin/sh", "-c", "trap '' HUP; " + script + " & echo $!" ]);
 	let pid = started == null ? "" : trim(started.out);
 	return { pid: pid, starttime: start_time_of(pid) };
 };

@@ -186,10 +186,7 @@ copy_instance = function(var) {
 		return conf_lines;
 	if (length(conf_lines) > 0) {
 		let DNSMASQ_CONF = var["-DNSMASQ_CONF"];
-		let prev = api.fs.readfile(DNSMASQ_CONF);
-		if (prev == null)
-			prev = "";
-		api.fs.writefile(DNSMASQ_CONF, prev + join("\n", conf_lines) + "\n");
+		api.fs.writefile(DNSMASQ_CONF, join("\n", conf_lines) + "\n");
 	}
 	return null;
 };
@@ -774,12 +771,8 @@ add_rule = function(var) {
 			if (FLAG == "default")
 				api.set_cache_var("DEFAULT_DNS", DEFAULT_DNS);
 		}
-		if (type(conf_lines) == "array" && length(conf_lines) > 0) {
-			let prev = api.fs.readfile(DNSMASQ_CONF_FILE);
-			if (prev == null)
-				prev = "";
-			api.fs.writefile(DNSMASQ_CONF_FILE, prev + join("\n", conf_lines) + "\n");
-		}
+		if (type(conf_lines) == "array" && length(conf_lines) > 0)
+			api.fs.writefile(DNSMASQ_CONF_FILE, join("\n", conf_lines) + "\n");
 	}
 
 	if (USE_CHINADNS_NG == "0")

@@ -117,9 +117,7 @@ split_lines = function(s) {
 };
 
 function argv_call(argv) {
-	if (type(global.system) == 'function')
-		return global.system(argv) ?? 1;
-	let fp = fs.popen(argv, 'r');
+	let fp = api.command_pipe(argv, 'r');
 	if (fp == null)
 		return 1;
 	fp.read('all');
@@ -127,7 +125,7 @@ function argv_call(argv) {
 }
 
 function argv_output(argv) {
-	let fp = fs.popen(argv, 'r');
+	let fp = api.command_pipe(argv, 'r');
 	if (fp == null)
 		return { output: '', status: 1 };
 	let output = fp.read('all') ?? '';
@@ -511,7 +509,9 @@ function launch_command(argv) {
 }
 
 function process_snapshot() {
-	return argv_output([ '/bin/busybox', 'top', '-bn1' ]).output;
+	// top -bn1 truncates the command line, so /tmp/.../acl/default/global.json
+	// never matches and every service looks stopped.
+	return api.proc_lines('.');
 }
 
 function process_matches(snapshot, required, excluded, insensitive) {
@@ -918,7 +918,8 @@ index_status = function() {
 		e.dns_mode_status = process_matches(processes, [ tmp + '/bin/', 'default', 'chinadns_ng' ], [], false);
 	}
 	else {
-		e.dns_mode_status = listening_on(15353);
+		let port = cache_get('ACL_default_dns_port');
+		e.dns_mode_status = port != null && port != '' && listening_on(port);
 	}
 	e.haproxy_status = '-1';
 	if (found_bin('haproxy')) {

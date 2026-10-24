@@ -97,6 +97,26 @@ function unlink_tree(path) {
 	command(['rm', '-rf', path], true);
 }
 
+function sysctl_file(key) {
+	return '/proc/sys/' + replace(key, /\./g, '/');
+}
+
+function read_sysctl(key) {
+	let path = sysctl_file(key);
+	if (fs.stat(path) == null)
+		return '';
+	return trim(fs.readfile(path) ?? '');
+}
+
+function write_sysctl(key, value) {
+	if (value == null || trim('' + value) == '')
+		return;
+	let path = sysctl_file(key);
+	if (fs.stat(path) == null)
+		return;
+	fs.writefile(path, trim('' + value) + '\n');
+}
+
 function bin(name, fallback) {
 	return utils.first_type(cfg('@global_app[0]', name + '_file'), fallback ?? name);
 }
@@ -681,7 +701,13 @@ export function start_global() {
 	utils.set_cache_var('ACL_GLOBAL_node', node);
 	utils.set_cache_var('ACL_GLOBAL_redir_port', state.REDIR_PORT);
 	if (type_name != 'sing-box' && type_name != 'xray') append(TMP + '/direct_node_list', node + '\n');
-	return 0;
+	for (let i = 0; i < 5; i++) {
+		if (utils.check_port_exists(state.REDIR_PORT, 'tcp'))
+			return 0;
+		command(['sleep', '1'], true);
+	}
+	api.log('全局节点未在端口 ' + state.REDIR_PORT + ' 监听，不加载转发规则。');
+	return 1;
 };
 
 function helper_args(object) {
@@ -768,6 +794,8 @@ export function start_dns() {
 			let args = ['-b', '::', '-l', '' + state.NEXT_DNS_LISTEN_PORT, '-t', proto + '://' + state.REMOTE_DNS, '-d', 'gfw'];
 			if (state.FILTER_PROXY_IPV6 == '1') push(args, '-N');
 			launch_core(utils.first_type('chinadns-ng'), 'chinadns-ng', '/dev/null', args);
+		} else if (proto == 'tcp') {
+			state.TUN_DNS = 'tcp://' + state.REMOTE_DNS;
 		} else {
 			state.TUN_DNS = state.REMOTE_DNS;
 		}
@@ -840,6 +868,20 @@ export function start_dns() {
 		state.DNS_REDIRECT_PORT = '' + port;
 		utils.set_cache_var('ACL_default_dns_port', port);
 		launch_core('/usr/bin/ucode', 'lease2hosts', '/dev/null', [LIBEXEC + '/lease2hosts.uc'], { NO_REC_PROCESS: '1' });
+	}
+	if (state.DNS_REDIRECT_PORT) {
+		let ready = false;
+		for (let i = 0; i < 5; i++) {
+			if (utils.check_port_exists(state.DNS_REDIRECT_PORT, 'tcp,udp')) {
+				ready = true;
+				break;
+			}
+			command(['sleep', '1'], true);
+		}
+		if (!ready) {
+			api.log('DNS 未在端口 ' + state.DNS_REDIRECT_PORT + ' 监听，不加载转发规则。');
+			return 1;
+		}
 	}
 	return 0;
 };
@@ -1230,8 +1272,8 @@ export function stop(mode, internal) {
 		api.uci_save(null, 'dhcp', true);
 		command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'restart', '-LOG', '0'], true);
 	}
-	if (cache.bak_bridge_nf_ipt) command(['sysctl', '-w', 'net.bridge.bridge-nf-call-iptables=' + cache.bak_bridge_nf_ipt], true);
-	if (cache.bak_bridge_nf_ip6t) command(['sysctl', '-w', 'net.bridge.bridge-nf-call-ip6tables=' + cache.bak_bridge_nf_ip6t], true);
+	write_sysctl('net.bridge.bridge-nf-call-iptables', cache.bak_bridge_nf_ipt);
+	write_sysctl('net.bridge.bridge-nf-call-ip6tables', cache.bak_bridge_nf_ip6t);
 	unlink_tree(TMP);
 	api.log('清空并关闭相关程序和缓存完成。');
 	return 0;
@@ -1273,13 +1315,17 @@ export function start(mode) {
 	}
 	utils.set_cache_var('USE_TABLES', state.USE_TABLES);
 	if (state.ENABLED_DEFAULT_ACL == '1' || state.ENABLED_ACLS == '1') {
-		let old = trim(command_output(['sysctl', '-e', '-n', 'net.bridge.bridge-nf-call-iptables']));
-		utils.set_cache_var('bak_bridge_nf_ipt', old);
-		command(['sysctl', '-w', 'net.bridge.bridge-nf-call-iptables=0'], true);
+		let old = read_sysctl('net.bridge.bridge-nf-call-iptables');
+		if (old != '') {
+			utils.set_cache_var('bak_bridge_nf_ipt', old);
+			write_sysctl('net.bridge.bridge-nf-call-iptables', '0');
+		}
 		if (state.PROXY_IPV6 == '1') {
-			old = trim(command_output(['sysctl', '-e', '-n', 'net.bridge.bridge-nf-call-ip6tables']));
-			utils.set_cache_var('bak_bridge_nf_ip6t', old);
-			command(['sysctl', '-w', 'net.bridge.bridge-nf-call-ip6tables=0'], true);
+			old = read_sysctl('net.bridge.bridge-nf-call-ip6tables');
+			if (old != '') {
+				utils.set_cache_var('bak_bridge_nf_ip6t', old);
+				write_sysctl('net.bridge.bridge-nf-call-ip6tables', '0');
+			}
 		}
 	}
 	start_crontab(mode);
