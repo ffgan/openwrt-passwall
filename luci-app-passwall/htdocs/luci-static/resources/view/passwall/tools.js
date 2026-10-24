@@ -234,6 +234,17 @@ return baseclass.extend({
 		return fs.write(path, String(value == null ? '' : value).replace(/\r\n/g, '\n'));
 	},
 
+	paintHtml: function(root) {
+		if (!root || !root.querySelectorAll)
+			return;
+		root.querySelectorAll('.cbi-value-description, .cbi-section-descr, .cbi-map-descr').forEach(function(el) {
+			var text = el.textContent || '';
+			if (text.indexOf('<') < 0)
+				return;
+			el.innerHTML = text;
+		});
+	},
+
 	bindReload: function(root, selector, saveFn) {
 		var nodes = root.querySelectorAll(selector);
 		nodes.forEach(function(el) {

@@ -1846,6 +1846,7 @@ return view.extend({
 					sessionStorage.removeItem('fromUrl');
 				}
 			}
+			pw.paintHtml(nodeEl);
 			return nodeEl;
 		});
 	}

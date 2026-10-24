@@ -1189,6 +1189,54 @@ export function write_nft_env() {
 		fs.unlink(TMP + '/nft.env');
 };
 
+function kill_matching(pattern, excludes) {
+	let got = api.proc_lines(pattern);
+	for (let line in split(got, '\n')) {
+		let skip = false;
+		for (let exclude in excludes ?? [])
+			if (match(line, exclude) != null) skip = true;
+		if (skip) continue;
+		let pid = match(line, /^([0-9]+)/)?.[1];
+		if (pid) command(['kill', '-9', pid], true);
+	}
+}
+
+export function stop(mode, internal) {
+	utils.clean_log();
+	let cache = utils.cache_all();
+	if ((cache.USE_TABLES ?? '') == 'nftables')
+		command([LIBEXEC + '/nftables.uc', 'stop'], true);
+	utils.delete_ip2route();
+	for (let path in split(command_output(['find', TMP, '-type', 'f', '-name', '*_plugin.pid']), '\n')) {
+		if (!path) continue;
+		let pid = match(fs.readfile(path) ?? '', /^([0-9]+)/)?.[1];
+		if (pid) command(['kill', '-9', pid], true);
+	}
+	kill_matching('passwall/monitor.', []);
+	kill_matching('sleep.*(6s|9s|58s)', []);
+	kill_matching('passwall/', [/app\.uc/, /service\.uc/, /subscribe\.uc/, /rule_update\.uc/, /tasks\.uc/, /server_app\.uc/, /ujail/]);
+	stop_crontab(mode);
+	unlink_tree(cache.GLOBAL_DNSMASQ_CONF ?? '');
+	unlink_tree(cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');
+	let backup = cfg('@global[0]', 'dnsmasq_dns_redirect');
+	if (backup) {
+		api.uci_set('dhcp', '@dnsmasq[0]', 'dns_redirect', backup);
+		api.uci_del_c('@global[0]', 'dnsmasq_dns_redirect');
+		api.uci_save(null, 'dhcp', true);
+		api.uci_save_c(true);
+	}
+	if (!cache.ACL_default_dns_port || backup) {
+		api.uci.del_list('dhcp', api.uci_get('dhcp', '@dnsmasq[0]')?.['.name'], 'addnmount', cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');
+		api.uci_save(null, 'dhcp', true);
+		command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'restart', '-LOG', '0'], true);
+	}
+	if (cache.bak_bridge_nf_ipt) command(['sysctl', '-w', 'net.bridge.bridge-nf-call-iptables=' + cache.bak_bridge_nf_ipt], true);
+	if (cache.bak_bridge_nf_ip6t) command(['sysctl', '-w', 'net.bridge.bridge-nf-call-ip6tables=' + cache.bak_bridge_nf_ip6t], true);
+	unlink_tree(TMP);
+	api.log('清空并关闭相关程序和缓存完成。');
+	return 0;
+};
+
 export function start(mode) {
 	let residues = api.proc_lines(TMP + '/bin');
 	if (trim(residues) != '') {
@@ -1247,54 +1295,6 @@ export function start(mode) {
 			            [LIBEXEC + '/subscribe.uc', 'start', join(',', ids), 'cron'], { NO_REC_PROCESS: '1' });
 		}
 	}
-	return 0;
-};
-
-function kill_matching(pattern, excludes) {
-	let got = api.proc_lines(pattern);
-	for (let line in split(got, '\n')) {
-		let skip = false;
-		for (let exclude in excludes ?? [])
-			if (match(line, exclude) != null) skip = true;
-		if (skip) continue;
-		let pid = match(line, /^([0-9]+)/)?.[1];
-		if (pid) command(['kill', '-9', pid], true);
-	}
-}
-
-export function stop(mode, internal) {
-	utils.clean_log();
-	let cache = utils.cache_all();
-	if ((cache.USE_TABLES ?? '') == 'nftables')
-		command([LIBEXEC + '/nftables.uc', 'stop'], true);
-	utils.delete_ip2route();
-	for (let path in split(command_output(['find', TMP, '-type', 'f', '-name', '*_plugin.pid']), '\n')) {
-		if (!path) continue;
-		let pid = match(fs.readfile(path) ?? '', /^([0-9]+)/)?.[1];
-		if (pid) command(['kill', '-9', pid], true);
-	}
-	kill_matching('passwall/monitor.', []);
-	kill_matching('sleep.*(6s|9s|58s)', []);
-	kill_matching('passwall/', [/app\.uc/, /service\.uc/, /subscribe\.uc/, /rule_update\.uc/, /tasks\.uc/, /server_app\.uc/, /ujail/]);
-	stop_crontab(mode);
-	unlink_tree(cache.GLOBAL_DNSMASQ_CONF ?? '');
-	unlink_tree(cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');
-	let backup = cfg('@global[0]', 'dnsmasq_dns_redirect');
-	if (backup) {
-		api.uci_set('dhcp', '@dnsmasq[0]', 'dns_redirect', backup);
-		api.uci_del_c('@global[0]', 'dnsmasq_dns_redirect');
-		api.uci_save(null, 'dhcp', true);
-		api.uci_save_c(true);
-	}
-	if (!cache.ACL_default_dns_port || backup) {
-		api.uci.del_list('dhcp', api.uci_get('dhcp', '@dnsmasq[0]')?.['.name'], 'addnmount', cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');
-		api.uci_save(null, 'dhcp', true);
-		command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'restart', '-LOG', '0'], true);
-	}
-	if (cache.bak_bridge_nf_ipt) command(['sysctl', '-w', 'net.bridge.bridge-nf-call-iptables=' + cache.bak_bridge_nf_ipt], true);
-	if (cache.bak_bridge_nf_ip6t) command(['sysctl', '-w', 'net.bridge.bridge-nf-call-ip6tables=' + cache.bak_bridge_nf_ip6t], true);
-	unlink_tree(TMP);
-	api.log('清空并关闭相关程序和缓存完成。');
 	return 0;
 };
 

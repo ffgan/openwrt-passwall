@@ -414,7 +414,9 @@ return view.extend({
 				'div[id^="cbid.passwall."] .cbi-value-field{display:flex;flex-wrap:wrap;gap:1em;}',
 				'div[id^="cbid.passwall."] .cbi-checkbox{display:inline-flex;align-items:center;}'
 			].join(''));
-			return E('div', {}, [ style, node ]);
+			var root = E('div', {}, [ style, node ]);
+			pw.paintHtml(root);
+			return root;
 		});
 	},
 

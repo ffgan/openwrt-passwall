@@ -179,6 +179,19 @@ function isHostname(value) {
 	return /^[a-zA-Z0-9_][a-zA-Z0-9_\-.]*[a-zA-Z0-9]$/.test(value) && /[^0-9.]/.test(value);
 }
 
+function readRuleFile(path) {
+	var stock = null;
+	if (path.indexOf(RULE_DIR) === 0)
+		stock = '/usr/share/passwall/rules/' + path.slice(RULE_DIR.length);
+	return fs.stat(path).then(function() {
+		return pw.readText(path);
+	}).catch(function() {
+		if (!stock)
+			return '';
+		return pw.readText(stock);
+	});
+}
+
 function fileOption(section, tab, name, path, description, validate) {
 	var o = section.taboption(tab, form.TextValue, name, '', description);
 	o.rows = 15;
@@ -188,7 +201,7 @@ function fileOption(section, tab, name, path, description, validate) {
 	o.load = function(section_id) {
 		if (section_id == null)
 			return Promise.resolve('');
-		return pw.readText(path);
+		return readRuleFile(path);
 	};
 	o.write = function(section_id, value) {
 		return pw.writeText(path, cleanText(value));

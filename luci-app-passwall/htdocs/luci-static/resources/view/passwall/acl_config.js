@@ -1216,7 +1216,9 @@ return view.extend({
 				'div.cbi-value[id$="-_hide_node_option"],div.cbi-value[id$="-_acl_node_bool"],div.cbi-value[id$="-_diff_global_node"],div.cbi-value[id$="-_node_sel_shunt"]{display:none !important;}',
 				'.shunt_hidden{display:none !important;}'
 			].join(''));
-			return E('div', {}, [ style, node ]);
+			var root = E('div', {}, [ style, node ]);
+			pw.paintHtml(root);
+			return root;
 		});
 	},
 

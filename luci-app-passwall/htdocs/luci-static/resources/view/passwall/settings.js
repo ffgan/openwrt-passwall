@@ -125,9 +125,23 @@ function openLog(getter) {
 }
 
 function ul(lines) {
-	return E('ul', {}, lines.map(function(line) {
-		return E('li', {}, line);
-	}));
+	return '<ul>' + lines.map(function(line) {
+		return '<li>' + String(line)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;') + '</li>';
+	}).join('') + '</ul>';
+}
+
+function paintHtml(root) {
+	if (!root || !root.querySelectorAll)
+		return;
+	root.querySelectorAll('.cbi-value-description, .cbi-section-descr, .cbi-map-descr').forEach(function(el) {
+		var text = el.textContent || '';
+		if (text.indexOf('<') === -1)
+			return;
+		el.innerHTML = text;
+	});
 }
 
 function baseDnsLines() {
@@ -889,7 +903,7 @@ return view.extend({
 		o = s.taboption('Main', form.Flag, 'enabled', _('Main switch'));
 		o.rmempty = false;
 
-		var nodeOpt = s.taboption('Main', form.ListValue, 'node', E('a', { 'class': 'pw-warn' }, _('Proxy Node')));
+		var nodeOpt = s.taboption('Main', form.ListValue, 'node', _('Proxy Node'));
 		var shuntSel = s.taboption('Main', form.Value, '_node_sel_shunt', '');
 		shuntSel.depends({ node: '__always__' });
 		shuntSel.write = function() {};
@@ -1188,11 +1202,8 @@ return view.extend({
 		o.depends({ singbox_dns_mode: 'http3' });
 
 		o = s.taboption('DNS', form.Value, 'remote_dns_client_ip', _('EDNS Client Subnet'));
-		o.description = E('div', {}, [
-			_('Notify the DNS server when the DNS query is notified, the location of the client (cannot be a private IP address).'),
-			E('br'),
-			_('This feature requires the DNS server to support the Edns Client Subnet (RFC7871).')
-		]);
+		o.description = _('Notify the DNS server when the DNS query is notified, the location of the client (cannot be a private IP address).') +
+			' ' + _('This feature requires the DNS server to support the Edns Client Subnet (RFC7871).');
 		o.datatype = 'ipaddr';
 		o.depends({ dns_mode: 'sing-box' });
 		o.depends({ dns_mode: 'xray' });
@@ -1492,33 +1503,19 @@ return view.extend({
 				o.value('IPIfNonMatch');
 				o.value('IPOnDemand');
 				o.default = 'IPOnDemand';
-				o.description = E('div', {}, [
-					E('br'),
-					ul([
-						_("'AsIs': Only use domain for routing. Default value."),
-						_("'IPIfNonMatch': When no rule matches current domain, resolves it into IP addresses (A or AAAA records) and try all rules again."),
-						_("'IPOnDemand': As long as there is a IP-based rule, resolves the domain into IP immediately.")
-					])
-				]);
+				o.description = _("'AsIs': Only use domain for routing. Default value.") + ' ' +
+					_("'IPIfNonMatch': When no rule matches current domain, resolves it into IP addresses (A or AAAA records) and try all rules again.") + ' ' +
+					_("'IPOnDemand': As long as there is a IP-based rule, resolves the domain into IP immediately.");
 				mirror(o, 'domainStrategy', false);
 				o = s.taboption('Shunt', form.ListValue, 'domainMatcher', _('Domain matcher'));
 				o.value('hybrid');
 				o.value('linear');
 				mirror(o, 'domainMatcher', false);
 			}
-			var fakeTitle = _('Use FakeDNS work in the domain that proxy.') + '\n' +
-				_('Suitable scenarios for let the node servers get the target domain names.') + '\n' +
-				_('Such as: DNS unlocking of streaming media, reducing DNS query latency, etc.');
-			o = s.taboption('Shunt', form.Flag, 'fakedns', E('span', {}, [
-				E('a', { 'style': 'color:#FF8C00' }, 'FakeDNS'),
-				' ' + _('Main switch')
-			]), E('div', {}, [
-				_('Use FakeDNS work in the domain that proxy.'),
-				E('br'),
-				_('Suitable scenarios for let the node servers get the target domain names.'),
-				E('br'),
-				_('Such as: DNS unlocking of streaming media, reducing DNS query latency, etc.')
-			]));
+			o = s.taboption('Shunt', form.Flag, 'fakedns', 'FakeDNS ' + _('Main switch'),
+				_('Use FakeDNS work in the domain that proxy.') + ' ' +
+				_('Suitable scenarios for let the node servers get the target domain names.') + ' ' +
+				_('Such as: DNS unlocking of streaming media, reducing DNS query latency, etc.'));
 			mirror(o, 'fakedns', true);
 
 			var shuntGroup = s.taboption('Shunt', form.ListValue, 'shunt_group', _('Shunt Rule Group'));
@@ -1972,6 +1969,7 @@ return view.extend({
 				});
 			}, 5);
 
+			paintHtml(root);
 			self.map = m;
 			return root;
 		});

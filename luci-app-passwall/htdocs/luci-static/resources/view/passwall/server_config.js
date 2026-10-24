@@ -1612,6 +1612,9 @@ return view.extend({
 				addHysteria2(s, ctx);
 		}
 
-		return m.render();
+		return m.render().then(function(node) {
+			pw.paintHtml(node);
+			return node;
+		});
 	}
 });

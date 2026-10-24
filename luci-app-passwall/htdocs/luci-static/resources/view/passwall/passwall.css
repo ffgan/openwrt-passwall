@@ -93,6 +93,19 @@
 
 .pw-hidden-field { display: none !important; }
 
+.cbi-value[data-name="node"] > .cbi-value-field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: .4rem;
+}
+
+.cbi-value[data-name="node"] > .cbi-value-field > .cbi-input-select {
+	flex: 1 1 18rem;
+	width: min(100%, 48rem);
+	max-width: 100%;
+}
+
 .dns-con { padding: 1rem; }
 .faq-title { color: var(--primary); font-weight: 700; margin-bottom: .5rem; display: inline-block; }
 .reset-title { color: var(--primary); font-weight: 700; margin: 1.2rem 0 .3rem; display: inline-block; text-decoration: underline; }

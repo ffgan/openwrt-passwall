@@ -402,7 +402,9 @@ return view.extend({
 				'@media screen and (max-width:600px){.key-btn-div{display:block;}.key-label{display:none !important;}}',
 				'.key-btn-div .cbi-button{margin-bottom:2px;}'
 			].join(''));
-			return E('div', {}, [ style, node ]);
+			var root = E('div', {}, [ style, node ]);
+			pw.paintHtml(root);
+			return root;
 		});
 	}
 });

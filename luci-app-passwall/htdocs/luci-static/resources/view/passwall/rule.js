@@ -115,7 +115,9 @@ return view.extend({
 		s.addremove = false;
 
 		var o;
+		var urlOptions = {};
 		o = s.option(form.DynamicList, 'gfwlist_url', _('GFW domains(gfwlist) Update URL'));
+		urlOptions.gfwlist_url = o;
 		o.value('https://cdn.jsdelivr.net/gh/YW5vbnltb3Vz/domain-list-community@release/gfwlist.txt', _('v2fly/domain-list-community'));
 		o.value('https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/gfw.txt', _('Loyalsoldier/v2ray-rules-dat'));
 		o.value('https://cdn.jsdelivr.net/gh/Loukky/gfwlist-by-loukky/gfwlist.txt', _('Loukky/gfwlist-by-loukky'));
@@ -124,6 +126,7 @@ return view.extend({
 		o.default = 'https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/gfw.txt';
 
 		o = s.option(form.DynamicList, 'chnroute_url', _('China IPs(chnroute) Update URL'));
+		urlOptions.chnroute_url = o;
 		o.value('https://ispip.clang.cn/all_cn.txt', _('Clang.CN'));
 		o.value('https://cdn.jsdelivr.net/gh/gaoyifan/china-operator-ip@ip-lists/china.txt', _('gaoyifan/china-operator-ip/china'));
 		o.value('https://cdn.jsdelivr.net/gh/soffchen/GeoIP2-CN@release/CN-ip-cidr.txt', _('soffchen/GeoIP2-CN'));
@@ -132,12 +135,14 @@ return view.extend({
 		o.value('https://cdn.jsdelivr.net/gh/pexcn/daily@gh-pages/chnroute/chnroute.txt', _('pexcn/chnroute'));
 
 		o = s.option(form.DynamicList, 'chnroute6_url', _('China IPv6s(chnroute6) Update URL'));
+		urlOptions.chnroute6_url = o;
 		o.value('https://ispip.clang.cn/all_cn_ipv6.txt', _('Clang.CN.IPv6'));
 		o.value('https://cdn.jsdelivr.net/gh/gaoyifan/china-operator-ip@ip-lists/china6.txt', _('gaoyifan/china-operator-ip/china6'));
 		o.value('https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script@master/rule/Clash/ChinaMax/ChinaMax_IP.txt', _('ios_rule_script/ChinaMax_IP'));
 		o.value('https://cdn.jsdelivr.net/gh/pexcn/daily@gh-pages/chnroute/chnroute6.txt', _('pexcn/chnroute6'));
 
 		o = s.option(form.DynamicList, 'chnlist_url', _('China List(Chnlist) Update URL'));
+		urlOptions.chnlist_url = o;
 		o.value('https://cdn.jsdelivr.net/gh/felixonmars/dnsmasq-china-list/accelerated-domains.china.conf', _('felixonmars/domains.china'));
 		o.value('https://cdn.jsdelivr.net/gh/felixonmars/dnsmasq-china-list/apple.china.conf', _('felixonmars/apple.china'));
 		o.value('https://cdn.jsdelivr.net/gh/felixonmars/dnsmasq-china-list/google.china.conf', _('felixonmars/google.china'));
@@ -191,9 +196,8 @@ return view.extend({
 
 		if (hasGeoview && hasCore) {
 			[ 'gfwlist_url', 'chnroute_url', 'chnroute6_url', 'chnlist_url' ].forEach(function(name) {
-				var opt = m.lookupOption(name, sid);
-				if (opt && opt[0])
-					opt[0].depends('geo2rule', '0');
+				if (urlOptions[name])
+					urlOptions[name].depends('geo2rule', '0');
 			});
 		}
 

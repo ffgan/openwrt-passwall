@@ -3,7 +3,7 @@
 		"description": "Grant UCI, file and ubus access for luci-app-passwall",
 		"read": {
 			"ubus": {
-				"file": [ "list", "read", "stat" ],
+				"file": [ "list", "read", "stat", "exec" ],
 				"luci": [ "getFeatures" ],
 				"luci-rpc": [ "getNetworkDevices", "getHostHints", "getDHCPLeases" ],
 				"luci.passwall": [ "*" ],
@@ -11,31 +11,36 @@
 			},
 			"uci": [ "passwall", "passwall_server", "network", "dhcp", "firewall" ],
 			"file": {
-				"/etc/passwall/": [ "list", "read" ],
-				"/etc/passwall/rules/": [ "list", "read" ],
-				"/usr/share/passwall/": [ "list", "read" ],
-				"/usr/share/passwall/rules/": [ "list", "read" ],
-				"/usr/share/v2ray/": [ "list", "read" ],
+				"/etc/hosts": [ "read" ],
+				"/etc/passwall/*": [ "read" ],
+				"/etc/config/ssl/*": [ "read" ],
+				"/etc/ssl/*": [ "read" ],
+				"/usr/share/passwall/*": [ "read" ],
+				"/usr/share/v2ray/*": [ "read" ],
 				"/tmp/log/passwall.log": [ "read" ],
 				"/tmp/log/passwall_server.log": [ "read" ],
-				"/tmp/etc/passwall/": [ "list", "read" ],
-				"/tmp/etc/passwall_server/": [ "list", "read" ],
-				"/usr/lib/smartdns_ui.so": [ "stat" ],
-				"/usr/lib/smartdns/smartdns_ui.so": [ "stat" ],
-				"/usr/sbin/haproxy": [ "stat" ]
+				"/tmp/etc/passwall/*": [ "read" ],
+				"/tmp/etc/passwall_server/*": [ "read" ],
+				"/tmp/etc/passwall_tmp/*": [ "read" ],
+				"/tmp/bak_v2ray/*": [ "read" ],
+				"/tmp/dhcp.leases": [ "read" ],
+				"/proc/net/arp": [ "read" ]
 			}
 		},
 		"write": {
 			"ubus": {
+				"file": [ "write", "remove" ],
 				"luci.passwall": [ "*" ]
 			},
 			"uci": [ "passwall", "passwall_server" ],
 			"file": {
-				"/etc/passwall/": [ "write" ],
-				"/etc/passwall/rules/": [ "write" ],
+				"/etc/hosts": [ "write" ],
+				"/etc/passwall/*": [ "write" ],
+				"/etc/config/ssl/*": [ "write" ],
 				"/tmp/log/passwall.log": [ "write" ],
 				"/tmp/log/passwall_server.log": [ "write" ],
-				"/tmp/links.conf": [ "write" ]
+				"/tmp/links.conf": [ "write" ],
+				"/tmp/etc/passwall_tmp/*": [ "write" ]
 			}
 		}
 	}
