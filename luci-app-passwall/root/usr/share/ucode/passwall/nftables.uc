@@ -3,7 +3,7 @@
 import * as api from 'passwall.api';
 import * as fs from 'fs';
 import { parse_nft_state } from 'passwall.state';
-import { run, output } from 'passwall.utils';
+import { run, output, ubus_call, get_wan_ips } from 'passwall.utils';
 
 const TABLE = "inet passwall";
 const MARK = "0x50535731";
@@ -571,12 +571,9 @@ function source_expr(source, iface) {
 function interface_device(name) {
 	if (name == "")
 		return "";
-	let data = output(["ubus", "call", "network.interface." + name, "status"]);
-	try {
-		let status = json(data);
-		if (status.device != null && status.device != "")
-			return status.device;
-	} catch (e) {}
+	let status = ubus_call("network.interface." + name, "status", {});
+	if (type(status) == "object" && status.device != null && status.device != "")
+		return status.device;
 	if (exists("/sys/class/net/" + name))
 		return name;
 	return name;
@@ -956,21 +953,7 @@ function delete_routes() {
 }
 
 wan_addresses = function(family) {
-	let out = [];
-	let data = output(["ubus", "call", "network.interface", "dump"]);
-	let decoded;
-	try { decoded = json(data); } catch (err) { return out; }
-	for (let iface in decoded.interface ?? []) {
-		if (match(iface.interface ?? "", /lan/) != null || !length(iface.route ?? []))
-			continue;
-		let key = family == 6 ? "ipv6-address" : "ipv4-address";
-		for (let item in iface[key] ?? []) {
-			let address = item.address;
-			if (address != null && address != "" && address != "0.0.0.0" && address != "::" && substr(address, 0, 5) != "fe80:")
-				push(out, address);
-		}
-	}
-	return out;
+	return get_wan_ips(family == 6 ? "ip6" : "ip4");
 };
 
 function update_wan_sets(do_log) {

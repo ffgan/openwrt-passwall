@@ -231,3 +231,49 @@ export function quoted_option_blob(text, kind) {
 		return "";
 	return join("\n", vals) + "\n";
 };
+
+function hex_port(text) {
+	if (type(text) != "string" || text == "")
+		return null;
+	let n = 0;
+	for (let i = 0; i < length(text); i++) {
+		let c = ord(text, i);
+		let digit = null;
+		if (c >= 48 && c <= 57)
+			digit = c - 48;
+		else if (c >= 97 && c <= 102)
+			digit = c - 87;
+		else if (c >= 65 && c <= 70)
+			digit = c - 55;
+		if (digit == null)
+			return null;
+		n = n * 16 + digit;
+		if (n > 65535)
+			return null;
+	}
+	return n;
+}
+
+// Rows from /proc/net/tcp or /proc/net/udp. TCP keeps state 0A (LISTEN).
+// UDP keeps every bound local port. Keys are decimal port strings.
+export function proc_net_ports(text, tcp) {
+	let ports = {};
+	if (type(text) != "string" || text == "")
+		return ports;
+	for (let line in split(text, "\n")) {
+		let fields = whitespace_fields(line);
+		if (length(fields) < 4)
+			continue;
+		let local = fields[1];
+		let colon = rindex(local, ":");
+		if (colon < 1)
+			continue;
+		let port = hex_port(substr(local, colon + 1));
+		if (port == null || port <= 0)
+			continue;
+		if (tcp && lc(fields[3]) != "0a")
+			continue;
+		ports["" + port] = true;
+	}
+	return ports;
+};

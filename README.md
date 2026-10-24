@@ -10,9 +10,9 @@
 
 ## 运行环境
 
-面向 **OpenWrt 25.12 及更新版本**。透明代理使用 **firewall4 + nftables**，包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。
+面向 **OpenWrt 25.12 及更新版本**。透明代理使用 **firewall4 + nftables**，包管理器为 **apk**，官方 `dnsmasq-full` 默认启用 **nftset**。Web 界面是 LuCI 的 JavaScript 视图，后台逻辑使用 ucode。依赖包含 `luci-base`、`firewall4`、`ucode-mod-ubus` 和 `luci-lib-uqr`。
 
-运行状态、nftables 参数和进程记录使用 JSON，旧的 `KEY='value'` 文件仍能读取。进程按参数数组启动，匹配时直接读 `/proc/<pid>/cmdline`。字符串、数值和命令输出的解析集中在 `text.uc`。UUID、磁盘空间、可执行文件查找、dnsmasq 配置段和 WireGuard 密钥在 ucode 里读取。证书指纹仍调用 openssl，主机名和端口会先加引号。删除路径只接受绝对路径；带 `*` 的清理也限制在这组字符里。
+运行状态、nftables 参数和进程记录使用 JSON，旧的 `KEY='value'` 文件仍能读取。进程按参数数组启动，匹配时直接读 `/proc/<pid>/cmdline`。接口状态走 ucode 的 ubus 模块。端口占用直接读 `/proc/net`，节点域名从 UCI 游标导出。主机路由用 `ip route`。删除文件走 ucode 的目录遍历，带 `*` 的路径用 `glob`。字符串、数值和命令输出的解析集中在 `text.uc`。UUID、磁盘空间、可执行文件查找、dnsmasq 配置段和 WireGuard 密钥在 ucode 里读取。证书指纹仍调用 openssl，主机名和端口会先加引号。删除路径只接受绝对路径；带 `*` 的清理也限制在这组字符里。节点分享二维码由 LuCI 的 µQR 生成。
 
 节点列表和分流规则的拖动排序由 `sortable.js` 完成，使用指针事件。状态卡片、警告文字和弹层颜色跟随 LuCI 主题变量。
 

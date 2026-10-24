@@ -3,6 +3,8 @@
 'require form';
 'require uci';
 'require ui';
+'require dom';
+'require uqr';
 'require network';
 'require view.passwall.tools as pw';
 'require view.passwall.types.socks as socksType';
@@ -1096,11 +1098,10 @@ return view.extend({
 			}));
 			return E('div', {}, [
 				E('style', {}, '.share-toolbar{display:inline-block;text-align:center;padding:5px 0;white-space:nowrap}.toolbar-buttons .cbi-button{margin-right:2px;margin-bottom:2px}.status-text{display:none}.status-text:not(:empty){display:inline-block;line-height:1;padding:5px 0}@media screen and (max-width:500px){.share-toolbar{white-space:normal}}'),
-				E('script', { 'src': L.resource('view/passwall/qrcode.min.js') }),
 				E('div', { 'class': 'share-toolbar' }, [
 					E('div', { 'class': 'toolbar-buttons' }, buttons),
-					E('div', { 'id': 'qrcode_div', 'style': 'padding:5px 0;display:none' }, [
-						E('div', { 'id': 'qrcode', 'style': 'display:flex;justify-content:center;' })
+					E('div', { 'id': 'qrcode_div', 'style': 'display:none' }, [
+						E('div', { 'id': 'qrcode', 'class': 'pw-qr' })
 					]),
 					E('div', { 'style': 'text-align:center;padding:0;min-height:0;line-height:1;' }, [
 						E('span', { 'id': 'share-status', 'class': 'status-text' })
@@ -1736,12 +1737,18 @@ return view.extend({
 			var target = document.getElementById('qrcode');
 			if (!box || !target)
 				return false;
-			box.style.display = '';
-			target.innerHTML = '';
-			if (url && window.QRCode) {
-				var qrcode = new QRCode(target, { width: 150, height: 150 });
-				qrcode.makeCode(url);
+			if (!url) {
+				box.style.display = 'none';
+				dom.content(target, []);
+				return false;
 			}
+			box.style.display = '';
+			dom.content(target, E(uqr.renderSVG(url, {
+				ecc: 'M',
+				pixelSize: 4,
+				whiteColor: 'var(--background-color-high, #fff)',
+				blackColor: 'var(--text-color, #111)'
+			})));
 			return false;
 		}
 

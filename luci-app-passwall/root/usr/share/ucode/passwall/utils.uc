@@ -47,6 +47,49 @@ export function output(argv) {
 	return data;
 };
 
+let ubus_conn;
+let ubus_tried = false;
+
+function ubus_connect() {
+	if (ubus_tried)
+		return ubus_conn;
+	ubus_tried = true;
+	ubus_conn = null;
+	try {
+		let ubus = require('ubus');
+		if (type(ubus?.connect) == 'function')
+			ubus_conn = ubus.connect();
+	}
+	catch (e) {
+		ubus_conn = null;
+	}
+	return ubus_conn;
+}
+
+// OpenWrt 25.12 ships ucode-mod-ubus. Fall back to the ubus CLI if the module cannot connect.
+export function ubus_call(object, method, args) {
+	let conn = ubus_connect();
+	if (conn != null) {
+		let result = null;
+		try {
+			result = conn.call(object, method, args ?? {});
+		}
+		catch (e) {
+			result = null;
+		}
+		return type(result) == 'object' ? result : null;
+	}
+	let raw = output([ 'ubus', 'call', object, method, sprintf('%J', args ?? {}) ]);
+	let parsed = null;
+	try {
+		parsed = json(raw);
+	}
+	catch (e) {
+		parsed = null;
+	}
+	return type(parsed) == 'object' ? parsed : null;
+};
+
 export function launch(argv, name, logfile, env) {
 	let clean = {};
 	if (type(env) == 'object' && env != null) {
@@ -307,18 +350,10 @@ export function format_dns(value, default_port) {
 };
 
 export function check_port_exists(port, protocol) {
-	let argv = ['netstat'];
-	if (protocol == 'tcp')
-		push(argv, '-tln');
-	else if (protocol == 'udp')
-		push(argv, '-uln');
-	else
-		push(argv, '-tuln');
-	let needle = ':' + port;
-	for (let line in split(output(argv), '\n'))
-		if (index(line, needle) >= 0 && match(line, regexp(':' + port + '[[:space:]]')) != null)
-			return true;
-	return false;
+	let n = int(port);
+	if (n != n || n <= 0 || n > 65535)
+		return false;
+	return api.occupied_ports(protocol)['' + n] == true;
 };
 
 export function get_new_port(start_port, protocol) {
@@ -328,8 +363,9 @@ export function get_new_port(start_port, protocol) {
 	if (port != port || port < min_port || port > max_port)
 		port = default_port;
 	let start = port;
+	let busy = api.occupied_ports(protocol ?? 'tcp,udp');
 	while (true) {
-		if (!check_port_exists(port, protocol ?? 'tcp,udp') && (!automatic || get_cache_var('get_port_' + port) == null))
+		if (busy['' + port] != true && (!automatic || get_cache_var('get_port_' + port) == null))
 			break;
 		port = port < max_port ? port + 1 : min_port;
 		if (port == start)
@@ -359,18 +395,13 @@ export function has_1_65535(value) {
 	return false;
 };
 
-function interface_status(iface) {
-	let raw = output(['ubus', 'call', 'network.interface.' + iface, 'status']);
-	return json(raw) ?? {};
-}
-
 export function add_ip2route(host, iface) {
 	let ip = get_host_ip('ipv4', host);
 	if (ip == '') {
 		api.log('  - 无法解析[' + host + ']，路由表添加失败！');
 		return 1;
 	}
-	let status = interface_status(iface);
+	let status = ubus_call('network.interface.' + iface, 'status', {}) ?? {};
 	let gateway = '';
 	for (let route in status.route ?? []) {
 		let target = route.target ?? '';
@@ -386,7 +417,7 @@ export function add_ip2route(host, iface) {
 	}
 	let device = status.l3_device ?? status.device ?? iface;
 	let remarks = host == ip ? host : host + '(' + ip + ')';
-	if (gateway != '' && run(['route', 'add', '-host', ip, 'gw', gateway, 'dev', device], true) == 0) {
+	if (gateway != '' && run(['ip', 'route', 'replace', ip + '/32', 'via', gateway, 'dev', device], true) == 0) {
 		api.fs.mkdirr(TMP_ROUTE_PATH);
 		let fh = fs.open(TMP_ROUTE_PATH + '/' + device, 'a');
 		if (fh != null) { fh.write(ip + '\n'); fh.close(); }
@@ -401,7 +432,7 @@ export function delete_ip2route() {
 	for (let device in fs.lsdir(TMP_ROUTE_PATH) ?? [])
 		for (let ip in split(fs.readfile(TMP_ROUTE_PATH + '/' + device) ?? '', '\n'))
 			if (ip != '')
-				run(['route', 'del', '-host', ip, 'dev', device], true);
+				run(['ip', 'route', 'del', ip + '/32', 'dev', device], true);
 };
 
 export function get_process_start_time(pid) {
@@ -445,7 +476,7 @@ export function gen_lanlist(family) {
 };
 
 export function get_wan_ips(family) {
-	let dump = json(output(['ubus', 'call', 'network.interface', 'dump'])) ?? {};
+	let dump = ubus_call('network.interface', 'dump', {}) ?? {};
 	let out = [], seen = {};
 	for (let iface in dump.interface ?? []) {
 		if (index(iface.interface ?? '', 'lan') >= 0 || !length(iface.route ?? []))

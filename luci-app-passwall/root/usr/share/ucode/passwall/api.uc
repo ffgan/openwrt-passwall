@@ -2,13 +2,13 @@
 
 // ucode port of the passwall API. LuCI CBI helpers are not included.
 
-import { readfile, writefile, stat, unlink, mkdir, lsdir, popen, error, open, access, chmod, dirname } from 'fs';
+import { readfile, writefile, stat, lstat, unlink, rmdir, mkdir, lsdir, glob, popen, error, open, access, chmod, dirname } from 'fs';
 import { cursor } from 'uci';
 import { md5 } from 'digest';
 import * as com from 'passwall.com';
-import { df_available_kb, du_kb } from 'passwall.text';
+import { df_available_kb, du_kb, proc_net_ports } from 'passwall.text';
 import { parse_runtime, render_runtime } from 'passwall.state';
-let cache_file, cache_load, cache_save, cache_map, proc_self, proc_text, proc_lines, proc_running, which_bin, split_ws, read_argv, keyed_lines, isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, command_pipe, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
+let uci_show, occupied_ports, rm_tree, cache_file, cache_load, cache_save, cache_map, proc_self, proc_text, proc_lines, proc_running, which_bin, split_ws, read_argv, keyed_lines, isset, ifnil, translate, translatef, as_str, comp, read_all, rand_int, shellquote, command_pipe, trim, index_from, split, sys_call, sys_exec, nixio_type, fs_stat, perm_has, fs_access, mkdir_p, fs_dir, wrap_uci, log, is_old_uci, resolve_sid, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, has_bin, ffi_can_setgid, exec_call_as_gid, strip_controls, strip_nul, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, ip4addr, ip6_side, ip6addr, ipaddr, dt_port, mac_groups, macaddr, hostname, ip4prefix, ip6prefix, ipmask4, ipmask6, ip4addrport, ip6addrport, ipaddrport, hostport, is_json, is_timehhmm, is_uuid, get_domain_port_from_url, parse_dns_server, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, core_protocol_name, is_special_protocol, node_base_type, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, is_reg, is_dir, get_final_dir, get_free_space, get_file_space, _unpack, exec_argv, version_part, compare_versions, release_value, auto_get_arch, parseURL, parseDoH, re_escape_char, lua_pattern_regexp, get_api_json, check_path, unwrap_release, strip_v_run, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_cond, split_nonempty, match_node_rule, match_tokens, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache;
 
 export let appname = "passwall";
 export let c_config = "passwall";
@@ -576,6 +576,39 @@ sh_uci_add_list = function(config, section, option, val, commit_flag) {
 		sh_uci_commit(config);
 };
 
+function uci_quote(value) {
+	return "'" + replace("" + value, /'/g, "'\\''") + "'";
+}
+
+uci_show = function(config) {
+	if (type(config) != "string" || match(config, /^[A-Za-z0-9_]+$/) == null)
+		return "";
+	let all = cursor().get_all(config);
+	let lines = [];
+	for (let name, section in all ?? {}) {
+		if (type(section) != "object")
+			continue;
+		let sid = section[".name"] ?? name;
+		if (type(sid) != "string" || sid == "")
+			continue;
+		for (let key in keys(section)) {
+			if (substr(key, 0, 1) == ".")
+				continue;
+			let value = section[key];
+			if (type(value) == "array") {
+				for (let item in value)
+					if (item != null && type(item) != "object")
+						push(lines, config + "." + sid + "." + key + "=" + uci_quote(item));
+			}
+			else if (value != null && type(value) != "object" && type(value) != "function")
+				push(lines, config + "." + sid + "." + key + "=" + uci_quote(value));
+		}
+	}
+	if (length(lines) == 0)
+		return "";
+	return join("\n", lines) + "\n";
+};
+
 cache_file = function() {
 	return TMP_PATH + "/var";
 };
@@ -701,12 +734,9 @@ get_new_port = function(start_port, protocol) {
 	if (protocol != "tcp" && protocol != "udp")
 		protocol = "tcp,udp";
 	let start = port;
+	let busy_ports = occupied_ports(protocol);
 	while (true) {
-		let flag = protocol == "tcp" ? "-tln" : (protocol == "udp" ? "-uln" : "-tuln");
-		let ph = command_pipe(["netstat", flag], "r");
-		let sockets = ph == null ? "" : read_all(ph);
-		if (ph != null) ph.close();
-		let busy = match(sockets, regexp(":" + port + "[[:space:]]")) != null;
+		let busy = busy_ports["" + port] == true;
 		if (!busy && (!automatic || get_cache_var("get_port_" + port) == null))
 			break;
 		port = port < 49151 ? port + 1 : 1025;
@@ -739,15 +769,11 @@ exec_call = function(cmd) {
 };
 
 has_bin = function(name) {
+	if (type(name) != "string" || name == "")
+		return false;
 	if (bin_cache[name] != null)
 		return bin_cache[name];
-	let p = popen("command -v " + shellquote(name) + " >/dev/null 2>&1", "r");
-	if (p == null) {
-		bin_cache[name] = false;
-		return false;
-	}
-	read_all(p);
-	let ok = p.close() == 0;
+	let ok = which_bin(name) != "";
 	bin_cache[name] = ok;
 	return ok;
 };
@@ -893,10 +919,13 @@ md5_file = function(path) {
 				return substr(h, 0, 32);
 		}
 	} catch (e) {}
-	let out = sys_exec("md5sum " + shellquote(path));
-	if (out == null || out == "")
+	let data = readfile(path);
+	if (type(data) != "string" || type(md5) != "function")
 		return "";
-	return substr(out, 0, 32);
+	let hashed = md5(data);
+	if (type(hashed) != "string" || length(hashed) < 32)
+		return "";
+	return substr(hashed, 0, 32);
 };
 
 md5_string = function(str) {
@@ -1381,6 +1410,19 @@ repeat_exist = function(arr, value) {
 	return count > 1;
 };
 
+rm_tree = function(path) {
+	let st = lstat(path);
+	if (st == null)
+		return;
+	if (st.type == "directory") {
+		for (let name in lsdir(path) ?? [])
+			rm_tree(path + "/" + name);
+		rmdir(path);
+		return;
+	}
+	unlink(path);
+};
+
 remove = function(...values) {
 	for (let value in values) {
 		if (type(value) != "string" || length(value) == 0 || value == "/")
@@ -1389,10 +1431,21 @@ remove = function(...values) {
 			continue;
 		if (match(value, /^\/[A-Za-z0-9._+\/=*,-]+$/) == null)
 			continue;
-		if (index(value, "*") >= 0)
-			sys_call("rm -rf -- " + value);
+		if (index(value, "*") >= 0) {
+			let matches = null;
+			try {
+				matches = glob(value);
+			} catch (e) {
+				matches = null;
+			}
+			if (type(matches) != "array")
+				continue;
+			for (let path in matches)
+				if (type(path) == "string" && substr(path, 0, 1) == "/")
+					rm_tree(path);
+		}
 		else
-			exec_argv("/bin/rm", ["-rf", "--", value], null, null);
+			rm_tree(value);
 	}
 };
 
@@ -2105,8 +2158,27 @@ release_value = function(path, key) {
 	return null;
 };
 
+occupied_ports = function(protocol) {
+	let map = {};
+	let files = [];
+	if (protocol != "udp") {
+		push(files, "/proc/net/tcp");
+		push(files, "/proc/net/tcp6");
+	}
+	if (protocol != "tcp") {
+		push(files, "/proc/net/udp");
+		push(files, "/proc/net/udp6");
+	}
+	for (let path in files) {
+		let ports = proc_net_ports(readfile(path) ?? "", index(path, "/tcp") >= 0);
+		for (let key in keys(ports))
+			map[key] = true;
+	}
+	return map;
+};
+
 auto_get_arch = function() {
-	let arch = trim(sys_exec("uname -m"));
+	let arch = trim(read_argv(["uname", "-m"]).out);
 	if (OPENWRT_ARCH == null && fs_access("/usr/lib/os-release")) {
 		OPENWRT_ARCH = release_value("/usr/lib/os-release", "OPENWRT_ARCH");
 		OPENWRT_BOARD = release_value("/usr/lib/os-release", "OPENWRT_BOARD");
@@ -3270,4 +3342,4 @@ get_socks_port_by_cache = function(node_id) {
 set_socks_port_to_cache = function(node_id, v) {
 	set_cache_var(sprintf("node_%s_socks_port", node_id), v);
 };
-export { cache_map, proc_lines, proc_running, command_pipe, shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };
+export { uci_show, occupied_ports, cache_map, proc_lines, proc_running, command_pipe, shellquote, trim, split, log, is_old_uci, uci_del, uci_get, uci_set, uci_del_c, uci_foreach_c, uci_get_c, uci_set_c, uci_save_c, uci_del_s, uci_foreach_s, uci_get_s, uci_set_s, uci_save_s, sh_uci_commit, uci_save, sh_uci_get, sh_uci_set, sh_uci_del, sh_uci_add_list, del_cache_var, set_cache_var, get_cache_var, get_new_port, exec_call, exec_call_as_gid, base64Decode, base64Encode, UrlEncode, UrlDecode, md5_file, md5_string, get_domain_port_from_url, resolve_domain, table_join, curl_base, curl_proxy, curl_direct, curl_logic, curl_auto, is_exist, repeat_exist, remove, is_install, get_args, get_function_args, strToTable, is_normal_node, is_special_node, is_ip, is_ipv6, is_local_ip, is_ipv6addrport, get_ipv6_only, get_ipv6_full, get_ip_type, is_mac, ip_or_mac, iprange, get_domain_from_url, get_valid_nodes, get_node_list, get_node_remarks, get_full_node_remarks, get_random_normal_node, gen_uuid, gen_random_char, chmod_755, get_customed_path, get_app_path, get_bin_version_cache, get_app_version, finded_com, finded, is_finded, clone, _unpack, compare_versions, parseURL, parseDoH, to_check, to_download, to_download_progress, to_extract, to_move, get_version, to_check_self, to_install_self, get_std_domain, format_go_time, match_node_rule, get_batch_nodes, get_socks_backup_nodes, get_core, cleanEmptyTables, fetch_cert_sha256, sha256_xray_sb, sha256_sb_xray, vps_domain_exclude, parse_realm_uri, get_network_devices, table_remove_duplicates, gen_wireguard_key, get_socks_port_by_cache, set_socks_port_to_cache };

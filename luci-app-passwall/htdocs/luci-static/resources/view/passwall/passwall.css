@@ -147,6 +147,17 @@
 	background: color-mix(in srgb, var(--primary, #5e72e4) 22%, transparent) !important;
 }
 
+.pw-qr {
+	display: flex;
+	justify-content: center;
+	padding: .35rem 0;
+}
+
+.pw-qr svg {
+	width: 150px;
+	height: auto;
+}
+
 .dragging-row {
 	background: color-mix(in srgb, var(--primary, #5e72e4) 35%, transparent) !important;
 	box-shadow: 0 6px 16px rgba(0, 0, 0, .12);

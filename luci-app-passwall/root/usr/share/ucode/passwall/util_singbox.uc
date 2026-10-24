@@ -2015,7 +2015,7 @@ gen_config = function(var) {
 		}
 		if (ltruth(direct_dns_udp_server) || ltruth(direct_dns_tcp_server)) {
 			let domain = [];
-			let nodes_domain_text = quoted_option_blob(api.sys.exec("uci show passwall"), "address");
+			let nodes_domain_text = quoted_option_blob(api.uci_show("passwall"), "address");
 			for (let raw in gmatch(nodes_domain_text, /[^\r\n]+/g)) {
 				let w = lc(lor(raw, ""));
 				if (!api.vps_domain_exclude(w) && api.datatypes.hostname(w) && !ltruth(GLOBAL.VPS_EXCLUDE[w]))

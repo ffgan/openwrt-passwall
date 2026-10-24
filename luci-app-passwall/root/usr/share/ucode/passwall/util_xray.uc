@@ -2007,7 +2007,7 @@ gen_config = function(vars) {
 
 		if (truthy(dns_listen_port) && length(_direct_dns) > 0) {
 			let domain = [];
-			let nodes_domain_text = quoted_option_blob(api.sys.exec("uci show passwall"));
+			let nodes_domain_text = quoted_option_blob(api.uci_show("passwall"));
 			for (let w in split_matches(nodes_domain_text, /[^\r\n]+/g)) {
 				w = lc(w != null ? w : "");
 				if (!api.vps_domain_exclude(w) && api.datatypes.hostname(w) && !truthy(GLOBAL.VPS_EXCLUDE[w]))

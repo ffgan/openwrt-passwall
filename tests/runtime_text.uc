@@ -2,7 +2,7 @@
 
 import {
 	truth, lua_or, to_number, leading_int, lua_quote, gmatch, lines_of,
-	awk_field, host_port, processor_count, df_available_kb, du_kb, quoted_option_blob
+	awk_field, host_port, processor_count, df_available_kb, du_kb, 	quoted_option_blob, proc_net_ports
 } from 'passwall.text';
 
 let failed = 0;
@@ -49,6 +49,10 @@ eq("awk word", awk_field("PrivateKey: aaa\nPublicKey: bbb\n", null), ["aaa", "bb
 eq("uci blob", quoted_option_blob("passwall.b.download_address='two'\npasswall.a.address='one'\npasswall.c.port='9'\n"), "one\ntwo\n");
 eq("uci address", quoted_option_blob("passwall.b.download_address='two'\npasswall.a.address='one'\n", "address"), "one\n");
 eq("uci empty", quoted_option_blob(""), "");
+eq("proc empty", proc_net_ports("", true), {});
+eq("proc header", proc_net_ports("sl local_address rem_address st\n", true), {});
+eq("tcp listen", proc_net_ports("  sl  local_address rem_address   st\n   0: 00000000:0035 00000000:0000 0A 00000000:00000000\n   1: 0100007F:01BB 00000000:0000 01 00000000:00000000\n", true), { "53": true });
+eq("udp bind", proc_net_ports("  sl  local_address rem_address   st\n   0: 00000000:14E9 00000000:0000 07\n", false), { "5353": true });
 
 if (failed == 0)
 	print("ok\n");

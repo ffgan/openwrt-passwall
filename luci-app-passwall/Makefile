@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall
 PKG_VERSION:=26.10.22
-PKG_RELEASE:=8
+PKG_RELEASE:=10
 PKG_PO_VERSION:=$(PKG_VERSION)
 PKG_LICENSE:=GPL-3.0-only
 
@@ -38,9 +38,10 @@ LUCI_PKGARCH:=all
 LUCI_URL:=https://github.com/Openwrt-Passwall/openwrt-passwall
 LUCI_MAINTAINER:=Openwrt-Passwall Organization
 PKG_MAINTAINER:=$(LUCI_MAINTAINER)
-LUCI_DEPENDS:=+coreutils +coreutils-base64 +coreutils-timeout +curl \
+LUCI_DEPENDS:=+luci-base +luci-lib-uqr +firewall4 \
+	+coreutils +coreutils-base64 +coreutils-timeout +curl \
 	+chinadns-ng +dns2socks +dnsmasq-full +ip-full \
-	+ucode +ucode-mod-digest +ucode-mod-fs +ucode-mod-math +ucode-mod-uci \
+	+ucode +ucode-mod-digest +ucode-mod-fs +ucode-mod-math +ucode-mod-ubus +ucode-mod-uci \
 	+microsocks +resolveip +tcping
 
 define Package/$(PKG_NAME)/config
@@ -154,6 +155,11 @@ define Package/$(PKG_NAME)/postinst
 #!/bin/sh
 rm -f $${IPKG_INSTROOT}/usr/share/passwall/rules/*.nft
 rm -rf $${IPKG_INSTROOT}/tmp/etc/passwall_tmp
+[ -n "$${IPKG_INSTROOT}" ] || {
+	rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
+	rm -rf /tmp/luci-modulecache/
+	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+}
 exit 0
 endef
 

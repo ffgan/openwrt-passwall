@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkgDir = path.join(root, 'luci-app-passwall');
 const pkgName = 'luci-app-passwall';
-const pkgVer = '26.10.22-r8';
+const pkgVer = '26.10.22-r10';
 const outDir = path.join(root, 'dist');
 const outFile = path.join(outDir, `${pkgName}_${pkgVer}_all.apk`);
 
@@ -15,13 +15,15 @@ const depends = [
 	'chinadns-ng',
 	'coreutils',
 	'coreutils-base64',
-	'coreutils-nohup',
 	'coreutils-timeout',
 	'curl',
 	'dns2socks',
 	'dnsmasq-full',
+	'firewall4',
 	'ip-full',
 	'libc',
+	'luci-base',
+	'luci-lib-uqr',
 	'microsocks',
 	'resolveip',
 	'tcping',
@@ -29,6 +31,7 @@ const depends = [
 	'ucode-mod-digest',
 	'ucode-mod-fs',
 	'ucode-mod-math',
+	'ucode-mod-ubus',
 	'ucode-mod-uci'
 ];
 
@@ -141,6 +144,11 @@ add_group_and_user
 default_postinst
 rm -f \${IPKG_INSTROOT}/usr/share/passwall/rules/*.nft
 rm -rf \${IPKG_INSTROOT}/tmp/etc/passwall_tmp
+[ -n "\${IPKG_INSTROOT}" ] || {
+	rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
+	rm -rf /tmp/luci-modulecache/
+	/etc/init.d/rpcd reload >/dev/null 2>&1 || true
+}
 exit 0
 `;
 

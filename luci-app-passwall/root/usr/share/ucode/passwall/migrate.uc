@@ -148,7 +148,7 @@ function migrate_client() {
 
 	mkdir_p('/var/etc');
 	if (fs.stat('/var/etc/passwall.include') == null) {
-		fs.writefile('/var/etc/passwall.include', "#!/bin/sh\nreturn 0\n");
+		fs.writefile('/var/etc/passwall.include', "#!/bin/sh\nexit 0\n");
 		fs.chmod('/var/etc/passwall.include', 0o755);
 	}
 

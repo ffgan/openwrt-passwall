@@ -23,7 +23,7 @@ function walk(dir, out) {
 	return out;
 }
 
-const jsFiles = walk(viewDir, []).filter((file) => file.endsWith('.js') && !file.endsWith('qrcode.min.js'));
+const jsFiles = walk(viewDir, []).filter((file) => file.endsWith('.js'));
 for (const file of jsFiles) {
 	const src = fs.readFileSync(file, 'utf8');
 	try {
@@ -34,12 +34,34 @@ for (const file of jsFiles) {
 	}
 }
 
-for (const gone of ['Sortable.min.js', 'func.js', 'cbi.js']) {
+for (const gone of ['Sortable.min.js', 'func.js', 'cbi.js', 'qrcode.min.js']) {
 	if (fs.existsSync(path.join(viewDir, gone)))
 		fail(gone + ' is still packaged');
 }
 
 const ucodeDir = path.join(root, 'luci-app-passwall/root/usr/share/ucode/passwall');
+const readUc = (name) => fs.readFileSync(path.join(ucodeDir, name), 'utf8');
+const invokes = (text, bin) => text.includes("['" + bin + "'") || text.includes('["' + bin + '"');
+const utilsSrc = readUc('utils.uc');
+const apiSrc = readUc('api.uc');
+const nftSrc = readUc('nftables.uc');
+if (invokes(utilsSrc, 'netstat') || invokes(apiSrc, 'netstat'))
+	fail('port checks still call netstat');
+if (invokes(utilsSrc, 'route') || invokes(apiSrc, 'route'))
+	fail('host routes still call the route command');
+if (invokes(nftSrc, 'ubus') || invokes(apiSrc, 'ubus'))
+	fail('nftables or api still shells out to the ubus command');
+if ((utilsSrc.match(/\[\s*'ubus'/g) || []).length !== 1)
+	fail('ubus CLI fallback should stay in ubus_call');
+if (invokes(utilsSrc, 'ss') || invokes(apiSrc, 'ss'))
+	fail('port checks still call ss');
+if (!apiSrc.includes('/proc/net/tcp') || !apiSrc.includes('uci_show'))
+	fail('api should read /proc/net and export uci_show');
+const showCallers = readUc('helper_dnsmasq.uc') + readUc('util_xray.uc') + readUc('util_singbox.uc');
+if (showCallers.includes('uci show'))
+	fail('domain lists still shell out to uci show');
+if (apiSrc.includes('command -v') || apiSrc.includes('md5sum ') || apiSrc.includes('rm -rf'))
+	fail('api still shells out for command lookup, md5, or rm');
 for (const name of fs.readdirSync(ucodeDir)) {
 	if (!name.endsWith('.uc'))
 		continue;

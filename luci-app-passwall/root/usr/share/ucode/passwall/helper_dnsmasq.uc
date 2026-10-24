@@ -358,7 +358,7 @@ add_rule = function(var) {
 	}
 
 	function get_dns_config_key() {
-		let address_md5 = api.md5_string(quoted_option_blob(api.sys.exec("uci show passwall")));
+		let address_md5 = api.md5_string(quoted_option_blob(api.uci_show("passwall")));
 		let new_rules = "";
 		let rule_files = [
 			"/usr/share/passwall/rules/chnlist",
