@@ -1293,7 +1293,7 @@ return view.extend({
 						window.location.reload();
 					});
 				}
-			}, clearTitle);
+			}, _('Clear NFTSET'));
 		};
 
 		o = s.taboption('Proxy', form.Flag, 'use_direct_list', tf('Use %s', _('Direct List')));
