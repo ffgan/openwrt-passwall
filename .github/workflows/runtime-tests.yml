@@ -25,11 +25,13 @@ jobs:
           git -C /tmp/ucode fetch --depth 1 origin 85922056ef7abeace3cca3ab28bc1ac2d88e31b1
           git -C /tmp/ucode checkout 85922056ef7abeace3cca3ab28bc1ac2d88e31b1
           cmake -S /tmp/ucode -B /tmp/ucode/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/ucode/build --target ucode -j"$(nproc)"
+          cmake --build /tmp/ucode/build --target ucode fs_lib -j"$(nproc)"
 
       - name: ucode runtime state
         run: |
           U=/tmp/ucode/build/ucode
           L="${GITHUB_WORKSPACE}/luci-app-passwall/root/usr/share/ucode"
+          S="${GITHUB_WORKSPACE}/tests/stubs"
           "$U" -L "$L" tests/runtime_state.uc
           "$U" -L "$L" tests/runtime_text.uc
+          "$U" -L "$S" -L "$L" -L /tmp/ucode/build tests/rpc-plugin.uc

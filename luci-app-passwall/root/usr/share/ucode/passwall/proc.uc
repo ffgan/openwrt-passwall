@@ -80,7 +80,7 @@ export function cmdline_of(pid) {
 			out += substr(raw, i, 1);
 	}
 	return trim(out);
-}
+};
 
 function is_link(path) {
 	let target = fs.readlink(path);
