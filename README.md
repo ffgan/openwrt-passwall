@@ -55,4 +55,4 @@ node tests/check.mjs
 node --test tests/parse-runtime.test.mjs
 ```
 
-`check.mjs` 检查 LuCI 脚本语法、运行状态解析和表格拖动排序。`parse-runtime.test.mjs` 检查页面上的 `parseRuntime`。
+`check.mjs` 检查 LuCI 脚本语法、运行状态解析和表格拖动排序。`parse-runtime.test.mjs` 检查页面上的 `parseRuntime`。`rpc-plugin.uc` 用同一套 ucode 加载 rpcd 插件并调用设置页的 `capabilities`、`index_status` 和 `get_now_use_node`。插件或它导入的模块只要编译失败，ubus 上就没有 `luci.passwall`，页面会报 `Object not found`。
