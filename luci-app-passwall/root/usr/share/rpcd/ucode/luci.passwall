@@ -537,11 +537,12 @@ function process_matches(snapshot, required, excluded, insensitive) {
 }
 
 function listening_on(port) {
-	let result = argv_output([ '/bin/busybox', 'netstat', '-apn' ]);
-	for (let line in split(result.output, '\n'))
-		if (match(line, regexp(':' + port + '[[:space:]]')) != null)
-			return true;
-	return false;
+	// netstat -apn walks every socket and stalls after a long uptime.
+	// The status RPC then never returns, and a freshly opened page stays
+	// on the default "not running" for TCP, UDP and DNS together.
+	if (port == null || ('' + port) == '')
+		return false;
+	return api.occupied_ports('tcp,udp')['' + port] == true;
 }
 
 mark_ipv6 = function(o, show) {
@@ -910,16 +911,17 @@ index_status = function() {
 	let dns_shunt = api.uci_get_c('@global[0]', 'dns_shunt') || 'dnsmasq';
 	let tmp = tmp_path();
 	let processes = process_snapshot();
+	let dns_port = cache_get('ACL_default_dns_port');
+	let dns_up = listening_on(dns_port);
 	if (dns_shunt == 'smartdns') {
 		let config_file = tmp + '/acl/default/smartdns.conf';
-		e.dns_mode_status = process_matches(processes, [ config_file, 'smartdns' ], [], false);
+		e.dns_mode_status = process_matches(processes, [ config_file, 'smartdns' ], [], false) || dns_up;
 	}
 	else if (dns_shunt == 'chinadns-ng') {
-		e.dns_mode_status = process_matches(processes, [ tmp + '/bin/', 'default', 'chinadns_ng' ], [], false);
+		e.dns_mode_status = process_matches(processes, [ tmp + '/bin/', 'default', 'chinadns_ng' ], [], false) || dns_up;
 	}
 	else {
-		let port = cache_get('ACL_default_dns_port');
-		e.dns_mode_status = port != null && port != '' && listening_on(port);
+		e.dns_mode_status = dns_up;
 	}
 	e.haproxy_status = '-1';
 	if (found_bin('haproxy')) {
@@ -932,9 +934,15 @@ index_status = function() {
 			has_tproxy = (index(mods, 'TPROXY') >= 0 || index(mods, 'nft_tproxy') >= 0) ? '1' : '0';
 			cache_set('HAS_TPROXY', has_tproxy);
 		}
-		e.tcp_status = process_matches(processes, [ tmp + '/bin/', 'default', 'global' ], [], false);
-		if (has_tproxy == '1')
-			e.udp_status = process_matches(processes, [ tmp + '/bin/', 'default', 'global' ], [ 'naive' ], false);
+		let redir_up = listening_on(cache_get('ACL_GLOBAL_redir_port'));
+		let tcp_proc = process_matches(processes, [ tmp + '/bin/', 'default', 'global' ], [], false);
+		e.tcp_status = tcp_proc || redir_up;
+		if (has_tproxy == '1') {
+			// Naive has no UDP relay. Trust the command line when it is
+			// visible; fall back to the listen port only when it is not.
+			let udp_proc = process_matches(processes, [ tmp + '/bin/', 'default', 'global' ], [ 'naive' ], false);
+			e.udp_status = udp_proc || (redir_up && !tcp_proc);
+		}
 	}
 	return e;
 };

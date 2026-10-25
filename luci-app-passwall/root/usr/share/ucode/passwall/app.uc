@@ -51,6 +51,15 @@ function command(argv, quiet) {
 	return utils.run(argv, quiet);
 }
 
+function wait_listen(port, protocol) {
+	for (let i = 0; i < 20; i++) {
+		if (utils.check_port_exists(port, protocol))
+			return true;
+		command(['sleep', '1'], true);
+	}
+	return false;
+}
+
 function capture(argv, destination) {
 	let ph = api.command_pipe(argv, 'r');
 	if (ph == null) return 127;
@@ -701,11 +710,8 @@ export function start_global() {
 	utils.set_cache_var('ACL_GLOBAL_node', node);
 	utils.set_cache_var('ACL_GLOBAL_redir_port', state.REDIR_PORT);
 	if (type_name != 'sing-box' && type_name != 'xray') append(TMP + '/direct_node_list', node + '\n');
-	for (let i = 0; i < 5; i++) {
-		if (utils.check_port_exists(state.REDIR_PORT, 'tcp'))
-			return 0;
-		command(['sleep', '1'], true);
-	}
+	if (wait_listen(state.REDIR_PORT, 'tcp'))
+		return 0;
 	api.log('全局节点未在端口 ' + state.REDIR_PORT + ' 监听，不加载转发规则。');
 	return 1;
 };
@@ -869,19 +875,9 @@ export function start_dns() {
 		utils.set_cache_var('ACL_default_dns_port', port);
 		launch_core('/usr/bin/ucode', 'lease2hosts', '/dev/null', [LIBEXEC + '/lease2hosts.uc'], { NO_REC_PROCESS: '1' });
 	}
-	if (state.DNS_REDIRECT_PORT) {
-		let ready = false;
-		for (let i = 0; i < 5; i++) {
-			if (utils.check_port_exists(state.DNS_REDIRECT_PORT, 'tcp,udp')) {
-				ready = true;
-				break;
-			}
-			command(['sleep', '1'], true);
-		}
-		if (!ready) {
-			api.log('DNS 未在端口 ' + state.DNS_REDIRECT_PORT + ' 监听，不加载转发规则。');
-			return 1;
-		}
+	if (state.DNS_REDIRECT_PORT && !wait_listen(state.DNS_REDIRECT_PORT, 'tcp,udp')) {
+		api.log('DNS 未在端口 ' + state.DNS_REDIRECT_PORT + ' 监听，不加载转发规则。');
+		return 1;
 	}
 	return 0;
 };

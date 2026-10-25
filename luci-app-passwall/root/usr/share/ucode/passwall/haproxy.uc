@@ -65,8 +65,8 @@ defaults
 	timeout http-request 10s
 	timeout queue 1m
 	timeout connect 10s
-	timeout client 1m
-	timeout server 1m
+	timeout client 24h
+	timeout server 24h
 	timeout http-keep-alive 10s
 	timeout check 10s
 	maxconn 3000

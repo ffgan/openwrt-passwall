@@ -2,7 +2,7 @@
 
 import * as api from 'passwall.api';
 import { readfile, writefile, stat, unlink, lsdir } from 'fs';
-import { background, spawn, start_time_of, write_record, command_rc } from 'passwall.proc';
+import { background, spawn, start_time_of, cmdline_of, write_record, command_rc } from 'passwall.proc';
 import { parse_proc_record } from 'passwall.state';
 
 let ymd, run;
@@ -48,32 +48,55 @@ run = function() {
 				let count = 0;
 				if (type(count_txt) == "string" && match(trim(count_txt), /^[0-9]+$/) != null)
 					count = int(trim(count_txt));
+
+				// Start time alone is a poor liveness check: it is empty if it
+				// was read before /proc was ready, and it changes when the pid
+				// is reused. A still-running binary must not be started again.
+				// Ten false restarts used to burn the daily budget, after which
+				// a real exit was left down for the rest of the day.
+				let current = start_time_of(rec.pid);
+				let cmd = cmdline_of(rec.pid);
+				let alive = false;
+				if (rec.file != "" && cmd != "" && index(cmd, rec.file) >= 0)
+					alive = true;
+				else if (rec.file == "" && current != "" && current == rec.starttime)
+					alive = true;
+				if (alive) {
+					if (current != "" && current != rec.starttime) {
+						rec.starttime = current;
+						write_record(path, rec);
+					}
+					if (count > 0)
+						unlink(count_path);
+					continue;
+				}
 				if (count >= 10)
 					continue;
 
-				let current = start_time_of(rec.pid);
-				if (current == "" || current != rec.starttime) {
-					count++;
-					writefile(count_path, "" + count + "\n");
-					if (rec.file != "") {
-						let started = spawn({
-							file: rec.file,
-							name: name,
-							args: rec.args,
-							output: rec.output,
-							env: rec.env
-						});
-						rec.pid = started.pid;
-						rec.starttime = started.starttime;
-						rec.file = started.file == "" ? rec.file : started.file;
-					} else {
-						let started = background(rec.script);
-						rec.pid = started.pid;
-						rec.starttime = started.starttime;
-					}
-					write_record(path, rec);
-					command_rc([ "sleep", "1" ]);
+				count++;
+				writefile(count_path, "" + count + "\n");
+				let label = rec.file != "" ? rec.file : name;
+				api.log("进程已退出，重新启动 " + label + "（" + count + "/10）。");
+				if (rec.file != "") {
+					let started = spawn({
+						file: rec.file,
+						name: name,
+						args: rec.args,
+						output: rec.output,
+						env: rec.env
+					});
+					rec.pid = started.pid;
+					rec.starttime = started.starttime;
+					rec.file = started.file == "" ? rec.file : started.file;
+				} else {
+					let started = background(rec.script);
+					rec.pid = started.pid;
+					rec.starttime = started.starttime;
 				}
+				write_record(path, rec);
+				if (count >= 10)
+					api.log("进程 " + label + " 连续重启失败，今日不再拉起。");
+				command_rc([ "sleep", "1" ]);
 			}
 		}
 

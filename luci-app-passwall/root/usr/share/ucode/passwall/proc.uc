@@ -63,6 +63,25 @@ export function start_time_of(pid) {
 	return fields[19];
 };
 
+// argv of a live process. NUL separators become spaces. Empty when the pid is gone.
+export function cmdline_of(pid) {
+	if (match("" + (pid ?? ""), /^[0-9]+$/) == null)
+		return "";
+	let raw = fs.readfile("/proc/" + pid + "/cmdline");
+	if (type(raw) != "string" || raw == "")
+		return "";
+	let out = "";
+	let n = length(raw);
+	for (let i = 0; i < n; i++) {
+		let c = ord(raw, i);
+		if (c == 0)
+			out += " ";
+		else if (c != 10 && c != 13)
+			out += substr(raw, i, 1);
+	}
+	return trim(out);
+}
+
 function is_link(path) {
 	let target = fs.readlink(path);
 	return type(target) == "string" && target != "";
@@ -73,11 +92,28 @@ export function shell_launch(file, args, output, env) {
 };
 
 export function background(script) {
-	// Ignore SIGHUP before exec. Otherwise the process dies with the init
-	// script and nftables keeps redirecting into a closed port.
-	let started = read_cmd([ "/bin/sh", "-c", "trap '' HUP; " + script + " & echo $!" ]);
+	// The proxy used to stay in the starter's foreground process group.
+	// Closing that session later (SSH idle timeout, LuCI apply, init script
+	// exit) delivers SIGHUP and every core exits together. nftables keeps
+	// redirecting into a closed port, and the status page shows nothing running.
+	// setsid moves the process into its own session; the ignored HUP is
+	// inherited across exec. The recorded pid is setsid itself, which execs
+	// the shell and then the binary, so the pid and starttime stay stable.
+	let quoted = api.shellquote(script);
+	let launcher = "trap '' HUP; " +
+		"if command -v setsid >/dev/null 2>&1; then " +
+		"setsid sh -c " + quoted + " </dev/null >/dev/null 2>&1 & " +
+		"else sh -c " + quoted + " </dev/null >/dev/null 2>&1 & fi; echo $!";
+	let started = read_cmd([ "/bin/sh", "-c", launcher ]);
 	let pid = started == null ? "" : trim(started.out);
-	return { pid: pid, starttime: start_time_of(pid) };
+	if (match(pid, /^[0-9]+$/) == null)
+		pid = "";
+	let starttime = pid == "" ? "" : start_time_of(pid);
+	if (pid != "" && starttime == "") {
+		command_rc([ "sleep", "1" ]);
+		starttime = start_time_of(pid);
+	}
+	return { pid: pid, starttime: starttime };
 };
 
 export function spawn(spec) {

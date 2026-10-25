@@ -2295,6 +2295,9 @@ gen_config = function(vars) {
 			policy: {
 				levels: {
 					"0": {
+						// Xray's default connIdle is 300s, so a quiet session is
+						// closed on its own. 0 disables that limit.
+						connIdle: 0,
 						bufferSize: truthy(xray_settings.buffer_size) ? to_number(xray_settings.buffer_size) : null,
 						statsUserUplink: false,
 						statsUserDownlink: false
@@ -2437,6 +2440,13 @@ gen_proto_config = function(vars) {
 	let config = {
 		log: {
 			loglevel: "warning"
+		},
+		policy: {
+			levels: {
+				"0": {
+					connIdle: 0
+				}
+			}
 		},
 		inbounds: inbounds,
 		outbounds: outbounds,
