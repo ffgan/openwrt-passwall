@@ -1,0 +1,15 @@
+#!/bin/sh
+# Fixture resolver. node.example answers with an IPv4 address for both
+# families. A -6 answer that is not IPv6 must not be written into psw_vps6:
+# nft rejects it and, with an atomic batch, drops the China and node sets too.
+if [ "$1" = "-4" ] || [ "$1" = "-6" ]; then
+	shift
+fi
+if [ "$1" = "-t" ]; then
+	shift 2
+fi
+if [ "$1" = "node.example" ]; then
+	printf '%s\n' '198.51.100.10'
+	exit 0
+fi
+exit 1

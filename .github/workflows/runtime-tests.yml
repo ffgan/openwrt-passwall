@@ -35,3 +35,9 @@ jobs:
           "$U" -L "$L" tests/runtime_state.uc
           "$U" -L "$L" tests/runtime_text.uc
           "$U" -L "$S" -L "$L" -L /tmp/ucode/build tests/rpc-plugin.uc
+
+      - name: Install nftables
+        run: sudo apt-get install -y nftables iproute2
+
+      - name: nftables routing
+        run: sudo -E UCODE=/tmp/ucode/build/ucode tests/routing.sh

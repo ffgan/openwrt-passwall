@@ -109,13 +109,32 @@ function nft(command) {
 function nft_flush(quiet) {
 	if (!length(pending))
 		return 0;
-	let path = TMP + "/nft.batch";
-	let script = "";
-	for (let command in pending)
-		script += command + "\n";
+	let commands = pending;
 	pending = [];
-	write(path, script);
-	return run(["nft", "-f", path], quiet);
+	let path = TMP + "/nft.batch";
+	write(path, join("\n", commands) + "\n");
+	// nft -f is atomic. One rejected element or rule used to roll back the
+	// redirect rules and the China/node sets together, so foreign sites were
+	// never proxied while a domestic check still went out directly.
+	if (run(["nft", "-f", path], true) == 0)
+		return 0;
+	if (!quiet)
+		log("nft 批量加载失败，改为逐条加载");
+	let applied = 0;
+	for (let command in commands) {
+		write(path, command + "\n");
+		if (run(["nft", "-f", path], true) == 0) {
+			applied++;
+			continue;
+		}
+		if (quiet)
+			continue;
+		let shown = command;
+		if (length(shown) > 180)
+			shown = substr(shown, 0, 180) + "...";
+		log("nft 规则被跳过: " + shown);
+	}
+	return applied > 0 ? 0 : 1;
 }
 
 function nft_now(command, quiet) {
@@ -202,15 +221,32 @@ function interface_addresses(family) {
 	return out;
 }
 
+function is_ipv4(address) {
+	return match(address, /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) != null;
+}
+
+function is_ipv6(address) {
+	return index(address, ":") >= 0 && match(address, /^[0-9A-Fa-f:]+$/) != null;
+}
+
 function resolve_host(family, host, count) {
 	if (host == null || host == "")
 		return "";
 	host = replace(replace("" + host, /^\[/, ""), /\]$/, "");
-	if ((family == 6 && index(host, ":") >= 0) ||
-	    (family == 4 && match(host, /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) != null))
+	if (family == 4 && is_ipv4(host))
 		return host;
+	if (family == 6 && is_ipv6(host))
+		return host;
+	if (is_ipv4(host) || is_ipv6(host))
+		return "";
 	let resolved = lines(output(["resolveip", family == 6 ? "-6" : "-4", "-t", "" + (count ?? 3), host]));
-	return length(resolved) ? resolved[0] : "";
+	for (let address in resolved) {
+		if (family == 4 && is_ipv4(address))
+			return address;
+		if (family == 6 && is_ipv6(address))
+			return address;
+	}
+	return "";
 }
 
 function geoview_bin() {
@@ -324,10 +360,7 @@ function filter_vps_addr(addresses) {
 	}
 	add_elements("psw_vps", ip4);
 	add_elements("psw_vps6", ip6);
-	if (length(ip4))
-		log("  - 加入IPv4节点服务器IP到nftset[psw_vps]直连完成");
-	if (length(ip6))
-		log("  - 加入IPv6节点服务器IP到nftset[psw_vps6]直连完成");
+	return [length(ip4), length(ip6)];
 }
 
 function filter_vpsip() {
@@ -335,12 +368,12 @@ function filter_vpsip() {
 	api.uci_foreach_c("nodes", (s) => {
 		push(addresses, "" + (s.address ?? ""), "" + (s.download_address ?? ""));
 	});
-	filter_vps_addr(addresses);
+	return filter_vps_addr(addresses);
 }
 
 function filter_haproxy() {
 	if (cfg("@global_haproxy[0]", "balancing_enable", "0") != "1")
-		return;
+		return [0, 0];
 	let section = api.uci_get_c("@global_haproxy[0]") ?? {};
 	let values = section.lbss ?? [];
 	if (type(values) != "array")
@@ -348,7 +381,7 @@ function filter_haproxy() {
 	let addresses = [];
 	for (let item in values)
 		push(addresses, split("" + item, ":")[0]);
-	filter_vps_addr(addresses);
+	return filter_vps_addr(addresses);
 }
 
 function populate_shunt_sets(node, set4, set6) {
@@ -419,8 +452,8 @@ function populate_sets() {
 	}
 	add_elements("psw_white", words(e("ISP_DNS")));
 	add_elements("psw_white6", words(e("ISP_DNS6")));
-	filter_vpsip();
-	filter_haproxy();
+	let vps_counts = filter_vpsip();
+	let hap_counts = filter_haproxy();
 	let wan4 = wan_addresses(4), wan6 = wan_addresses(6);
 	let wan4map = {}, wan6map = {};
 	for (let value in wan4) wan4map[value] = true;
@@ -441,7 +474,12 @@ function populate_sets() {
 				add_elements("psw_lan6", [fields[3]]);
 		}
 	}
-	nft_flush(false);
+	if (nft_flush(false) != 0)
+		return;
+	if (vps_counts[0] + hap_counts[0] > 0)
+		log("  - 加入IPv4节点服务器IP到nftset[psw_vps]直连完成");
+	if (vps_counts[1] + hap_counts[1] > 0)
+		log("  - 加入IPv6节点服务器IP到nftset[psw_vps6]直连完成");
 }
 
 function add_list_rules(chain4, chain6, proto, ports, action4, action6, comment, prefix, options) {
@@ -978,16 +1016,40 @@ function update_wan_sets(do_log) {
 	return rc;
 }
 
-function filter_server_port(address, port, stream, tproxy) {
+function insert_server_return(address, port, stream, tproxy) {
 	let proto = lc(stream);
 	let pexpr = factor(replace(port, /:/g, "-"), proto + " dport");
 	let comment = quote_comment(address + ":" + replace(port, /:/g, "-") + ":" + proto);
-	let v6 = index(address, ":") >= 0;
-	let chain4 = (proto == "udp" || tproxy) ? "PSW_OUTPUT_MANGLE" : "PSW_OUTPUT_NAT";
-	if (!v6 && index(nft_output(["list", "chain", "inet", "passwall", chain4]), "comment " + comment) < 0)
-		nft("insert rule " + TABLE + " " + chain4 + " meta l4proto " + proto + " ip daddr " + address + " " + pexpr + " return comment " + comment);
-	if (v6 && index(nft_output(["list", "chain", "inet", "passwall", "PSW_OUTPUT_MANGLE_V6"]), "comment " + comment) < 0)
-		nft("insert rule " + TABLE + " PSW_OUTPUT_MANGLE_V6 meta l4proto " + proto + " ip6 daddr " + address + " " + pexpr + " return comment " + comment);
+	let v6 = is_ipv6(address);
+	if (!v6 && !is_ipv4(address))
+		return;
+	let chain = v6 ? "PSW_OUTPUT_MANGLE_V6" : ((proto == "udp" || tproxy) ? "PSW_OUTPUT_MANGLE" : "PSW_OUTPUT_NAT");
+	let match_addr = v6 ? "ip6 daddr " : "ip daddr ";
+	if (index(nft_output(["list", "chain", "inet", "passwall", chain]), "comment " + comment) >= 0)
+		return;
+	nft("insert rule " + TABLE + " " + chain + " meta l4proto " + proto + " " + match_addr + address + " " + pexpr + " return comment " + comment);
+}
+
+function filter_server_port(address, port, stream, tproxy) {
+	address = replace(replace(trim("" + (address ?? "")), /^\[/, ""), /\]$/, "");
+	if (address == "")
+		return;
+	if (is_ipv4(address) || is_ipv6(address)) {
+		insert_server_return(address, port, stream, tproxy);
+		return;
+	}
+	let v4 = resolve_host(4, address);
+	let v6 = resolve_host(6, address);
+	if (v4 != "") {
+		add_elements("psw_vps", [v4]);
+		insert_server_return(v4, port, stream, tproxy);
+	}
+	if (v6 != "") {
+		add_elements("psw_vps6", [v6]);
+		insert_server_return(v6, port, stream, tproxy);
+	}
+	if (v4 == "" && v6 == "")
+		log("  - 节点 " + address + " 未解析到 IP，直连绕过未写入");
 }
 
 function filter_node(node, stream, tproxy) {
