@@ -1239,6 +1239,49 @@ function kill_matching(pattern, excludes) {
 	}
 }
 
+function kept_during_restart(line) {
+	// Cron restart leaves tasks.uc running, and subscribe.uc is the process
+	// that asked for the restart. Both are started via /tmp/etc/passwall/bin,
+	// so a blanket residue check calls stop() again. That second stop sees
+	// an empty cache and blocks in dnsmasq restart while the proxy is down.
+	for (let name in ['/tasks.uc', '/subscribe.uc', '/rule_update.uc', '/app.uc', '/service.uc', '/server_app.uc'])
+		if (index(line, name) >= 0)
+			return true;
+	return false;
+}
+
+function proxy_residues() {
+	let out = [];
+	for (let line in split(api.proc_lines(TMP + '/bin') ?? '', '\n')) {
+		if (trim(line ?? '') == '' || kept_during_restart(line))
+			continue;
+		push(out, line);
+	}
+	return out;
+}
+
+function kill_listed(lines) {
+	for (let line in lines) {
+		let pid = match(line, /^([0-9]+)/)?.[1];
+		if (pid) command(['kill', '-9', pid], true);
+	}
+}
+
+function restart_system_dnsmasq() {
+	let argv = [];
+	let timeout = utils.first_type('timeout');
+	if (timeout != '') {
+		push(argv, timeout);
+		push(argv, '20');
+	}
+	push(argv, '/usr/bin/ucode');
+	push(argv, LIBEXEC + '/helper_dnsmasq.uc');
+	push(argv, 'restart');
+	push(argv, '-LOG');
+	push(argv, '0');
+	command(argv, true);
+}
+
 export function stop(mode, internal) {
 	utils.clean_log();
 	let cache = utils.cache_all();
@@ -1263,10 +1306,19 @@ export function stop(mode, internal) {
 		api.uci_save(null, 'dhcp', true);
 		api.uci_save_c(true);
 	}
-	if (!cache.ACL_default_dns_port || backup) {
-		api.uci.del_list('dhcp', api.uci_get('dhcp', '@dnsmasq[0]')?.['.name'], 'addnmount', cache.GLOBAL_DNSMASQ_CONF_PATH ?? '');
-		api.uci_save(null, 'dhcp', true);
-		command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'restart', '-LOG', '0'], true);
+	let dns_mount = cache.GLOBAL_DNSMASQ_CONF_PATH ?? '';
+	// A missing cache is not the same as "dnsmasq was never pointed at
+	// passwall". The previous stop already deleted it. Restarting dnsmasq
+	// from that empty cache blocks startup and leaves the proxy down.
+	let restart_dns = backup ? true : false;
+	if (dns_mount != '' && !cache.ACL_default_dns_port)
+		restart_dns = true;
+	if (restart_dns) {
+		if (dns_mount != '') {
+			api.uci.del_list('dhcp', api.uci_get('dhcp', '@dnsmasq[0]')?.['.name'], 'addnmount', dns_mount);
+			api.uci_save(null, 'dhcp', true);
+		}
+		restart_system_dnsmasq();
 	}
 	write_sysctl('net.bridge.bridge-nf-call-iptables', cache.bak_bridge_nf_ipt);
 	write_sysctl('net.bridge.bridge-nf-call-ip6tables', cache.bak_bridge_nf_ip6t);
@@ -1276,11 +1328,18 @@ export function stop(mode, internal) {
 };
 
 export function start(mode) {
-	let residues = api.proc_lines(TMP + '/bin');
-	if (trim(residues) != '') {
-		command(['logger', '-t', 'PSW-RESTART', 'Upgrade or overload residue is detected, and the subprocess is being called to perform complete cleaning...'], true);
-		stop(mode, true);
-		command(['sleep', '2'], true);
+	let residues = proxy_residues();
+	if (length(residues)) {
+		let cache = utils.cache_all();
+		let cache_left = (cache.USE_TABLES ?? '') != '' || (cache.ACL_default_dns_port ?? '') != '';
+		if (cache_left) {
+			command(['logger', '-t', 'PSW-RESTART', 'Upgrade or overload residue is detected, and the subprocess is being called to perform complete cleaning...'], true);
+			stop(mode, true);
+		} else {
+			command(['logger', '-t', 'PSW-RESTART', 'Leftover proxy processes found after stop, killing them without restarting dnsmasq...'], true);
+			kill_listed(residues);
+		}
+		command(['sleep', '1'], true);
 	}
 	mkdirs();
 	get_config();
@@ -1293,7 +1352,7 @@ export function start(mode) {
 			api.uci_save_c(true);
 			api.uci_set('dhcp', '@dnsmasq[0]', 'dns_redirect', '0');
 			api.uci_save(null, 'dhcp', true);
-			command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'restart', '-LOG', '0'], true);
+			restart_system_dnsmasq();
 		}
 	}
 	if (state.ENABLED_DEFAULT_ACL == '1') {

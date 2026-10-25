@@ -2407,7 +2407,9 @@ main = function(argv) {
 	release_lock();
 	if (restart_required) {
 		let action = (length(argv) > 2 && argv[2] === "cron") ? " cron" : "";
-		api.sys.call("/etc/init.d/passwall restart" + action + " > /dev/null 2>&1 &");
+		// Detach before popen waits. This busybox setsid has no -f; the
+		// shell backgrounds it so a stuck restart cannot hold the pipe open.
+		api.sys.call("setsid /etc/init.d/passwall restart" + action + " >/dev/null 2>&1 </dev/null &");
 	}
 };
 export { main };
