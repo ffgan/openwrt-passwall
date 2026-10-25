@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkgDir = path.join(root, 'luci-app-passwall');
 const pkgName = 'luci-app-passwall';
-const pkgVer = '26.10.25-r2';
+const pkgVer = '26.10.25-r4';
 const outDir = path.join(root, 'dist');
 const outFile = path.join(outDir, `${pkgName}_${pkgVer}_all.apk`);
 

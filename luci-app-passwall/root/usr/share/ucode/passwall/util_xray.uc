@@ -556,7 +556,7 @@ client_stream_settings = function(node, dialer_proxy_tag, fragment, noise) {
 			} : null,
 			dialerProxy: dialer_proxy_tag
 		},
-		method: node.transport,
+		network: node.transport,
 		security: node.stream_security,
 		tlsSettings: node.stream_security == "tls" ? {
 			serverName: node.tls_serverName,
@@ -840,13 +840,23 @@ gen_outbound = function(flag, node, tag, proxy_table) {
 				xudpConcurrency: node.mux == "1" ? tonumber_or(node.xudp_concurrency, 8) : null
 			} : null,
 			streamSettings: need_stream_settings(node, dialer_proxy_tag) ? client_stream_settings(node, dialer_proxy_tag, fragment, noise) : null,
-			settings: {
+			settings: (node.protocol == "vmess" || node.protocol == "vless") ? {
+				// Xray 26.10 still applies VLESS flow only from vnext.users.
+				// A flat settings.id is dialed, then the server resets the tunnel.
+				vnext: [{
+					address: node.address,
+					port: to_number(node.port),
+					users: [{
+						id: node.uuid,
+						encryption: node.protocol == "vless" ? (nonempty(node.encryption) ? node.encryption : "none") : null,
+						flow: node.protocol == "vless" ? vless_flow(node) : null,
+						security: node.protocol == "vmess" ? node.security : null,
+						level: 0
+					}]
+				}]
+			} : {
 				address: node.protocol == "wireguard" ? lua_or(node.wireguard_local_address, node.address) : node.address,
 				port: to_number(node.port),
-				id: (node.protocol == "vmess" || node.protocol == "vless") ? node.uuid : null,
-				encryption: node.protocol == "vless" ? (nonempty(node.encryption) ? node.encryption : "none") : null,
-				flow: vless_flow(node),
-				security: node.protocol == "vmess" ? node.security : null,
 				user: (node.protocol == "socks" || node.protocol == "http") ? node.username : null,
 				pass: (node.protocol == "socks" || node.protocol == "http") ? node.password : null,
 				password: (node.protocol == "shadowsocks" || node.protocol == "trojan") ? node.password : null,
@@ -941,7 +951,7 @@ server_users = function(node) {
 
 server_stream_settings = function(node) {
 	return {
-		method: node.transport,
+		network: node.transport,
 		security: "none",
 		masqueSettings: node.protocol == "masque" ? {
 			path: nonempty(node.masque_path) ? node.masque_path : null
@@ -2295,9 +2305,10 @@ gen_config = function(vars) {
 			policy: {
 				levels: {
 					"0": {
-						// Xray's default connIdle is 300s, so a quiet session is
-						// closed on its own. 0 disables that limit.
-						connIdle: 0,
+						// Xray 26 treats connIdle 0 as "close immediately", which
+						// resets the Reality tunnel before any data returns.
+						// A day is long enough for a quiet session and still expires.
+						connIdle: 86400,
 						bufferSize: truthy(xray_settings.buffer_size) ? to_number(xray_settings.buffer_size) : null,
 						statsUserUplink: false,
 						statsUserDownlink: false
@@ -2444,7 +2455,7 @@ gen_proto_config = function(vars) {
 		policy: {
 			levels: {
 				"0": {
-					connIdle: 0
+					connIdle: 86400
 				}
 			}
 		},
