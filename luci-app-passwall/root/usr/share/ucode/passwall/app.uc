@@ -438,13 +438,78 @@ export function get_local_dns() {
 	let servers = api.uci_get('dhcp', '@dnsmasq[0]', 'server');
 	let defaults = [];
 	if (type(servers) != 'array') servers = servers == null ? [] : [servers];
-	for (let server in servers)
-		if (index(server, '/') < 0) push(defaults, server);
+	for (let server in servers) {
+		if (index(server, '/') >= 0)
+			continue;
+		// 127.0.0.1#15353 is a passwall listener, not an upstream. Treating it
+		// as the ISP resolver makes later starts send direct DNS into itself.
+		let host = split(server, '#')[0];
+		if (host == '127.0.0.1' || host == '0.0.0.0' || host == '::1' || host == '[::1]')
+			continue;
+		push(defaults, server);
+	}
 	state.ISP_DNS = join(' ', v4);
 	state.ISP_DNS6 = join(' ', v6);
 	state.DEFAULT_DNS = length(defaults) ? join(',', defaults) : join(',', v4);
 	state.LOCAL_DNS = split(state.DEFAULT_DNS || '223.5.5.5', ',')[0];
 };
+
+function passwall_loopback_dns(server) {
+	if (server == null || index(server, '/') >= 0 || index(server, '#') < 0)
+		return false;
+	let host = split(server, '#')[0];
+	let port = int(split(server, '#')[1]);
+	if (substr(host, 0, 1) == '[')
+		host = substr(host, 1, length(host) - 2);
+	if (host != '127.0.0.1' && host != '::1')
+		return false;
+	return port == port && port >= 15353 && port <= 15399;
+}
+
+// Drop dnsmasq upstreams that point at a passwall DNS port. Leaving
+// noresolv plus 127.0.0.1#15353 makes every LAN client time out once the
+// listener is gone, including after the main switch is turned off.
+function restore_system_dns() {
+	let servers = api.uci_get('dhcp', '@dnsmasq[0]', 'server');
+	if (type(servers) != 'array')
+		servers = servers == null || servers == '' ? [] : [servers];
+	let kept = [];
+	let dropped = false;
+	for (let server in servers) {
+		if (passwall_loopback_dns(server))
+			dropped = true;
+		else
+			push(kept, server);
+	}
+	let plain = false;
+	for (let server in kept)
+		if (index(server, '/') < 0)
+			plain = true;
+	let noresolv = api.uci_get('dhcp', '@dnsmasq[0]', 'noresolv') == '1';
+	if (dropped) {
+		api.uci_set('dhcp', '@dnsmasq[0]', 'server', kept);
+		if (noresolv && !plain)
+			api.uci_del('dhcp', '@dnsmasq[0]', 'noresolv');
+		api.uci_save(null, 'dhcp', true);
+		api.log('已恢复系统 DNS，不再使用本机 PassWall 端口。');
+		return true;
+	}
+	return false;
+}
+
+function restart_cron() {
+	if (!fs.access('/etc/init.d/cron', 'x'))
+		return;
+	let argv = [];
+	let timeout = utils.first_type('timeout');
+	if (timeout != '') {
+		push(argv, timeout);
+		push(argv, '15');
+	}
+	push(argv, '/etc/init.d/cron');
+	push(argv, 'restart');
+	command(argv, true);
+}
 
 export function get_config() {
 	get_local_dns();
@@ -1165,7 +1230,7 @@ export function start_crontab(mode) {
 	}
 	clean_crontab();
 	if (state.ENABLED != '1') {
-		if (fs.access('/etc/init.d/cron', 'x')) command(['/etc/init.d/cron', 'restart'], true);
+		restart_cron();
 		return;
 	}
 	let entries = [], loop = false;
@@ -1205,13 +1270,13 @@ export function start_crontab(mode) {
 		api.log('自动更新：启动循环更新进程。');
 	} else if (state.ENABLED_DEFAULT_ACL != '1' && state.ENABLED_ACLS != '1')
 		api.log('运行于非代理模式，仅允许服务启停的定时任务。');
-	if (fs.access('/etc/init.d/cron', 'x')) command(['/etc/init.d/cron', 'restart'], true);
+	restart_cron();
 };
 
 export function stop_crontab(mode) {
 	if (mode == 'cron') return;
 	clean_crontab();
-	if (fs.access('/etc/init.d/cron', 'x')) command(['/etc/init.d/cron', 'restart'], true);
+	restart_cron();
 };
 
 export function write_nft_env() {
@@ -1313,9 +1378,22 @@ export function stop(mode, internal) {
 	let restart_dns = backup ? true : false;
 	if (dns_mount != '' && !cache.ACL_default_dns_port)
 		restart_dns = true;
+	if (restore_system_dns())
+		restart_dns = true;
 	if (restart_dns) {
 		if (dns_mount != '') {
-			api.uci.del_list('dhcp', api.uci_get('dhcp', '@dnsmasq[0]')?.['.name'], 'addnmount', dns_mount);
+			// 25.12's uci cursor has no del_list. Calling it aborts stop()
+			// after nftables are already gone and before the service is restarted.
+			let sid = api.uci_get('dhcp', '@dnsmasq[0]')?.['.name'];
+			let mounts = sid ? api.uci_get('dhcp', sid, 'addnmount') : null;
+			if (type(mounts) != 'array')
+				mounts = mounts == null || mounts == '' ? [] : [mounts];
+			let kept_mounts = [];
+			for (let item in mounts)
+				if (item != dns_mount)
+					push(kept_mounts, item);
+			if (sid)
+				api.uci_set('dhcp', sid, 'addnmount', kept_mounts);
 			api.uci_save(null, 'dhcp', true);
 		}
 		restart_system_dnsmasq();
@@ -1328,6 +1406,9 @@ export function stop(mode, internal) {
 };
 
 export function start(mode) {
+	api.log('开始启动，总开关：' + cfg('@global[0]', 'enabled', '0') + '，节点：' + (cfg('@global[0]', 'node') ?? ''));
+	if (restore_system_dns())
+		restart_system_dnsmasq();
 	let residues = proxy_residues();
 	if (length(residues)) {
 		let cache = utils.cache_all();

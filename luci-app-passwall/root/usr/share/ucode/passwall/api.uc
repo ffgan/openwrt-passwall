@@ -543,7 +543,13 @@ uci_save = function(cur, config, commit_flag, apply) {
 				sys_call("/etc/init.d/" + config + " reload > /dev/null 2>&1 &");
 		}
 	} else if (apply) {
-		cur.commit(config);
+		/* Commit, then reload. On 25.12 cur.commit() alone leaves the old
+		   process on the previous node, so the page shows a new selection
+		   while Current Node stays on the one that is actually running. */
+		cur.save(config);
+		sh_uci_commit(config);
+		if (match(config, /^[A-Za-z0-9_]+$/) != null && fs_access("/etc/init.d/" + config, "x"))
+			sys_call("/etc/init.d/" + config + " reload >/dev/null 2>&1 &");
 	} else {
 		/* 25.12 ucode uci keeps set() in the cursor until save(). A shell
 		   `uci commit` only sees that delta, so write it first. */

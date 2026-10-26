@@ -117,12 +117,14 @@ function client(action, args) {
 		let mode = (args[1] ?? '') != '' ? args[1] : (args[0] ?? '');
 		if (mode == 'restart')
 			mode = '';
-		return with_client_lock('restart', [ mode ], false);
+		// Wait. A non-blocking restart used to exit while another restart
+		// held the lock, so a node change was saved and then never applied.
+		return with_client_lock('restart', [ mode ], true);
 	}
 	if (action == 'reload') {
 		print('Warning: This service does not support configuration reloading\n');
 		print('Performing full restart instead...\n');
-		return with_client_lock('restart', [ '' ], false);
+		return with_client_lock('restart', [ '' ], true);
 	}
 	return 1;
 }
