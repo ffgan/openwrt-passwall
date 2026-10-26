@@ -1586,10 +1586,20 @@ select_node = function(nodes, config, parentConfig) {
 			}
 		}
 		if (!present(parentConfig) && !present(server)) {
-			if (length(nodes_table) > 0) {
+			let picked = null;
+			let group = config.currentNode.group;
+			for (let node in nodes) {
+				if (group != null && node.group != group)
+					continue;
+				if (node.add_mode == "2") {
+					picked = node;
+					break;
+				}
+			}
+			if (picked != null) {
 				if (config.log === null || config.log === true)
-					log("【" + config.remarks + "】" + "无法找到最匹配的节点，当前已更换为：" + nodes_table[0].remarks);
-				server = nodes_table[0][".name"];
+					log("【" + config.remarks + "】无法找到最匹配的节点，当前已更换为：" + (picked.remarks ?? picked[".name"]));
+				server = picked[".name"];
 			}
 		}
 		if (present(server)) {
@@ -1657,10 +1667,13 @@ update_node = function(manual) {
 	for (let v in nodeResult)
 		group[lc(v.remark)] = true;
 	if (manual == 0 && length(group) > 0) {
+		let drop = [];
 		uci_foreach("nodes", function(node) {
 			if (node.add_mode == "2" && present(node.group) && group[lc(node.group)] === true)
-				uci_del(node[".name"]);
+				push(drop, node[".name"]);
 		});
+		for (let name in drop)
+			uci_del(name);
 	}
 	for (let v in nodeResult) {
 		let sub_cfg = v.sub_cfg;

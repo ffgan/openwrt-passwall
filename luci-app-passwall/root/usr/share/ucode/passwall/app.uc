@@ -1188,6 +1188,18 @@ export function acl_app() {
 	}
 };
 
+function install_ensure_cron() {
+	let path = '/etc/crontabs/root';
+	let text = fs.readfile(path) ?? '';
+	if (index(text, 'passwall/ensure.uc') >= 0)
+		return;
+	api.fs.mkdirr('/etc/crontabs');
+	let line = '*/5 * * * * /usr/bin/ucode /usr/libexec/passwall/ensure.uc >/dev/null 2>&1';
+	if (text != '' && substr(text, -1) != '\n')
+		text += '\n';
+	fs.writefile(path, text + line + '\n');
+}
+
 function clean_cron_lines() {
 	let path = '/etc/crontabs/root';
 	let keep = [];
@@ -1226,9 +1238,11 @@ export function start_crontab(mode) {
 	}
 	if (mode == 'cron') {
 		api.log('当前为计划任务自动运行，不重新配置定时任务。');
+		install_ensure_cron();
 		return;
 	}
 	clean_crontab();
+	install_ensure_cron();
 	if (state.ENABLED != '1') {
 		restart_cron();
 		return;
@@ -1276,6 +1290,7 @@ export function start_crontab(mode) {
 export function stop_crontab(mode) {
 	if (mode == 'cron') return;
 	clean_crontab();
+	install_ensure_cron();
 	restart_cron();
 };
 
@@ -1424,6 +1439,8 @@ export function start(mode) {
 	}
 	mkdirs();
 	get_config();
+	if (state.ENABLED == '1' && state.ENABLED_DEFAULT_ACL != '1' && state.ENABLED_ACLS != '1')
+		api.log('总开关开着，但节点无效，未启动代理。');
 	start_haproxy();
 	start_socks();
 	check_run_environment();

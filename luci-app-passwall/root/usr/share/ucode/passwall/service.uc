@@ -50,6 +50,9 @@ function with_client_lock(action, args, wait) {
 		api.log(wait ? '无法取得停止锁，退出.' : '脚本已经在运行，不重复运行，退出.');
 		return wait ? 1 : 0;
 	}
+	let self = fs.readfile('/proc/self/stat') ?? '';
+	let pid = match(self, /^([0-9]+)/)?.[1] ?? '0';
+	fs.writefile(LOCK_DIR + '/passwall.owner', pid + ' ' + time() + '\n');
 	let rc = client_locked(action, args);
 	lock.lock('u');
 	lock.close();
