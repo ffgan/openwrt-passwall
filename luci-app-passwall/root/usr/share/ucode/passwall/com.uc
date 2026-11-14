@@ -72,7 +72,7 @@ export let sing_box = {
 export let xray = {
 	name: "Xray",
 	repo: "XTLS/Xray-core",
-	get_url: gh_pre_release_url,
+	get_url: function() { return "https://api.github.com/repos/XTLS/Xray-core/releases?per_page=100"; },
 	cmd_version: "version | awk '{print $2}' | sed -n 1P",
 	zipped: true,
 	default_path: "/usr/bin/xray",

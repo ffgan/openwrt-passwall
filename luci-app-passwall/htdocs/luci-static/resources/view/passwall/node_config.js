@@ -1216,6 +1216,10 @@ return view.extend({
 				dom = 'xray_';
 			else if (vType === 'sing-box')
 				dom = 'singbox_';
+			if (vType === 'Xray' && ((field(dom + 'transport') || {}).value || node.transport) === 'xdrive') {
+				status(_('XDRIVE settings cannot be represented by this share link. Use the full JSON configuration.'));
+				return null;
+			}
 			var address = '';
 			if (dom) {
 				try {

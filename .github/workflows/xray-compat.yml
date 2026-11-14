@@ -1,0 +1,55 @@
+name: Xray upstream compatibility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [v26.11.9, latest]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake libjson-c-dev pkg-config build-essential
+      - name: Build target ucode runtime
+        run: |
+          git clone --quiet https://github.com/jow-/ucode.git /tmp/ucode
+          git -C /tmp/ucode checkout 85922056ef7abeace3cca3ab28bc1ac2d88e31b1
+          cmake -S /tmp/ucode -B /tmp/ucode/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/ucode/build --target ucode fs_lib -j2
+      - name: Download verified official core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tests/xray-upstream.py --version '${{ matrix.version }}' --output /tmp/xray
+      - name: Check merge policy and generated configurations
+        env:
+          UCODE: /tmp/ucode/build/ucode
+          UCODE_LIB: /tmp/ucode/build
+          XRAY: /tmp/xray/xray
+        run: python3 tests/xray-compat.py
+      - name: Detect changes to upstream configuration surface
+        run: |
+          if ! diff -u tests/fixtures/xray-config-inventory.json /tmp/xray/config-inventory.json; then
+            echo '::error::Xray configuration fields changed. Review the upstream source and update compatibility fixtures before refreshing the inventory.'
+            exit 1
+          fi
+      - name: Preserve release identity and configuration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-${{ matrix.version }}
+          path: |
+            /tmp/xray/release.json
+            /tmp/xray/config-inventory.json
+            /tmp/passwall-xray-results.json

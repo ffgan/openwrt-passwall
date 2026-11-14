@@ -1,5 +1,6 @@
 'use strict';
 'require baseclass';
+'require form';
 'require dom';
 'require fs';
 'require rpc';
@@ -125,6 +126,38 @@ return baseclass.extend({
 	__init__: function() {
 		installValidators();
 		installTheme();
+	},
+
+	addXrayMerge: function(section, scope) {
+		var self = this;
+		var enabled = section.option(form.Flag, 'json_merge', _('Merge Xray JSON configuration'));
+		enabled.default = '0';
+		if (scope === 'server') enabled.depends({ custom: false });
+		var text = section.option(form.TextValue, 'json_config', _('Xray JSON configuration'),
+			_('Objects merge recursively; ordinary arrays replace. Inbounds/outbounds merge by tag. Managed fields are protected; DNS servers and new balancers append. Custom routing rules append after managed rules. Client configuration applies only to the main Xray instance.'));
+		text.rows = 16;
+		text.wrap = 'off';
+		text.depends(scope === 'server' ? { json_merge: '1', custom: false } : { json_merge: '1' });
+		text.validate = function(id, value) {
+			try {
+				var parsed = JSON.parse(value || '{}');
+				if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return true;
+			} catch (e) {}
+			return _('Expected a JSON object');
+		};
+		var button = section.option(form.Button, '_xray_json_check', _('Preview and validate merged configuration'),
+			_('Client preview uses the last generated main configuration. Server preview uses saved server settings. Save other form changes first. The preview contains credentials.'));
+		button.depends(scope === 'server' ? { json_merge: '1', custom: false } : { json_merge: '1' });
+		button.inputtitle = _('Preview and validate');
+		button.onclick = function(id) {
+			return self.call('xray_config_check', { scope: scope, id: id, overlay: text.formvalue(id) || '{}' }).then(function(result) {
+				if (result.code) throw new Error(result.error || _('Validation failed'));
+				ui.showModal(_('Xray configuration validated by installed core'), [
+					E('textarea', { 'class': 'cbi-input-textarea', 'rows': 24, 'readonly': true, 'style': 'width:100%' }, JSON.stringify(result.config, null, 2)),
+					E('div', { 'class': 'right' }, [ E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close')) ])
+				]);
+			}).catch(function(err) { ui.addNotification(null, E('p', {}, err.message)); });
+		};
 	},
 
 	appname: 'passwall',

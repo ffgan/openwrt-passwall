@@ -195,6 +195,7 @@ setFinalmask = function(result, fm) {
 
 normNet = function(result, net) {
 	net = lc(net);
+	if (net == "xdrive") die("XDRIVE share links are unsupported; import the full JSON configuration");
 	if (result.type == "sing-box" && net == "raw")
 		return "tcp";
 	if (result.type == "Xray" && net == "tcp")

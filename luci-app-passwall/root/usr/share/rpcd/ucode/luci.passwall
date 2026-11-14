@@ -2,6 +2,9 @@
 
 import * as api from 'passwall.api';
 import * as com from 'passwall.com';
+import { merge_config } from 'passwall.xray_config';
+import { check_config } from 'passwall.xray_runtime';
+import { gen_config_server as xray_server_config } from 'passwall.util_xray';
 import { main as subscribe_main } from 'passwall.subscribe';
 import { url_test_node } from 'passwall.urltest';
 import { main } from 'passwall.rule_update';
@@ -1864,7 +1867,42 @@ app_update_args = function() {
 	};
 };
 
+function xray_config_check(req) {
+	try {
+		let scope = form_raw(req, 'scope');
+		let overlay = form_raw(req, 'overlay') ?? '{}';
+		if (length(overlay) > 1048576) return { code: 1, error: 'JSON configuration exceeds 1 MiB' };
+		let base;
+		if (scope == 'client') {
+			let source = read_text(tmp_path() + '/acl/default/global.json.base');
+			if (!source) return { code: 1, error: 'No generated main Xray baseline; start the main Xray instance first' };
+			base = json(source);
+		} else if (scope == 'server') {
+			let id = form_raw(req, 'id') ?? '';
+			if (!match(id, /^[A-Za-z0-9_]+$/)) return { code: 1, error: 'Invalid server identifier' };
+			let node = api.uci_get_s(id);
+			if (node?.type != 'Xray' || node.custom == '1') return { code: 1, error: 'Select a saved Xray server in merge mode' };
+			node.json_merge = '0';
+			base = xray_server_config(node, true);
+		} else return { code: 1, error: 'Invalid scope' };
+		let patch;
+		try { patch = json(overlay); }
+		catch (e) { return { code: 1, error: 'Invalid JSON' }; }
+		let config = merge_config(base, patch, scope == 'server');
+		let result = check_config(config);
+		if (result.code == 0) result.config = config;
+		return result;
+	} catch (e) {
+		let message = e.message ?? '';
+		return { code: 1, error: (index(message, 'Xray JSON $') == 0 || index(message, 'XDRIVE ') == 0) ? message : 'Cannot generate Xray configuration' };
+	}
+}
+
 let methods = {
+	xray_config_check: {
+		args: { scope: 'string', id: 'string', overlay: 'string' },
+		call: xray_config_check
+	},
 	show_menu: {
 		call: function() {
 			return show_menu();

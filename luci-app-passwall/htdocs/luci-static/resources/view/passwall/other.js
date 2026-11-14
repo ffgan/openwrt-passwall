@@ -201,6 +201,7 @@ return view.extend({
 
 		if (present(caps.xray)) {
 			var sx = m.section(form.NamedSection, ensureSection('global_xray'), 'global_xray', 'Xray ' + _('Settings'));
+			pw.addXrayMerge(sx, 'client');
 
 			o = flag(sx, 'fragment', _('Fragment'), _('TCP fragments, which can deceive the censorship system in some cases, such as bypassing SNI blacklists.'));
 			o.default = '0';

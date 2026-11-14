@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { cursor } from 'uci';
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
+import { preflight as xray_preflight } from 'passwall.xray_preflight';
 
 const LOCK_DIR = '/var/lock';
 const CLIENT_LOCK = LOCK_DIR + '/passwall.lock';
@@ -92,9 +93,12 @@ client_locked = function(action, args) {
 			api.log('等待订阅/规则更新结束失败或超时，取消重启.');
 			return 2;
 		}
+		if (!xray_preflight(false)) {
+			api.log('Xray JSON preflight failed; restart cancelled and running instance retained.');
+			return 1;
+		}
 		invoke_app(false, 'stop', mode);
-		invoke_app(false, 'start', mode);
-		return 0;
+		return invoke_app(false, 'start', mode);
 	}
 	return 1;
 };
@@ -145,12 +149,14 @@ function server(action) {
 	if (action == 'start' || action == 'stop')
 		return invoke_app(true, action);
 	if (action == 'restart') {
+		if (!xray_preflight(true)) return 1;
 		invoke_app(true, 'stop');
 		return invoke_app(true, 'start');
 	}
 	if (action == 'reload') {
 		print('Warning: This service does not support configuration reloading\n');
 		print('Performing full restart instead...\n');
+		if (!xray_preflight(true)) return 1;
 		invoke_app(true, 'stop');
 		return invoke_app(true, 'start');
 	}

@@ -3,6 +3,8 @@
 import * as fs from 'fs';
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
+import { apply_config } from 'passwall.xray_config';
+import { check_config, install_config } from 'passwall.xray_runtime';
 import { render_nft_state } from 'passwall.state';
 
 const TMP = utils.TMP_PATH;
@@ -240,13 +242,33 @@ function run_core(kind, raw) {
 	if (!o.type || !o.config_file)
 		return 1;
 	o.log_file = o.log_file || '/dev/null';
-	generate(UTIL[kind], 'gen_config', core_config(o, kind), o.config_file);
+	if (kind == 'xray') {
+		try {
+			let args = core_config(o, kind);
+			args.skip_json_merge = '1';
+			let text = command_output(['/usr/bin/ucode', UTIL[kind], 'gen_config', sprintf('%J', args)]);
+			let base = json(text);
+			if (type(base) != 'object') die('Invalid generated Xray configuration');
+			let config = o.flag == 'global' ? apply_config(base, api.uci_get_c('@global_xray[0]') ?? {}, false) : base;
+			let checked = o.no_run ? { code: 0 } : check_config(config);
+			if (checked.code != 0) die(checked.error);
+			if (!install_config(config, o.config_file)) die('Cannot install Xray candidate');
+			if (o.flag == 'global') {
+				install_config(base, o.config_file + '.base');
+			}
+		}
+		catch (e) {
+			api.log('Xray configuration rejected; existing configuration retained.');
+			return 1;
+		}
+	}
+	else generate(UTIL[kind], 'gen_config', core_config(o, kind), o.config_file);
 	if (o.no_run)
 		return 0;
 	let executable = kind == 'sing-box' ? bin('sing_box', 'sing-box') : bin('xray', 'xray');
 	let testlog = o.log_file == '/dev/null' ? TMP + '/' + split(o.config_file, '/')[length(split(o.config_file, '/')) - 1] + '_test.log' : o.log_file;
 	let rc = 0;
-	if (o.run_in_global)
+	if (o.run_in_global && kind != 'xray')
 		rc = capture(kind == 'sing-box' ? [executable, 'check', '-c', o.config_file] : [executable, 'run', '-test', '-c', o.config_file], testlog);
 	if (rc == 0)
 		launch_core(executable, kind, o.log_file, ['run', '-c', o.config_file]);
@@ -725,7 +747,7 @@ export function start_global() {
 			for (let key, val in direct_dns_options()) o[key] = val;
 			state.NEXT_DNS_LISTEN_PORT = dns_port + 1;
 		}
-		run_core(type_name, o);
+		if (run_core(type_name, o) != 0) return 1;
 		native_socks = true;
 	} else if (type_name == 'socks') {
 		let direct = host, dport = port;

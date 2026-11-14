@@ -2,6 +2,8 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+import { apply_config } from 'passwall.xray_config';
+import { check_config, install_config, core_env } from 'passwall.xray_runtime';
 import { spawn, kill_matching } from 'passwall.proc';
 import { gen_config_server as ss_gen_config_server } from 'passwall.util_shadowsocks';
 import { gen_config_server as xray_gen_config_server } from 'passwall.util_xray';
@@ -32,12 +34,13 @@ log = function(...args) {
 	fh.close();
 };
 
-launch_server = function(file, name, args, output) {
+launch_server = function(file, name, args, output, env) {
 	return spawn({
 		file: file ?? "",
 		name: name,
 		args: args,
 		output: output ?? "/dev/null",
+		env: env,
 		bindir: TMP_BIN_PATH
 	});
 };
@@ -137,15 +140,29 @@ start = function() {
 					config = ss_gen_config_server(server);
 				launch = { file: "/usr/bin/ssserver", name: "ssserver", args: ["-c", config_file] };
 			} else if (server_type == "Xray") {
-				if (server.custom === "1" && ltruth(server.config_str)) {
-					config = api.jsonc.parse(api.base64Decode(server.config_str));
-					if (log_path != null) {
-						if (config.log == null)
-							config.log = {};
-						config.log.loglevel = server.loglevel;
+				try {
+					if (server.custom === "1" && ltruth(server.config_str)) {
+						config = api.jsonc.parse(api.base64Decode(server.config_str));
+						if (log_path != null) {
+							if (config.log == null)
+								config.log = {};
+							config.log.loglevel = server.loglevel;
+						}
+					} else {
+						let settings = { json_merge: server.json_merge, json_config: server.json_config };
+						server.json_merge = '0';
+						let base = xray_gen_config_server(server);
+						config = apply_config(base, settings, true);
+						// Retained outside the live config until core validation succeeds.
+						server._xray_base = base;
 					}
-				} else {
-					config = xray_gen_config_server(server);
+					if (check_config(config).code != 0) {
+						log('Xray configuration rejected for instance', id);
+						return;
+					}
+				} catch (e) {
+					log('Xray configuration generation failed for instance', id);
+					return;
 				}
 				launch = { file: api.get_app_path("xray"), name: "xray", args: ["run", "-c", config_file] };
 			} else if (server_type == "sing-box") {
@@ -172,8 +189,12 @@ start = function() {
 			}
 
 			if (nonempty(config)) {
-				let fh = fs.open(config_file, "w");
-				if (fh != null) {
+				if (server_type == "Xray") {
+					if (!install_config(config, config_file)) return;
+					if (server._xray_base != null) install_config(server._xray_base, config_file + '.base');
+				} else {
+					let fh = fs.open(config_file, 'w');
+					if (fh == null) return;
 					fh.write(api.jsonc.stringify(config, 1));
 					fh.close();
 				}
@@ -181,7 +202,7 @@ start = function() {
 			}
 
 			if (launch != null)
-				launch_server(launch.file, launch.name, launch.args, log_path);
+				launch_server(launch.file, launch.name, launch.args, log_path, server_type == "Xray" ? core_env() : null);
 
 			let firewall_allow = server.firewall_allow;
 			if (firewall_allow == "1") {

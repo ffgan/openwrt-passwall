@@ -7,7 +7,12 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkgDir = path.join(root, 'luci-app-passwall');
 const pkgName = 'luci-app-passwall';
-const pkgVer = '26.10.25-r5';
+const makefile = fs.readFileSync(path.join(pkgDir, 'Makefile'), 'utf8');
+const version = makefile.match(/^PKG_VERSION:=(.+)$/m)?.[1].trim();
+const release = makefile.match(/^PKG_RELEASE:=(.+)$/m)?.[1].trim();
+if (!version || !release)
+	throw new Error('Package version or release missing from Makefile');
+const pkgVer = `${version}-r${release}`;
 const outDir = path.join(root, 'dist');
 const outFile = path.join(outDir, `${pkgName}_${pkgVer}_all.apk`);
 

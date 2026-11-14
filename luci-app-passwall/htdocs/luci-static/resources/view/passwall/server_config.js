@@ -1003,6 +1003,7 @@ function addSingbox(section, ctx) {
 }
 
 function addXray(section, ctx) {
+	pw.addXrayMerge(section, 'server');
 	var id = ctx.id;
 	var map = ctx.map;
 	var crt = '/etc/config/ssl/' + id + '.crt';
@@ -1188,10 +1189,19 @@ function addXray(section, ctx) {
 	o.value('grpc', 'gRPC');
 	o.value('httpupgrade', 'HttpUpgrade');
 	o.value('xhttp', 'XHTTP');
+	o.value('xdrive', 'XDRIVE');
 	o.depends({ protocol: 'vmess' });
 	o.depends({ protocol: 'vless' });
 	o.depends({ protocol: 'shadowsocks' });
 	o.depends({ protocol: 'trojan' });
+
+	o = section.option(form.TextValue, 'xdrive_settings', 'XDRIVE settings (JSON)', _('Requires VLESS encryption/decryption with no flow. Client Mux is enabled automatically; concurrency values must be nonnegative.'));
+	o.rows = 10;
+	o.depends({ transport: 'xdrive' });
+	o.validate = function(id, value) {
+		try { var v = JSON.parse(value || '{}'); if (v && typeof v === 'object' && !Array.isArray(v)) return true; } catch (e) {}
+		return _('Expected a JSON object');
+	};
 
 	o = section.option(form.Value, 'ws_host', _('WebSocket Host'));
 	o.depends({ transport: 'ws' });

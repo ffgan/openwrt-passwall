@@ -1,5 +1,7 @@
 'use strict';
 
+import { latest_release } from 'passwall.xray_release';
+
 // ucode port of the passwall API. LuCI CBI helpers are not included.
 
 import { readfile, writefile, stat, lstat, unlink, rmdir, mkdir, lsdir, glob, popen, error, open, access, chmod, dirname } from 'fs';
@@ -2434,7 +2436,7 @@ to_check = function(arch, app_name) {
 	let local_version = get_app_version(app_name);
 	let match_file_name = sprintf(c.match_fmt_str, file_tree);
 	let name_re = lua_pattern_regexp(match_file_name);
-	let payload = unwrap_release(get_api_json(c.get_url(c)));
+	let payload = (c.repo == "XTLS/Xray-core" ? latest_release(get_api_json(c.get_url(c))) : unwrap_release(get_api_json(c.get_url(c))));
 	if (payload == null || payload.tag_name == null) {
 		return {
 			code: 1,
@@ -2687,7 +2689,7 @@ to_check_self = function() {
 	let c = comp(appname);
 	if (c == null || c.get_url == null)
 		return { code: 1, error: translate("Get remote version info failed.") };
-	let release = unwrap_release(get_api_json(c.get_url(c)));
+	let release = (c.repo == "XTLS/Xray-core" ? latest_release(get_api_json(c.get_url(c))) : unwrap_release(get_api_json(c.get_url(c))));
 	if (type(release) != "object" || release == null || release.tag_name == null)
 		return { code: 1, error: translate("Get remote version info failed.") };
 	let local_version = get_version();

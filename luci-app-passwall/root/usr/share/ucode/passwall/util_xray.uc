@@ -2,11 +2,12 @@
 
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
+import { apply_config } from 'passwall.xray_config';
 // Lua truthiness: only null and false are falsy. 0 and "" stay truthy.
 import { truth as truthy, quoted_option_blob } from 'passwall.text';
-let lua_or, nonempty, lua_tostring, is_table, to_number, tonumber_or, trim_s, nl_to_real, contains, has_prefix, split_matches, linsert, file_lines, try_parse_b64_json, strip_nulls, drop_private_keys, http_paths, gecko_packet_size, hop_interval, hysteria_idle, hysteria_keepalive, mb_window, tolerance_ratio, expected_count, probe_every, kcp_settings, mkcp_udp, hysteria_obfs, hysteria_realm, client_quic, server_quic, client_finalmask, server_finalmask, xhttp_extra, masque_headers, shadowsocks_method, vless_flow, csv_tokens, noise_rand, noise_delay, get_domain_excluded, get_log_level, need_stream_settings, client_stream_settings, apply_alpn, register_domain_resolver, decode_wireguard_reserved, gen_outbound, server_users, server_stream_settings, gen_config_server, collect_rule_items, geosite_dat_path, gen_config, gen_proto_config, print_result, dispatch, main;
+let lua_or, nonempty, lua_tostring, is_table, to_number, tonumber_or, trim_s, nl_to_real, contains, has_prefix, split_matches, linsert, file_lines, try_parse_b64_json, strip_nulls, drop_private_keys, http_paths, gecko_packet_size, hop_interval, hysteria_idle, hysteria_keepalive, mb_window, tolerance_ratio, expected_count, probe_every, kcp_settings, mkcp_udp, hysteria_obfs, hysteria_realm, client_quic, server_quic, client_finalmask, server_finalmask, xhttp_extra, masque_headers, shadowsocks_method, vless_flow, csv_tokens, noise_rand, noise_delay, get_domain_excluded, get_log_level, need_stream_settings, xdrive_settings, client_stream_settings, apply_alpn, register_domain_resolver, decode_wireguard_reserved, gen_outbound, server_users, server_stream_settings, build_config_server, gen_config_server, collect_rule_items, geosite_dat_path, gen_config, gen_proto_config, print_result, dispatch, main;
 
-const xray_min_version = "26.7.11";
+const xray_min_version = "26.11.9";
 
 const FRAGMENT_TRANSPORTS = {
 	raw: 1,
@@ -540,7 +541,19 @@ need_stream_settings = function(node, dialer_proxy_tag) {
 	return p == "vmess" || p == "vless" || p == "socks" || p == "shadowsocks" || p == "trojan" || p == "hysteria" || p == "http" || p == "masque";
 };
 
+xdrive_settings = function(node) {
+	if (node.transport != "xdrive") return null;
+	let value;
+	try { value = json(node.xdrive_settings ?? "{}"); }
+	catch (e) { die("XDRIVE settings must be a JSON object"); }
+	if (type(value) != "object") die("XDRIVE settings must be a JSON object");
+	return value;
+};
+
 client_stream_settings = function(node, dialer_proxy_tag, fragment, noise) {
+	if (node.transport == "xdrive" && (node.protocol != "vless" || !nonempty(node.encryption) || node.encryption == "none" || nonempty(vless_flow(node))))
+		die("XDRIVE requires VLESS encryption and no flow");
+
 	let raw_ok = (node.transport == "raw" || node.transport == "tcp") && node.protocol != "socks" && truthy(node.tcp_guise) && node.tcp_guise !== "none";
 	return {
 		sockopt: {
@@ -557,6 +570,7 @@ client_stream_settings = function(node, dialer_proxy_tag, fragment, noise) {
 			dialerProxy: dialer_proxy_tag
 		},
 		network: node.transport,
+		xdriveSettings: xdrive_settings(node),
 		security: node.stream_security,
 		tlsSettings: node.stream_security == "tls" ? {
 			serverName: node.tls_serverName,
@@ -835,9 +849,9 @@ gen_outbound = function(flag, node, tag, proxy_table) {
 			tag: tag,
 			protocol: node.protocol,
 			mux: node.protocol != "masque" ? {
-				enabled: node.mux == "1",
-				concurrency: node.mux == "1" ? tonumber_or(node.mux_concurrency, -1) : null,
-				xudpConcurrency: node.mux == "1" ? tonumber_or(node.xudp_concurrency, 8) : null
+				enabled: node.transport == "xdrive" || node.mux == "1",
+				concurrency: node.transport == "xdrive" ? tonumber_or(node.mux_concurrency, 4) : (node.mux == "1" ? tonumber_or(node.mux_concurrency, -1) : null),
+				xudpConcurrency: node.transport == "xdrive" || node.mux == "1" ? tonumber_or(node.xudp_concurrency, 8) : null
 			} : null,
 			streamSettings: need_stream_settings(node, dialer_proxy_tag) ? client_stream_settings(node, dialer_proxy_tag, fragment, noise) : null,
 			settings: (node.protocol == "vmess" || node.protocol == "vless") ? {
@@ -920,6 +934,7 @@ server_users = function(node) {
 			if (node.protocol == "shadowsocks" || node.protocol == "trojan") {
 				u.email = user.username;
 				u.password = user.password;
+				if (node.protocol == "shadowsocks") u.method = node.method;
 			}
 			if (node.protocol == "vmess") {
 				u.email = user.username;
@@ -950,8 +965,12 @@ server_users = function(node) {
 };
 
 server_stream_settings = function(node) {
+	if (node.transport == "xdrive" && (node.protocol != "vless" || !nonempty(node.decryption) || node.decryption == "none" || nonempty(node.flow)))
+		die("XDRIVE requires VLESS decryption and no flow");
+
 	return {
 		network: node.transport,
+		xdriveSettings: xdrive_settings(node),
 		security: "none",
 		masqueSettings: node.protocol == "masque" ? {
 			path: nonempty(node.masque_path) ? node.masque_path : null
@@ -1006,7 +1025,7 @@ server_stream_settings = function(node) {
 	};
 };
 
-gen_config_server = function(node) {
+build_config_server = function(node) {
 	let settings = null;
 	let routing = null;
 	let outbounds = [
@@ -1167,6 +1186,7 @@ gen_config_server = function(node) {
 			loglevel: node.log == "1" ? lua_or(get_log_level(node.loglevel), "none") : "none"
 		},
 		inbounds: [{
+			tag: "server-in",
 			listen: "::",
 			port: to_number(node.port),
 			protocol: node.protocol,
@@ -1206,7 +1226,20 @@ gen_config_server = function(node) {
 	}
 
 	drop_private_keys(config.outbounds);
-	return strip_nulls(config);
+	return apply_config(strip_nulls(config), node, true);
+};
+
+gen_config_server = function(node, no_run) {
+	let previous_no_run = NO_RUN;
+	NO_RUN = no_run;
+	let result;
+	try { result = build_config_server(node); }
+	catch (e) {
+		NO_RUN = previous_no_run;
+		die(e.message ?? "Xray server configuration generation failed");
+	}
+	NO_RUN = previous_no_run;
+	return result;
 };
 
 collect_rule_items = function(text) {
@@ -2353,7 +2386,7 @@ gen_config = function(vars) {
 				api.sys.call("printf '%s\n' " + api.shellquote(value["_id"]) + " >> " + api.shellquote(api.TMP_PATH + "/direct_node_list"));
 		}
 		drop_private_keys(config.outbounds);
-		return api.jsonc.stringify(strip_nulls(config), 1);
+		return api.jsonc.stringify(vars.flag == "global" && vars.skip_json_merge != "1" ? apply_config(strip_nulls(config), xray_settings, false) : strip_nulls(config), 1);
 	}
 	return null;
 };
