@@ -1,7 +1,10 @@
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::os::fd::AsRawFd;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use crate::uring::{self, UringSock};
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
@@ -32,20 +35,57 @@ impl Probe {
         let connect_for = self
             .connect_timeout
             .min(remaining(start, budget).ok_or(io_err("timeout"))?);
-        let mut tcp = TcpStream::connect_timeout(&addr, connect_for)?;
-        tcp.set_nodelay(true)?;
-        arm(&tcp, start, budget)?;
-        socks5(&mut tcp, &target, self.proxy_user.as_deref())?;
+        let deadline = start + budget;
+        match UringSock::connect(addr, connect_for, deadline) {
+            Ok(sock) => self.finish(sock, &target, start, budget),
+            Err(err) if uring::unavailable(&err) => {
+                let mut tcp = TcpStream::connect_timeout(&addr, connect_for)?;
+                tcp.set_nodelay(true)?;
+                set_quickack(tcp.as_raw_fd());
+                tcp.arm(start, budget)?;
+                self.finish(tcp, &target, start, budget)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn finish<S: Sock>(
+        &self,
+        mut sock: S,
+        target: &Target,
+        start: Instant,
+        budget: Duration,
+    ) -> std::io::Result<String> {
+        socks5(&mut sock, target, self.proxy_user.as_deref())?;
         if target.tls {
-            https_probe(&mut tcp, &target, start, budget)
+            https_probe(&mut sock, target, start, budget)
         } else {
-            http_probe(&mut tcp, &target, start, budget)
+            http_probe(&mut sock, target, start, budget)
         }
     }
 }
 
-fn https_probe(
-    tcp: &mut TcpStream,
+trait Sock: Read + Write {
+    fn arm(&mut self, start: Instant, budget: Duration) -> std::io::Result<()>;
+}
+
+impl Sock for UringSock {
+    fn arm(&mut self, start: Instant, budget: Duration) -> std::io::Result<()> {
+        self.set_deadline(start, budget)
+    }
+}
+
+impl Sock for TcpStream {
+    fn arm(&mut self, start: Instant, budget: Duration) -> std::io::Result<()> {
+        let left = remaining(start, budget).ok_or(io_err("timeout"))?;
+        self.set_read_timeout(Some(left))?;
+        self.set_write_timeout(Some(left))?;
+        Ok(())
+    }
+}
+
+fn https_probe<S: Sock>(
+    tcp: &mut S,
     target: &Target,
     start: Instant,
     budget: Duration,
@@ -58,30 +98,30 @@ fn https_probe(
     config.alpn_protocols = vec![b"http/1.1".to_vec()];
     let name = server_name(&target.host).map_err(|_| io_err("sni"))?;
     let mut conn = ClientConnection::new(Arc::new(config), name).map_err(|_| io_err("tls"))?;
-    arm(tcp, start, budget)?;
+    tcp.arm(start, budget)?;
     while conn.is_handshaking() {
-        arm(tcp, start, budget)?;
+        tcp.arm(start, budget)?;
         conn.complete_io(tcp)?;
     }
     let pre = start.elapsed();
     let req = request_bytes(target);
     conn.writer().write_all(&req)?;
     while conn.wants_write() {
-        arm(tcp, start, budget)?;
+        tcp.arm(start, budget)?;
         conn.complete_io(tcp)?;
     }
     let (code, start_at) = read_tls_status(&mut conn, tcp, start, budget)?;
     Ok(timing(code, pre, start_at))
 }
 
-fn http_probe(
-    tcp: &mut TcpStream,
+fn http_probe<S: Sock>(
+    tcp: &mut S,
     target: &Target,
     start: Instant,
     budget: Duration,
 ) -> std::io::Result<String> {
     let pre = start.elapsed();
-    arm(tcp, start, budget)?;
+    tcp.arm(start, budget)?;
     tcp.write_all(&request_bytes(target))?;
     let (code, start_at) = read_status(tcp, start, budget)?;
     Ok(timing(code, pre, start_at))
@@ -103,42 +143,43 @@ fn timing(code: u16, pre: Duration, start_at: Duration) -> String {
     )
 }
 
-fn read_status(
-    tcp: &mut TcpStream,
+fn read_status<S: Sock>(
+    tcp: &mut S,
     start: Instant,
     budget: Duration,
 ) -> std::io::Result<(u16, Duration)> {
-    arm(tcp, start, budget)?;
-    let mut first = [0u8; 1];
-    if tcp.read(&mut first)? == 0 {
-        return Err(io_err("eof"));
-    }
-    let start_at = start.elapsed();
-    let mut buf = vec![first[0]];
-    let mut byte = [0u8; 1];
-    while buf.len() < 256 && !buf.ends_with(b"\n") {
-        arm(tcp, start, budget)?;
-        if tcp.read(&mut byte)? == 0 {
+    let mut buf = [0u8; 256];
+    let mut filled = 0;
+    let mut start_at = None;
+    while filled < buf.len() && !buf[..filled].contains(&b'\n') {
+        tcp.arm(start, budget)?;
+        let n = tcp.read(&mut buf[filled..])?;
+        if n == 0 {
             break;
         }
-        buf.push(byte[0]);
+        if start_at.is_none() {
+            start_at = Some(start.elapsed());
+        }
+        filled += n;
     }
-    let code = status_code(&buf).ok_or(io_err("status"))?;
+    let start_at = start_at.ok_or(io_err("eof"))?;
+    let code = status_code(&buf[..filled]).ok_or(io_err("status"))?;
     Ok((code, start_at))
 }
 
-fn read_tls_status(
+fn read_tls_status<S: Sock>(
     conn: &mut ClientConnection,
-    tcp: &mut TcpStream,
+    tcp: &mut S,
     start: Instant,
     budget: Duration,
 ) -> std::io::Result<(u16, Duration)> {
     let mut marked: Option<Duration> = None;
     let mut buf = Vec::new();
-    let mut byte = [0u8; 1];
+    let mut chunk = [0u8; 256];
     while buf.len() < 256 && !buf.ends_with(b"\n") {
-        arm(tcp, start, budget)?;
-        match conn.reader().read(&mut byte) {
+        tcp.arm(start, budget)?;
+        let want = (256 - buf.len()).min(chunk.len());
+        match conn.reader().read(&mut chunk[..want]) {
             Ok(0) => {
                 if conn.is_handshaking() || conn.wants_read() {
                     conn.complete_io(tcp)?;
@@ -146,13 +187,13 @@ fn read_tls_status(
                 }
                 break;
             }
-            Ok(_) => {
+            Ok(n) => {
                 if marked.is_none() {
                     marked = Some(start.elapsed());
                 }
-                buf.push(byte[0]);
+                buf.extend_from_slice(&chunk[..n]);
             }
-            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(err) if err.kind() == ErrorKind::WouldBlock => {
                 conn.complete_io(tcp)?;
             }
             Err(err) => return Err(err),
@@ -172,7 +213,11 @@ fn status_code(buf: &[u8]) -> Option<u16> {
     parts.next()?.parse().ok()
 }
 
-fn socks5(tcp: &mut TcpStream, target: &Target, user: Option<&str>) -> std::io::Result<()> {
+fn socks5<S: Read + Write>(
+    tcp: &mut S,
+    target: &Target,
+    user: Option<&str>,
+) -> std::io::Result<()> {
     if let Some(user) = user {
         let (name, pass) = split_user(user);
         tcp.write_all(&[0x05, 0x02, 0x00, 0x02])?;
@@ -358,11 +403,17 @@ fn remaining(start: Instant, budget: Duration) -> Option<Duration> {
         .filter(|left| !left.is_zero())
 }
 
-fn arm(tcp: &TcpStream, start: Instant, budget: Duration) -> std::io::Result<()> {
-    let left = remaining(start, budget).ok_or(io_err("timeout"))?;
-    tcp.set_read_timeout(Some(left))?;
-    tcp.set_write_timeout(Some(left))?;
-    Ok(())
+fn set_quickack(fd: i32) {
+    let one: i32 = 1;
+    unsafe {
+        libc::setsockopt(
+            fd,
+            libc::IPPROTO_TCP,
+            libc::TCP_QUICKACK,
+            &one as *const i32 as *const libc::c_void,
+            std::mem::size_of_val(&one) as libc::socklen_t,
+        );
+    }
 }
 
 fn io_err(msg: &str) -> std::io::Error {

@@ -1,5 +1,6 @@
 mod encode;
 mod subinfo;
+mod uring;
 mod urltest;
 mod value;
 mod yaml;
