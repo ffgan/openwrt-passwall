@@ -776,7 +776,19 @@ add_rule = function(var) {
 		}
 		if (NO_PROXY_IPV6 == "1")
 			tinsert(conf_lines, "filter-AAAA");
-		conf_lines = apply_ttl_limits(conf_lines, api.uci_get_c("@global_rules[0]", "dns_max_ttl"), inherited_ttl_limits(conf_lines));
+		let inherited = inherited_ttl_limits(conf_lines);
+		// A port of 0 reuses the system dnsmasq. Its conf-file includes are not
+		// in this snippet, but dnsmasq still rejects a second max-ttl.
+		if (LISTEN_PORT == "0") {
+			let cfgid = "";
+			api.uci.foreach("dhcp", "dnsmasq", function(section) {
+				if (cfgid == "")
+					cfgid = section[".name"] ?? "";
+			});
+			for (let key, value in inherited_ttl_limits(read_lines("/var/etc/dnsmasq.conf." + cfgid) ?? []))
+				inherited[key] = value;
+		}
+		conf_lines = apply_ttl_limits(conf_lines, api.uci_get_c("@global_rules[0]", "dns_max_ttl"), inherited);
 		if (type(conf_lines) == "array" && length(conf_lines) > 0)
 			api.fs.writefile(DNSMASQ_CONF_FILE, join("\n", conf_lines) + "\n");
 	}
