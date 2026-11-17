@@ -1049,6 +1049,19 @@ return baseclass.extend({
 			var tfo = section.option(form.Flag, 'tcp_fast_open', 'TCP ' + _('Fast Open'), _('Need node support required'));
 			tfo.default = '0';
 
+			var congestion = section.option(form.ListValue, 'tcp_congestion', _('TCP congestion control'), _('The selected algorithm must be available in the router kernel. Empty uses the system default.'));
+			congestion.value('', _('System default'));
+			(caps.tcp_congestion || []).filter(Boolean).forEach(function(v) { congestion.value(v); });
+			[
+				['tcp_keepalive_idle', _('TCP keepalive idle (seconds)'), 'range(1,7200)'],
+				['tcp_keepalive_interval', _('TCP keepalive interval (seconds)'), 'range(1,600)'],
+				['tcp_user_timeout', _('TCP user timeout (milliseconds)'), 'range(1000,600000)']
+			].forEach(function(spec) {
+				var field = section.option(form.Value, spec[0], spec[1], _('Empty preserves the core default.'));
+				field.datatype = spec[2];
+				normalProtos.forEach(function(p) { if (p !== 'hysteria2') field.depends({ protocol: p }); });
+			});
+
 			var mptcp = section.option(form.Flag, 'tcpMptcp', 'tcpMptcp', _('Enable Multipath TCP, need to be enabled in both server and client configuration.'));
 			mptcp.default = '0';
 
@@ -1084,6 +1097,16 @@ return baseclass.extend({
 
 			var happy = section.option(form.Flag, 'happy_eyeballs', _('Enable Happy Eyeballs'), _('Attempts IPv4 and IPv6 simultaneously; automatically uses the faster connection.'));
 			happy.default = '0';
+			var happyDelay = section.option(form.Value, 'happy_delay_ms', _('Happy Eyeballs delay (milliseconds)'));
+			happyDelay.placeholder = '250';
+			happyDelay.datatype = 'range(10,2000)';
+			happyDelay.depends('happy_eyeballs', '1');
+			var happyConcurrency = section.option(form.Value, 'happy_concurrency', _('Happy Eyeballs concurrency'));
+			happyConcurrency.placeholder = '4';
+			happyConcurrency.datatype = 'range(1,8)';
+			happyConcurrency.depends('happy_eyeballs', '1');
+			var happyIPv6 = section.option(form.Flag, 'happy_prefer_ipv6', _('Try IPv6 first'));
+			happyIPv6.depends('happy_eyeballs', '1');
 
 			normalProtos.forEach(function(p) {
 				var dep = { protocol: p };
@@ -1099,6 +1122,7 @@ return baseclass.extend({
 				domainStrategy.depends(strategyDep);
 				if (p !== 'hysteria2') {
 					tfo.depends({ protocol: p });
+					congestion.depends({ protocol: p });
 					mptcp.depends({ protocol: p });
 				}
 			});

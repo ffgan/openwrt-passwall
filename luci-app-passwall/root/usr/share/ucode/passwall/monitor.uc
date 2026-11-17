@@ -3,6 +3,7 @@
 import * as api from 'passwall.api';
 import { readfile, writefile, stat, unlink, lsdir } from 'fs';
 import { background, spawn, start_time_of, cmdline_of, write_record, command_rc } from 'passwall.proc';
+import { retry_delay } from 'passwall.reliability';
 import { parse_proc_record } from 'passwall.state';
 
 let ymd, run;
@@ -26,7 +27,8 @@ run = function() {
 	api.fs.mkdirr(stats_dir);
 	let proc_dir = api.TMP_PATH + "/script_func";
 	let last_day = ymd();
-	command_rc([ "sleep", "58s" ]);
+	let retries = {};
+	command_rc([ "sleep", "5s" ]);
 
 	while (true) {
 		let names = lsdir(proc_dir);
@@ -66,17 +68,20 @@ run = function() {
 						rec.starttime = current;
 						write_record(path, rec);
 					}
-					if (count > 0)
+					let recovery = retries[name];
+					if (recovery != null && time() - recovery.started >= 60) {
+						delete retries[name];
 						unlink(count_path);
+					}
 					continue;
 				}
-				if (count >= 10)
-					continue;
-
-				count++;
+				let recovery = retries[name];
+				if (recovery != null && time() < recovery.next) continue;
+				count = recovery == null ? 1 : recovery.failures + 1;
+				retries[name] = { failures: count, started: time(), next: time() + retry_delay(count) };
 				writefile(count_path, "" + count + "\n");
 				let label = rec.file != "" ? rec.file : name;
-				api.log("进程已退出，重新启动 " + label + "（" + count + "/10）。");
+				api.log("进程已退出，重新启动 " + label + "（连续失败 " + count + " 次）。");
 				if (rec.file != "") {
 					let started = spawn({
 						file: rec.file,
@@ -94,8 +99,7 @@ run = function() {
 					rec.starttime = started.starttime;
 				}
 				write_record(path, rec);
-				if (count >= 10)
-					api.log("进程 " + label + " 连续重启失败，今日不再拉起。");
+
 				command_rc([ "sleep", "1" ]);
 			}
 		}
@@ -109,7 +113,7 @@ run = function() {
 			}
 			last_day = today;
 		}
-		command_rc([ "sleep", "58s" ]);
+		command_rc([ "sleep", "5s" ]);
 	}
 };
 

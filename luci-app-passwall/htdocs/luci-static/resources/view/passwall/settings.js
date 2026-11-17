@@ -182,13 +182,18 @@ function svgIcon(d) {
 }
 
 function statusCard(glyph, id, title, initial, extra) {
-	var spanAttrs = { 'class': 'pw-state red' };
+	var spanAttrs = { 'class': 'pw-state', 'aria-live': 'polite' };
 	if (extra && extra.spanId)
 		spanAttrs.id = extra.spanId;
 	var attrs = { 'class': 'pw-status-card' };
 	if (extra && extra.check) {
 		attrs.class = 'pw-status-card is-check';
 		attrs.title = _('HTTP request latency, for reference only');
+		attrs.role = 'button';
+		attrs.tabindex = '0';
+		attrs.keydown = function(ev) {
+			if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.currentTarget.click(); }
+		};
 		attrs.click = extra.check;
 	}
 	return E('div', attrs, [
@@ -203,8 +208,9 @@ function statusCard(glyph, id, title, initial, extra) {
 function renderStatus() {
 	return E('fieldset', { 'id': '_passwall_status_fieldset', 'class': 'cbi-section' }, [
 		E('legend', {}, _('Running Status')),
+		E('p', { id: 'passwall_firewall_warning', 'class': 'pw-warn', hidden: true, role: 'status' }),
 		E('div', { 'class': 'pw-board' }, [
-			statusCard('M4 7h16|M4 12h16|M4 17h10', 'status_tcp', 'TCP', _('NOT RUNNING')),
+			statusCard('M4 7h16|M4 12h16|M4 17h10', 'status_tcp', 'TCP', _('Check...')),
 			statusCard('M12 3v4|M12 17v4|M5 8l7-3 7 3|M5 16l7 3 7-3|M8 12h8', 'status_udp', 'UDP', _('NOT RUNNING')),
 			statusCard('M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z|M3 12h18|M12 3c2.4 2.6 3.6 5.8 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.8-3.6-9s1.2-6.4 3.6-9z', 'status_dns', 'DNS', _('NOT RUNNING')),
 			statusCard('M12 3v18|M6 7h12|M8 7l-3 5h6L8 7z|M16 7l-3 5h6L16 7z', 'status_haproxy', 'HAProxy', 'N/A'),
@@ -245,6 +251,17 @@ function setRun(id, label, on) {
 
 function paintIndex(data) {
 	data = data || {};
+	var warning = document.getElementById('passwall_firewall_warning');
+	if (warning) {
+		var reasons = {
+			fw4_missing: _('The system firewall table is missing. LAN direct connections may fail even while the proxy is running.'),
+			forward_chain_missing: _('The system forwarding chain is missing. Check the OpenWrt firewall.'),
+			ipv4_forwarding_disabled: _('IPv4 forwarding is disabled. LAN direct connections may fail.'),
+			masquerade_missing: _('IPv4 masquerading is missing for a configured NAT zone. Check the OpenWrt firewall.')
+		};
+		warning.hidden = !data.firewall_error;
+		warning.textContent = reasons[data.firewall_error] || '';
+	}
 	setRun('status_tcp', 'TCP', !!data.tcp_status);
 	setRun('status_udp', 'UDP', !!data.udp_status);
 	setRun('status_dns', 'DNS', !!data.dns_mode_status);
@@ -267,7 +284,10 @@ function checkConnect(type, url) {
 	if (!s)
 		return;
 	var card = s.closest ? s.closest('.pw-status-card') : null;
+	if (card && card.getAttribute('aria-busy') === 'true')
+		return;
 	if (card) {
+		card.setAttribute('aria-busy', 'true');
 		card.onclick = null;
 		card.title = _('HTTP request latency, for reference only');
 	}
@@ -296,12 +316,12 @@ function checkConnect(type, url) {
 			s.textContent = _('Problem detected!');
 		}
 		if (card)
-			card.onclick = function() { checkConnect(type, url); };
+			{ card.removeAttribute('aria-busy'); card.onclick = function() { checkConnect(type, url); }; }
 	}).catch(function() {
 		s.className = 'pw-state red';
 		s.textContent = _('Problem detected!');
 		if (card)
-			card.onclick = function() { checkConnect(type, url); };
+			{ card.removeAttribute('aria-busy'); card.onclick = function() { checkConnect(type, url); }; }
 	});
 }
 
@@ -332,7 +352,8 @@ function paintNowNode(data, remarks) {
 	while (el.firstChild)
 		el.removeChild(el.firstChild);
 	if (!remark) {
-		el.hidden = true;
+		el.hidden = false;
+		el.textContent = _('Current Node') + ': ' + _('None');
 		return;
 	}
 	el.hidden = false;
@@ -1854,7 +1875,26 @@ return view.extend({
 		var self = this;
 		return m.render().then(function(formNode) {
 			rootKids.push(formNode);
-			var root = E('div', {}, rootKids);
+			var root = E('div', { 'class': 'pw-dashboard' }, rootKids);
+			var statusBox = root.querySelector('#_passwall_status_fieldset');
+			statusBox.appendChild(E('div', { 'class': 'pw-actions' }, [
+				E('button', { 'class': 'cbi-button', 'type': 'button', 'click': function() {
+					var field = qid(root, nodeOpt.cbid(sid));
+					if (field) { field.scrollIntoView({ block: 'center' }); field.focus(); }
+				} }, _('Proxy Node')),
+				E('button', { 'class': 'cbi-button', 'type': 'button', 'click': function() { openLog(pw.get('get_redir_log', { id: 'default' })); } }, _('Log'))
+			]));
+			var advanced = E('details', { 'class': 'pw-advanced' }, [ E('summary', {}, _('Advanced Settings')) ]);
+			['node_socks_port', 'node_socks_bind_local'].forEach(function(name) {
+				var row = root.querySelector('.cbi-value[data-name="' + name + '"]');
+				if (row) { row.parentNode.insertBefore(advanced, row); advanced.appendChild(row); }
+			});
+			root.addEventListener('validation-failure', function(ev) {
+				if (advanced.contains(ev.target)) advanced.open = true;
+			}, true);
+			root.addEventListener('invalid', function(ev) {
+				if (advanced.contains(ev.target)) advanced.open = true;
+			}, true);
 			var tab = qid(root, 'container.passwall.' + sid + '.socks');
 			var grid = qid(root, 'cbi-passwall-socks');
 			var socksEnabled = qid(root, 'cbi-passwall-' + sid + '-socks_enabled');

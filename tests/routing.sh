@@ -83,11 +83,17 @@ EOF
 		rm -rf "$work"
 	}
 	trap cleanup EXIT
+	export ROUTING_PARENT_NETNS="$(readlink /proc/self/ns/net)"
 	export ROUTING_INSIDE=1 ROUTING_WORK="$work" ROUTING_ROOT="$ROOT" UCODE="$UCODE"
 	unshare --net --mount --pid --fork --mount-proc bash "$0"
 	exit $?
 fi
 
+# Refuse to touch networking unless unshare actually moved us off the host.
+[ -n "${ROUTING_PARENT_NETNS:-}" ] && [ "$(readlink /proc/self/ns/net)" != "$ROUTING_PARENT_NETNS" ] || {
+	echo 'Refusing routing tests outside an isolated network namespace' >&2
+	exit 1
+}
 work=$ROUTING_WORK
 root=$ROUTING_ROOT
 export PATH="$work/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/bin:/bin"
@@ -106,11 +112,23 @@ ip addr add 192.0.2.1/24 dev veth0
 ip addr add 192.0.2.2/24 dev veth1
 ip route add default via 192.0.2.2
 
+# Model fw4-owned forwarding/NAT rules. Every Passwall operation must leave
+# this table unchanged, including failure/stop paths.
+nft -f - <<'FW4'
+add table inet fw4
+add chain inet fw4 accept_to_wan { type filter hook forward priority filter; policy accept; }
+add rule inet fw4 accept_to_wan oifname "veth0" counter accept
+add chain inet fw4 srcnat_wan { type nat hook postrouting priority srcnat; policy accept; }
+add rule inet fw4 srcnat_wan ip saddr 192.168.0.0/16 masquerade
+FW4
+nft -s list table inet fw4 > "$work/fw4.before"
+
 python3 - <<'PY' &
 import socket, threading, time
 def serve(port):
     s = socket.socket()
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.setsockopt(socket.SOL_IP, 19, 1)  # IP_TRANSPARENT for the TPROXY variant
     s.bind(("0.0.0.0", port))
     s.listen(64)
     while True:
@@ -124,6 +142,17 @@ PY
 listener=$!
 trap 'kill "$listener" 2>/dev/null || true' EXIT
 sleep 0.2
+
+python3 - <<'PYMODE'
+import json, os
+path = '/tmp/etc/passwall/nft.json'
+with open(path) as f:
+    config = json.load(f)
+config['TCP_PROXY_WAY'] = os.environ.get('ROUTING_TCP_WAY', 'redirect')
+assert config['TCP_PROXY_WAY'] in ('redirect', 'tproxy')
+with open(path, 'w') as f:
+    json.dump(config, f)
+PYMODE
 
 set +e
 "$UCODE" \
@@ -146,9 +175,17 @@ note() {
 	echo "FAIL $*" >&2
 }
 
+if [ "${ROUTING_TCP_WAY:-redirect}" = tproxy ]; then
+	nft add rule inet passwall PSW_RULE meta mark and 0x10000 == 0x10000 counter comment MARK_PRESERVED
+fi
 python3 "$root/tests/routing-probe.py" || failed=$((failed + 1))
+if [ "${ROUTING_TCP_WAY:-redirect}" = tproxy ]; then
+	if ! nft list chain inet passwall PSW_RULE | grep -E 'counter packets [1-9][0-9]* .*MARK_PRESERVED' >/dev/null; then
+		note 'unrelated mark bits were lost in the proxy classification path'
+	fi
+fi
 
-if ! ip rule show | grep -q '0x50535731'; then
+if ! ip rule show | grep -q '0x40000000/0x40000000'; then
 	note "fwmark rule for the proxy was not installed"
 fi
 if ! nft get element inet passwall psw_chn_static '{ 1.2.4.1 }' >/dev/null 2>&1; then
@@ -174,6 +211,17 @@ fi
 if [ -f /tmp/log/passwall.log ] && grep -q 'psw_vps6' /tmp/log/passwall.log; then
 	note "log claims an IPv6 node address was installed"
 fi
+
+for action in fw4_reload stop; do
+	if ! "$UCODE" -L "$root/tests/routing-stubs" -L "$root/tests/stubs" \
+		-L "$root/luci-app-passwall/root/usr/share/ucode" "$root/tests/routing-start.uc" "$action"; then
+		note "Passwall $action failed"
+	fi
+	nft -s list table inet fw4 > "$work/fw4.after" || note "fw4 disappeared during $action"
+	if ! cmp -s "$work/fw4.before" "$work/fw4.after"; then
+		note "Passwall $action modified fw4 forwarding or MASQUERADE"
+	fi
+done
 
 if [ "$failed" -ne 0 ]; then
 	echo "----- passwall.log -----" >&2

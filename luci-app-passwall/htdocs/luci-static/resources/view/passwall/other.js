@@ -100,6 +100,11 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = true;
 
+		var dnsPolicy = m.section(form.NamedSection, ensureSection('global_rules'), 'global_rules', _('DNS cache policy'));
+		o = dnsPolicy.option(form.Value, 'dns_max_ttl', _('Maximum DNS TTL (seconds)'), _('Caps client and cache TTL in Passwall-managed dnsmasq configurations. Lower existing limits are preserved. Dynamic nft sets retain their existing lifetime.'));
+		o.placeholder = '3600';
+		o.datatype = 'range(60,86400)';
+
 		['stop', 'start', 'restart'].forEach(function(action) {
 			o = s.option(form.ListValue, action + '_week_mode', _(action + ' automatically mode'));
 			pw.weekMode(o, action === 'restart');

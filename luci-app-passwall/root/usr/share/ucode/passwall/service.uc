@@ -11,6 +11,29 @@ const CLIENT_LOCK = LOCK_DIR + '/passwall.lock';
 const UPDATE_LOCK = LOCK_DIR + '/passwall_sub_rule.lock';
 const READY_LOCK = LOCK_DIR + '/passwall_ready.lock';
 const uci = cursor();
+const GOOD_CONFIG = '/etc/passwall/last-good.conf';
+const FAILED_CONFIG = '/tmp/passwall-failed.conf';
+
+function private_copy(source, target) {
+	let data = fs.readfile(source);
+	if (data == null) return false;
+	if (fs.readfile(target) == data) return fs.chmod(target, 0o600);
+	if (target == GOOD_CONFIG && fs.stat('/etc/passwall') == null) fs.mkdir('/etc/passwall', 0o700);
+	let dir = fs.mkdtemp(target + '.XXXXXX');
+	if (dir == null) return false;
+	let path = dir + '/config';
+	let file = fs.open(path, 'w', 0o600);
+	let ok = false;
+	if (file != null) {
+		ok = file.write(data) == length(data);
+		ok = file.close() && ok;
+		if (ok) ok = fs.rename(path, target);
+	}
+	fs.unlink(path);
+	fs.rmdir(dir);
+	return ok;
+}
+
 // ucode 2026.01.16 does not hoist functions.
 let client_locked;
 
@@ -81,12 +104,13 @@ function wait_for_updates() {
 client_locked = function(action, args) {
 	let mode = args[0] ?? '';
 	if (action == 'start') {
-		invoke_app(false, 'start', mode);
-		return 0;
+		let rc = invoke_app(false, 'start', mode);
+		if (rc == 0) { private_copy('/etc/config/passwall', GOOD_CONFIG); fs.writefile(READY_LOCK, ''); }
+		return rc;
 	}
 	if (action == 'stop') {
-		invoke_app(false, 'stop', mode);
-		return 0;
+		fs.unlink(READY_LOCK);
+		return invoke_app(false, 'stop', mode);
 	}
 	if (action == 'restart') {
 		if (wait_for_updates() != 0) {
@@ -97,8 +121,26 @@ client_locked = function(action, args) {
 			api.log('Xray JSON preflight failed; restart cancelled and running instance retained.');
 			return 1;
 		}
+		fs.unlink(READY_LOCK);
+		if (invoke_app(false, 'stop', mode) != 0) return 1;
+		let rc = invoke_app(false, 'start', mode);
+		if (rc == 0) {
+			private_copy('/etc/config/passwall', GOOD_CONFIG);
+			fs.writefile(READY_LOCK, '');
+			return 0;
+		}
+		api.log('启动失败，尝试恢复最近成功的配置。');
+		if (fs.stat(GOOD_CONFIG) == null || !private_copy('/etc/config/passwall', FAILED_CONFIG)) return 1;
 		invoke_app(false, 'stop', mode);
-		return invoke_app(false, 'start', mode);
+		if (!private_copy(GOOD_CONFIG, '/etc/config/passwall')) return 1;
+		if (invoke_app(false, 'start', mode) == 0) {
+			fs.writefile(READY_LOCK, '');
+			api.log('已恢复最近成功配置；失败配置保存在 /tmp/passwall-failed.conf（含凭据）。');
+		} else {
+			api.log('恢复失败，停止残留代理规则。');
+			invoke_app(false, 'stop', mode);
+		}
+		return 1;
 	}
 	return 1;
 };

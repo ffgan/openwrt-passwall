@@ -16,6 +16,9 @@ function default_device(family) {
 }
 
 export function restart(interface) {
+	// Keep the iface lock while netifd emits related IPv4/IPv6 events.
+	utils.run(['sleep', '3'], true);
+	if (!active()) return 0;
 	api.log('network: passwall restart when ' + (interface ?? '') + ' ifup');
 	return utils.run(['/etc/init.d/passwall', 'restart'], true);
 };

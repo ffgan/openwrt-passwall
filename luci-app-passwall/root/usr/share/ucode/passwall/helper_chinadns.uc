@@ -187,13 +187,20 @@ main = function(argv) {
 	let setflag = (NFTFLAG == "1") ? "inet@passwall@" : "";
 	let only_global = (DEFAULT_MODE == "proxy" && CHNLIST == "0" && GFWLIST == "0") ? 1 : false;
 
+	let filter_qtypes = [];
+	if (tonumber(FILTER_HTTPS) == 1)
+		push(filter_qtypes, "65");
+	// When IPv6 proxy answers are disabled, also drop AAAA. LAN often has no
+	// working GUA while China DNS still returns AAAA, and clients hang on v6.
+	if (NO_IPV6_TRUST == "1")
+		push(filter_qtypes, "28");
 	config_lines = [
 		(LOG_FILE != "/dev/null") ? "verbose" : "",
 		"bind-addr ::",
 		"bind-port " + LISTEN_PORT,
 		"china-dns " + DNS_LOCAL,
 		"trust-dns " + DNS_TRUST,
-		(tonumber(FILTER_HTTPS) == 1) ? "filter-qtype 65" : ""
+		length(filter_qtypes) ? "filter-qtype " + join(",", filter_qtypes) : ""
 	];
 	for (let i = 1; i <= 6; i++)
 		push(config_lines, "#--" + i);

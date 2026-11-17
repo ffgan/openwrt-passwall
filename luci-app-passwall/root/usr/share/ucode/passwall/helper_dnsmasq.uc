@@ -2,6 +2,7 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+import { apply_ttl_limits, inherited_ttl_limits } from 'passwall.dns_policy';
 import { truth as ltruth, lua_quote, gmatch, lines_of, quoted_option_blob } from 'passwall.text';
 let exec_pair, read_lines, file_size, tinsert, backup_servers, restore_servers, stretch, restart, logic_restart, copy_instance, geosite_dat, foreach_geosite, tail_after_colon, add_rule, dispatch, main;
 
@@ -748,7 +749,9 @@ add_rule = function(var) {
 
 	if (DNSMASQ_CONF_FILE !== "nil") {
 		let conf_lines = [];
-		if (ltruth(LISTEN_PORT)) {
+		// helper_args turns an empty listen port into "0". That means reuse
+		// the system dnsmasq; copying its config into conf-dir repeats keywords.
+		if (ltruth(LISTEN_PORT) && LISTEN_PORT != "0") {
 			conf_lines = copy_instance({
 				"-LISTEN_PORT": LISTEN_PORT,
 				"-TMP_DNSMASQ_PATH": TMP_DNSMASQ_PATH,
@@ -771,6 +774,9 @@ add_rule = function(var) {
 			if (FLAG == "default")
 				api.set_cache_var("DEFAULT_DNS", DEFAULT_DNS);
 		}
+		if (NO_PROXY_IPV6 == "1")
+			tinsert(conf_lines, "filter-AAAA");
+		conf_lines = apply_ttl_limits(conf_lines, api.uci_get_c("@global_rules[0]", "dns_max_ttl"), inherited_ttl_limits(conf_lines));
 		if (type(conf_lines) == "array" && length(conf_lines) > 0)
 			api.fs.writefile(DNSMASQ_CONF_FILE, join("\n", conf_lines) + "\n");
 	}

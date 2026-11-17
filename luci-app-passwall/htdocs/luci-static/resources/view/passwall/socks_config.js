@@ -352,7 +352,7 @@ return view.extend({
 		o.default = '1';
 		o.depends('enable_autoswitch', '1');
 
-		o = s.option(form.Flag, 'autoswitch_restore_switch', _('Restore Switch'), _('Immediately switch back to the main node when it becomes available.'));
+		o = s.option(form.Flag, 'autoswitch_restore_switch', _('Restore Switch'), _('Switch back after consecutive successful probes and the cooldown period.'));
 		o.depends('enable_autoswitch', '1');
 
 		o = s.option(form.Value, 'autoswitch_probe_url', _('Probe URL'), _('The URL used to detect the connection status.'));
@@ -365,6 +365,20 @@ return view.extend({
 		o.value('https://wifi.vivo.com.cn/generate_204', 'VIVO (CN)');
 		o.default = 'https://www.google.com/generate_204';
 		o.depends('enable_autoswitch', '1');
+
+		o = s.option(form.DynamicList, 'autoswitch_probe_urls', _('Additional probe targets'), _('Optional list of up to four HTTP/HTTPS URLs. Any successful target keeps the node healthy. Empty uses the primary URL and Gstatic.'));
+		o.datatype = 'url';
+		o.depends('enable_autoswitch', '1');
+		[
+			['autoswitch_failure_threshold', _('Consecutive failures before switching'), '3', 'range(1,10)'],
+			['autoswitch_recovery_threshold', _('Consecutive successes before restoring'), '3', 'range(1,10)'],
+			['autoswitch_cooldown', _('Switch cooldown (seconds)'), '60', 'range(10,3600)']
+		].forEach(function(spec) {
+			var field = s.option(form.Value, spec[0], spec[1]);
+			field.placeholder = spec[2];
+			field.datatype = spec[3];
+			field.depends('enable_autoswitch', '1');
+		});
 
 		var btn = s.option(form.DummyValue, 'btn', '');
 		btn.depends('backup_node_add_mode', 'manual');

@@ -1,6 +1,7 @@
 'use strict';
 
 import * as api from 'passwall.api';
+import { bounded_integer } from 'passwall.reliability';
 import { readfile, unlink, lsdir } from 'fs';
 import { read_cmd, command_rc } from 'passwall.proc';
 
@@ -14,6 +15,13 @@ let retry_num = "1";
 let restore_switch = "0";
 let probe_url = "https://www.google.com/generate_204";
 let backup_count = 0;
+let probe_urls = [];
+let consecutive_failures = 0;
+let consecutive_recoveries = 0;
+let last_switch = 0;
+let failure_threshold = 3;
+let recovery_threshold = 3;
+let switch_cooldown = 60;
 
 words = function(text) {
 	let out = [];
@@ -89,9 +97,10 @@ check_process = function() {
 };
 
 test_proxy = function() {
-	let status = curl_code(probe_url, int(retry_num), int(connect_timeout), "socks5h://127.0.0.1:" + socks_port, false);
-	if (status == "200")
-		return 0;
+	for (let url in probe_urls) {
+		let status = curl_code(url, int(retry_num), int(connect_timeout), "socks5h://127.0.0.1:" + socks_port, false);
+		if (status == "200") return 0;
+	}
 	let direct = curl_code("https://www.baidu.com", int(retry_num), int(connect_timeout), "", false);
 	if (direct == "200")
 		return 1;
@@ -181,6 +190,9 @@ try_switch_backup = function(backup_nodes, now_node) {
 				"flag=" + id, "new_node=" + new_node
 			]);
 			if (rc == 0) {
+				last_switch = time();
+				consecutive_failures = 0;
+				consecutive_recoveries = 0;
 				api.log("Socks切换检测：端口[" + socks_port + "] 节点切换完毕！");
 				return 0;
 			}
@@ -201,10 +213,17 @@ test_auto_switch = function(backup_nodes) {
 		return 1;
 	let status = test_proxy();
 	if (status == 2) {
+		consecutive_failures = 0;
+		consecutive_recoveries = 0;
 		api.log("Socks切换检测：无法连接到网络，请检查网络是否正常！");
 		return 2;
 	}
-	if (restore_switch == "1" && main_node != "" && now_node != main_node && test_node(main_node)) {
+	if (status == 0) consecutive_failures = 0;
+	else consecutive_failures++;
+	if (time() - last_switch < switch_cooldown) return status;
+	let recovered = restore_switch == "1" && main_node != "" && now_node != main_node && test_node(main_node);
+	consecutive_recoveries = recovered ? consecutive_recoveries + 1 : 0;
+	if (recovered && consecutive_recoveries >= recovery_threshold) {
 		check_process();
 		let node_type = api.uci_get_c(main_node, "type") ?? "";
 		let node_remarks = api.uci_get_c(main_node, "remarks") ?? "";
@@ -215,14 +234,17 @@ test_auto_switch = function(backup_nodes) {
 			"flag=" + id, "new_node=" + main_node
 		]);
 		if (rc == 0) {
+			last_switch = time();
+			consecutive_failures = 0;
+			consecutive_recoveries = 0;
 			api.log("Socks切换检测：端口[" + socks_port + "] 节点切换完毕！");
 			return 0;
 		}
 		api.log("Socks切换检测：端口[" + socks_port + "] 恢复主节点失败！");
 		status = 1;
 	}
-	if (status == 0)
-		return 0;
+	if (status == 0) return 0;
+	if (consecutive_failures < failure_threshold) return 1;
 	let node_type = api.uci_get_c(now_node, "type") ?? "";
 	let node_remarks = api.uci_get_c(now_node, "remarks") ?? "";
 	api.log("Socks切换检测：端口[" + socks_port + "]【" + node_type + "：[" + node_remarks + "]】异常。");
@@ -274,8 +296,16 @@ main = function(argv) {
 	retry_num = "" + (api.uci_get_c(id, "autoswitch_retry_num") ?? "1");
 	restore_switch = "" + (api.uci_get_c(id, "autoswitch_restore_switch") ?? "0");
 	probe_url = api.uci_get_c(id, "autoswitch_probe_url") ?? "";
-	if (probe_url == "")
-		probe_url = "https://www.google.com/generate_204";
+	if (probe_url == "") probe_url = "https://www.google.com/generate_204";
+	probe_urls = api.uci_get_c(id, 'autoswitch_probe_urls');
+	if (type(probe_urls) != 'array' || !length(probe_urls))
+		probe_urls = [probe_url, 'https://www.gstatic.com/generate_204'];
+	if (length(probe_urls) > 4) die('At most four probe targets are supported');
+	for (let url in probe_urls)
+		if (type(url) != 'string' || match(url, /^https?:\/\//) == null) die('Invalid probe URL');
+	failure_threshold = bounded_integer(api.uci_get_c(id, 'autoswitch_failure_threshold'), 1, 10, 3);
+	recovery_threshold = bounded_integer(api.uci_get_c(id, 'autoswitch_recovery_threshold'), 1, 10, 3);
+	switch_cooldown = bounded_integer(api.uci_get_c(id, 'autoswitch_cooldown'), 10, 3600, 60);
 	if (match(delay, /^[0-9]+$/) == null)
 		delay = "30";
 	if (match(retry_num, /^[0-9]+$/) == null)

@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall
 PKG_VERSION:=26.10.25
-PKG_RELEASE:=6
+PKG_RELEASE:=14
 PKG_PO_VERSION:=$(PKG_VERSION)
 PKG_LICENSE:=GPL-3.0-only
 
@@ -41,6 +41,8 @@ PKG_MAINTAINER:=$(LUCI_MAINTAINER)
 LUCI_DEPENDS:=+luci-base +luci-lib-uqr +firewall4 \
 	+coreutils +coreutils-base64 +coreutils-timeout +curl \
 	+chinadns-ng +dns2socks +dnsmasq-full +ip-full \
+	+kmod-nft-socket +kmod-nft-tproxy +kmod-nft-nat \
+	+kmod-nf-reject +kmod-nf-reject6 \
 	+ucode +ucode-mod-digest +ucode-mod-fs +ucode-mod-math +ucode-mod-ubus +ucode-mod-uci \
 	+microsocks +resolveip +tcping
 

@@ -34,6 +34,14 @@ for (let protocol in ['socks','http','vmess','vless','trojan','shadowsocks']) {
 			xdrive_settings:'{"service":"local","remoteFolder":"/tmp/passwall-xdrive-fixture","secrets":["test-secret"]}'
 		};
 		if (transport == 'xdrive') node.encryption = 'mlkem768x25519plus.native.0rtt.Ype9Y4XCCbRW_ujqbRY2UQXeUrnzyT0IBGtJWqL-0jQ';
+		if (protocol == 'vless' && transport == 'raw') {
+			node.happy_eyeballs = '1';
+			node.happy_delay_ms = '200';
+			node.happy_concurrency = '2';
+			node.tcp_keepalive_idle = '60';
+			node.tcp_keepalive_interval = '15';
+			node.tcp_user_timeout = '30000';
+		}
 		global.xray_test_config.passwall.node = node;
 		emit('client-' + protocol + '-' + transport,gen_config({flag:'global',node:'node',no_run:'1',local_socks_port:'1080',local_socks_address:'127.0.0.1',redir_port:'1041',tcp_proxy_way:'tproxy'}));
 	}
@@ -56,6 +64,34 @@ for (let protocol in ['socks','http','vmess','vless','trojan','shadowsocks']) {
 		}
 	}
 }
+
+// Node bootstrap must preserve bracketed IPv6 DNS servers and disable stale answers.
+global.xray_test_config.passwall.node = {
+	'.name':'node','.type':'nodes',type:'Xray',protocol:'vless',address:'node.example',port:'443',
+	transport:'raw',encryption:'none',uuid:'00000000-0000-4000-8000-000000000001',
+	domain_resolver:'tcp',domain_resolver_dns:'[2606:4700:4700::1111]:53'
+};
+let bootstrap = gen_config({flag:'global',node:'node',no_run:'1',local_socks_port:'1080'});
+if (type(bootstrap) == 'string') bootstrap = json(bootstrap);
+let bootstrap_ok = false;
+for (let server in bootstrap.dns?.servers ?? []) {
+	if (type(server) == 'object' && server.address == 'tcp://[2606:4700:4700::1111]:53' && server.serveStale == false) bootstrap_ok = true;
+}
+if (!bootstrap_ok) die('IPv6 node bootstrap DNS was not preserved');
+emit('client-bootstrap-ipv6', bootstrap);
+let socket_fixture = json(fs.readfile(out + '/client-vless-raw.json'));
+let verified_socket = false;
+for (let outbound in socket_fixture.outbounds) {
+	let socket = outbound.streamSettings?.sockopt;
+	if (socket?.happyEyeballs != null) {
+		if (socket.domainStrategy != 'UseIP' || socket.happyEyeballs.tryDelayMs != 200 ||
+		    socket.happyEyeballs.maxConcurrentTry != 2 || socket.tcpUserTimeout != 30000 ||
+		    socket.tcpKeepAliveIdle != 60 || socket.tcpKeepAliveInterval != 15)
+			die('Socket settings were not generated correctly');
+		verified_socket = true;
+	}
+}
+if (!verified_socket) die('Missing Happy Eyeballs socket fixture');
 let main = {
 	inbounds:[{tag:'socks-in',protocol:'socks',listen:'127.0.0.1',port:1080,settings:{udp:true}}],
 	outbounds:[{tag:'direct',protocol:'freedom',streamSettings:{sockopt:{mark:255}}}],

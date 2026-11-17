@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
+import * as core_service from 'passwall.core_service';
 import { apply_config } from 'passwall.xray_config';
 import { check_config, install_config } from 'passwall.xray_runtime';
 import { render_nft_state } from 'passwall.state';
@@ -142,6 +143,8 @@ function launch_core(file, name, logfile, args, env) {
 	if (state.NO_REC_PROCESS == '1' || (type(global.getenv) == 'function' && global.getenv('NO_REC_PROCESS') == '1'))
 		launch_env.NO_REC_PROCESS = '1';
 	for (let key, value in env ?? {}) launch_env[key] = value;
+	if (name == 'xray' && args[0] == 'run' && args[1] == '-c' && args[2] == GLOBAL_ACL + '/global.json')
+		return core_service.start(file, args, logfile, launch_env);
 	return utils.launch([file, ...args], name, logfile, launch_env);
 }
 
@@ -947,15 +950,21 @@ export function start_dns() {
 		command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'stretch'], true);
 		add_dnsmasq_rule('default', state.GLOBAL_DNSMASQ_CONF_PATH, state.GLOBAL_DNSMASQ_CONF, '', state.TUN_DNS, china_listen, {});
 		api.uci_del('dhcp', '@dnsmasq[0]', 'min_cache_ttl');
-		api.uci.add_list('dhcp', api.uci_get('dhcp', '@dnsmasq[0]')['.name'], 'addnmount', state.GLOBAL_DNSMASQ_CONF_PATH);
 		api.uci_save(null, 'dhcp', true);
+		// 25.12's ucode uci cursor has no add_list. Commit the cursor first,
+		// then append the jail mount with the CLI so save() cannot drop it.
+		api.sh_uci_add_list('dhcp', api.uci_get('dhcp', '@dnsmasq[0]')['.name'], 'addnmount', state.GLOBAL_DNSMASQ_CONF_PATH, true);
 		command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'logic_restart', '-LOG', '1'], true);
 	} else if (state.DNS_SHUNT == 'smartdns') {
 		/* SmartDNS reads leases directly and is itself the redirect target. */
 	} else {
 		let port = utils.get_new_port(11400);
 		let conf = GLOBAL_ACL + '/dnsmasq.conf', path = GLOBAL_ACL + '/dnsmasq.d';
-		add_dnsmasq_rule('default', path, conf, port, state.TUN_DNS, china_listen, {});
+		if (add_dnsmasq_rule('default', path, conf, port, state.TUN_DNS, china_listen, {}) != 0 ||
+		    command([utils.first_type('dnsmasq'), '--test', '-C', conf], true) != 0) {
+			api.log('DNS 配置生成或校验失败。');
+			return 1;
+		}
 		launch_core(utils.first_type('dnsmasq'), 'dnsmasq_default', '/dev/null', ['-C', conf, '-x', GLOBAL_ACL + '/dnsmasq.pid']);
 		state.GLOBAL_DNSMASQ_PORT = '' + port;
 		state.DNS_REDIRECT_PORT = '' + port;
@@ -1256,7 +1265,7 @@ export function start_crontab(mode) {
 	let setsid = utils.first_type('setsid') ? 'setsid ' : '';
 	if (state.ENABLED_DEFAULT_ACL == '1' || state.ENABLED_ACLS == '1') {
 		if (cfg('@global_delay[0]', 'start_daemon', '0') == '1')
-			launch_core('/usr/bin/ucode', 'monitor', '/dev/null', [LIBEXEC + '/monitor.uc'], { NO_REC_PROCESS: '1' });
+			command(['/etc/init.d/passwall_monitor', 'start'], true);
 	}
 	if (mode == 'cron') {
 		api.log('当前为计划任务自动运行，不重新配置定时任务。');
@@ -1329,7 +1338,23 @@ export function write_nft_env() {
 		fs.unlink(TMP + '/nft.env');
 };
 
+// Service invokers can mention passwall paths in their command line. Never
+// kill the SSH/LuCI shell or other ancestors merely because a path matches.
+function protected_pids() {
+	let protected = {};
+	let path = '/proc/self/stat';
+	for (let depth = 0; depth < 64; depth++) {
+		let record = match(fs.readfile(path) ?? '', /^([0-9]+) \(.*\) [^ ]+ ([0-9]+)/);
+		if (record == null || protected[record[1]]) break;
+		protected[record[1]] = true;
+		if (record[2] == '0') break;
+		path = '/proc/' + record[2] + '/stat';
+	}
+	return protected;
+}
+
 function kill_matching(pattern, excludes) {
+	let protected = protected_pids();
 	let got = api.proc_lines(pattern);
 	for (let line in split(got, '\n')) {
 		let skip = false;
@@ -1337,7 +1362,7 @@ function kill_matching(pattern, excludes) {
 			if (match(line, exclude) != null) skip = true;
 		if (skip) continue;
 		let pid = match(line, /^([0-9]+)/)?.[1];
-		if (pid) command(['kill', '-9', pid], true);
+		if (pid && !protected[pid]) command(['kill', '-9', pid], true);
 	}
 }
 
@@ -1363,9 +1388,10 @@ function proxy_residues() {
 }
 
 function kill_listed(lines) {
+	let protected = protected_pids();
 	for (let line in lines) {
 		let pid = match(line, /^([0-9]+)/)?.[1];
-		if (pid) command(['kill', '-9', pid], true);
+		if (pid && !protected[pid]) command(['kill', '-9', pid], true);
 	}
 }
 
@@ -1395,6 +1421,8 @@ export function stop(mode, internal) {
 		let pid = match(fs.readfile(path) ?? '', /^([0-9]+)/)?.[1];
 		if (pid) command(['kill', '-9', pid], true);
 	}
+	core_service.stop();
+	command(['/etc/init.d/passwall_monitor', 'stop'], true);
 	kill_matching('passwall/monitor.', []);
 	kill_matching('sleep.*(6s|9s|58s)', []);
 	kill_matching('passwall/', [/app\.uc/, /service\.uc/, /subscribe\.uc/, /rule_update\.uc/, /tasks\.uc/, /server_app\.uc/, /ujail/]);
@@ -1462,7 +1490,7 @@ export function start(mode) {
 	mkdirs();
 	get_config();
 	if (state.ENABLED == '1' && state.ENABLED_DEFAULT_ACL != '1' && state.ENABLED_ACLS != '1')
-		api.log('总开关开着，但节点无效，未启动代理。');
+		{ api.log('总开关开着，但节点无效，未启动代理。'); return 1; }
 	start_haproxy();
 	start_socks();
 	check_run_environment();
@@ -1486,7 +1514,11 @@ export function start(mode) {
 	if (state.USE_TABLES == 'nftables') {
 		if (state.ENABLED_ACLS == '1') acl_app();
 		write_nft_env();
-		command([LIBEXEC + '/nftables.uc', 'start'], false);
+		if (command([LIBEXEC + '/nftables.uc', 'start'], false) != 0) {
+			api.log('防火墙加载失败，停止服务。');
+			stop('');
+			return 1;
+		}
 	}
 	utils.set_cache_var('USE_TABLES', state.USE_TABLES);
 	if (state.ENABLED_DEFAULT_ACL == '1' || state.ENABLED_ACLS == '1') {

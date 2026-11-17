@@ -2,11 +2,14 @@
 
 import * as api from 'passwall.api';
 import * as fs from 'fs';
+import { valid_address } from 'passwall.reliability';
 import { parse_nft_state } from 'passwall.state';
 import { run, output, ubus_call, get_wan_ips } from 'passwall.utils';
 
 const TABLE = "inet passwall";
-const MARK = "0x50535731";
+const MARK = "0x40000000";
+const ROUTE_MARK = MARK + "/" + MARK;
+const KEEP_MARK = "0xbfffffff";
 const TMP = "/tmp/etc/passwall";
 const RULES = "/usr/share/passwall/rules";
 const USER_RULES = "/etc/passwall/rules";
@@ -14,6 +17,7 @@ const LIBEXEC = "/usr/libexec/passwall/nftables.uc";
 
 let env = {};
 let pending = [];
+let set_families = {};
 // ucode 2026.01.16 does not hoist functions. Names used before their
 // definition have to be declared up front.
 let wan_addresses, add_icmp_rules, flush_table;
@@ -106,6 +110,43 @@ function nft(command) {
 	push(pending, command);
 }
 
+function nft_apply(path) {
+	let command = "nft -c -f " + api.shellquote(path) + " 2>&1";
+	let p = api.command_pipe(command, "r");
+	if (p == null)
+		return [255, "无法执行 nft"];
+	let text = p.read("all") ?? "";
+	let rc = p.close();
+	if (rc == null)
+		rc = 255;
+	if (rc != 0)
+		return [rc, text];
+	command = "nft -f " + api.shellquote(path) + " 2>&1";
+	p = api.command_pipe(command, "r");
+	if (p == null)
+		return [255, "无法执行 nft"];
+	text = p.read("all") ?? "";
+	rc = p.close();
+	return [rc == null ? 255 : rc, text];
+}
+
+function log_nft_reject(text) {
+	let shown = 0;
+	for (let line in lines(text)) {
+		log("  nft: " + line);
+		shown++;
+		if (shown == 12)
+			break;
+	}
+	let missing = index(text, "No such file") >= 0 || index(text, "not found") >= 0;
+	if (missing && index(text, "socket") >= 0)
+		log("  nft: 缺少内核模块 nft_socket。在路由器执行：apk add kmod-nft-socket");
+	if (missing && index(text, "tproxy") >= 0)
+		log("  nft: 缺少内核模块 nft_tproxy。UDP 转发需要它。在路由器执行：apk add kmod-nft-tproxy");
+	if (missing && index(text, "reject") >= 0)
+		log("  nft: 缺少内核模块 nft_reject。在路由器执行：apk add kmod-nft-reject kmod-nf-reject kmod-nf-reject6");
+}
+
 function nft_flush(quiet) {
 	if (!length(pending))
 		return 0;
@@ -113,28 +154,14 @@ function nft_flush(quiet) {
 	pending = [];
 	let path = TMP + "/nft.batch";
 	write(path, join("\n", commands) + "\n");
-	// nft -f is atomic. One rejected element or rule used to roll back the
-	// redirect rules and the China/node sets together, so foreign sites were
-	// never proxied while a domestic check still went out directly.
-	if (run(["nft", "-f", path], true) == 0)
-		return 0;
-	if (!quiet)
-		log("nft 批量加载失败，改为逐条加载");
-	let applied = 0;
-	for (let command in commands) {
-		write(path, command + "\n");
-		if (run(["nft", "-f", path], true) == 0) {
-			applied++;
-			continue;
-		}
-		if (quiet)
-			continue;
-		let shown = command;
-		if (length(shown) > 180)
-			shown = substr(shown, 0, 180) + "...";
-		log("nft 规则被跳过: " + shown);
+	// Never turn a rejected transaction into a partially installed ruleset.
+	let applied = nft_apply(path);
+	if (applied[0] != 0) {
+		log("nft 事务失败，未逐条加载；保留原规则并报告失败。");
+		log_nft_reject(applied[1]);
+		die("Passwall nft transaction rejected");
 	}
-	return applied > 0 ? 0 : 1;
+	return 0;
 }
 
 function nft_now(command, quiet) {
@@ -168,6 +195,7 @@ function ensure_table() {
 }
 
 function ensure_set(name, addr_type, timeout) {
+	set_families[name] = addr_type == "ipv6_addr";
 	if (set_exists(name))
 		return;
 	let spec = "add set " + TABLE + " " + name + " { type " + addr_type + "; flags interval";
@@ -184,6 +212,10 @@ function add_elements(name, values) {
 		value = trim(value);
 		if (value == "" || unique[value])
 			continue;
+		if (!valid_address(value, set_families[name] ?? (index(name, '6') >= 0))) {
+			log('跳过无效地址集合元素: ' + name);
+			continue;
+		}
 		unique[value] = true;
 		push(batch, value);
 		if (length(batch) == 500) {
@@ -222,11 +254,11 @@ function interface_addresses(family) {
 }
 
 function is_ipv4(address) {
-	return match(address, /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) != null;
+	return valid_address(address, false) && index(address, '/') < 0;
 }
 
 function is_ipv6(address) {
-	return index(address, ":") >= 0 && match(address, /^[0-9A-Fa-f:]+$/) != null;
+	return valid_address(address, true) && index(address, '/') < 0;
 }
 
 function resolve_host(family, host, count) {
@@ -320,17 +352,21 @@ function redirect(port, mode) {
 	if (port == null || port == "")
 		return "counter redirect";
 	if (mode == "TPROXY4")
-		return "counter meta mark " + MARK + " tproxy ip to :" + port;
+		return "counter meta mark & " + MARK + " == " + MARK + " tproxy ip to :" + port;
 	if (mode == "TPROXY6")
-		return "counter meta mark " + MARK + " tproxy ip6 to :" + port;
+		return "counter meta mark & " + MARK + " == " + MARK + " tproxy ip6 to :" + port;
 	if (mode == "TPROXY")
-		return "counter meta mark " + MARK + " tproxy to :" + port;
+		return "counter meta mark & " + MARK + " == " + MARK + " tproxy to :" + port;
 	return "counter redirect to :" + port;
 }
 
 function jump(mode, action) {
 	if (mode == "direct")
-		return "mark != " + MARK + " counter return";
+		// Do not gate China/direct returns on the proxy mark. PSW_DIVERT can
+		// mark transparent TCP before NAT, and OpenWrt kernels also reject
+		// combining meta/ct mark in one expression. A plain return keeps
+		// domestic destinations from falling through into redirect/tproxy.
+		return "counter return";
 	if (mode == "proxy")
 		return action ?? "counter redirect";
 	return "";
@@ -770,6 +806,10 @@ function add_output_rules(tproxy) {
 		let address = pos >= 0 ? substr(endpoint, 0, pos) : endpoint;
 		let port = pos >= 0 ? substr(endpoint, pos + 1) : "53";
 		address = replace(replace(address, /^\[/, ""), /\]$/, "");
+		if ((!is_ipv4(address) && !is_ipv6(address)) || match(port, /^[0-9]+$/) == null || int(port) < 1 || int(port) > 65535) {
+			log('跳过无效 DNS 绕过地址');
+			continue;
+		}
 		if (index(address, ":") >= 0) {
 			nft("add rule " + TABLE + " PSW_OUTPUT_MANGLE_V6 meta l4proto udp ip6 daddr " + address + " " + factor(port, "udp dport") + " counter return");
 			nft("add rule " + TABLE + " PSW_OUTPUT_MANGLE_V6 meta l4proto tcp ip6 daddr " + address + " " + factor(port, "tcp dport") + " counter return");
@@ -844,10 +884,10 @@ function add_output_rules(tproxy) {
 	else
 		nft("add rule " + TABLE + " nat_output ip protocol tcp counter jump PSW_OUTPUT_NAT");
 	nft("add rule " + TABLE + " mangle_output oif lo counter return comment \"PSW_OUTPUT_MANGLE\"");
-	nft("add rule " + TABLE + " mangle_output meta mark " + MARK + " counter return comment \"PSW_OUTPUT_MANGLE\"");
+	nft("add rule " + TABLE + " mangle_output meta mark & " + MARK + " == " + MARK + " counter return comment \"PSW_OUTPUT_MANGLE\"");
 	for (let iface in fs.lsdir(TMP + "/iface") ?? []) {
-		nft("add rule " + TABLE + " " + tcp_chain + " oif " + quote_comment(iface) + " counter return");
-		nft("add rule " + TABLE + " PSW_OUTPUT_MANGLE_V6 oif " + quote_comment(iface) + " counter return");
+		nft("add rule " + TABLE + " " + tcp_chain + " oifname " + quote_comment(iface) + " counter return");
+		nft("add rule " + TABLE + " PSW_OUTPUT_MANGLE_V6 oifname " + quote_comment(iface) + " counter return");
 	}
 }
 
@@ -898,7 +938,7 @@ add_icmp_rules = function() {
 
 function base_rules(tproxy) {
 	chain("PSW_DIVERT");
-	nft("add rule " + TABLE + " PSW_DIVERT meta l4proto tcp socket transparent 1 mark set " + MARK + " counter accept");
+	nft("add rule " + TABLE + " PSW_DIVERT meta l4proto tcp socket transparent 1 meta mark set meta mark | " + MARK + " counter accept");
 	chain("PSW_DNS");
 	if (cfg("@global[0]", "dns_redirect", "1") == "0") {
 		nft("insert rule " + TABLE + " dstnat ip saddr @psw_lan ip daddr @psw_local jump PSW_DNS");
@@ -908,11 +948,15 @@ function base_rules(tproxy) {
 		nft("insert rule " + TABLE + " dstnat ip6 saddr @psw_lan6 jump PSW_DNS");
 	}
 	chain("PSW_RULE");
-	nft("add rule " + TABLE + " PSW_RULE counter meta mark set ct mark");
-	nft("add rule " + TABLE + " PSW_RULE meta mark " + MARK + " counter return");
-	nft("add rule " + TABLE + " PSW_RULE tcp flags & (fin|syn|rst|ack) == syn counter meta mark set " + MARK);
-	nft("add rule " + TABLE + " PSW_RULE meta l4proto udp ct state { new, related } counter meta mark set " + MARK);
-	nft("add rule " + TABLE + " PSW_RULE counter ct mark set mark");
+	// OpenWrt's nft kernel path rejects combining meta mark and ct mark in one
+	// binary expression. Restore/save the proxy bit with guarded updates instead.
+	nft("add rule " + TABLE + " PSW_RULE ct mark & " + MARK + " == " + MARK + " counter meta mark set meta mark | " + MARK);
+	nft("add rule " + TABLE + " PSW_RULE ct mark & " + MARK + " != " + MARK + " counter meta mark set meta mark & " + KEEP_MARK);
+	nft("add rule " + TABLE + " PSW_RULE meta mark & " + MARK + " == " + MARK + " counter return");
+	nft("add rule " + TABLE + " PSW_RULE tcp flags & (fin|syn|rst|ack) == syn counter meta mark set meta mark | " + MARK);
+	nft("add rule " + TABLE + " PSW_RULE meta l4proto udp ct state { new, related } counter meta mark set meta mark | " + MARK);
+	nft("add rule " + TABLE + " PSW_RULE meta mark & " + MARK + " == " + MARK + " counter ct mark set ct mark | " + MARK);
+	nft("add rule " + TABLE + " PSW_RULE meta mark & " + MARK + " != " + MARK + " counter ct mark set ct mark & " + KEEP_MARK);
 
 	chain("PSW_MANGLE");
 	nft("add rule " + TABLE + " PSW_MANGLE ip daddr @psw_lan counter return");
@@ -969,24 +1013,48 @@ function base_rules(tproxy) {
 	setup_icmp();
 }
 
+const RPF_BACKUP = '/tmp/passwall-rp-filter.json';
 function set_sysctl() {
-	for (let name in fs.lsdir("/proc/sys/net/ipv4/conf") ?? [])
-		write("/proc/sys/net/ipv4/conf/" + name + "/rp_filter", "0\n");
+	let previous = {};
+	try { previous = json(read(RPF_BACKUP)); } catch (err) {}
+	if (type(previous) != 'object') previous = {};
+	for (let name in fs.lsdir("/proc/sys/net/ipv4/conf") ?? []) {
+		let path = '/proc/sys/net/ipv4/conf/' + name + '/rp_filter';
+		if (previous[name] == null) previous[name] = trim(read(path));
+	}
+	if (!write(RPF_BACKUP, sprintf('%J', previous))) die('Cannot save rp_filter state');
+	for (let name in previous) write('/proc/sys/net/ipv4/conf/' + name + '/rp_filter', '0\n');
+}
+
+function restore_sysctl() {
+	let previous;
+	try { previous = json(read(RPF_BACKUP)); } catch (err) { return; }
+	if (type(previous) != 'object') return;
+	for (let name, value in previous) {
+		let path = '/proc/sys/net/ipv4/conf/' + name + '/rp_filter';
+		if (trim(read(path)) == '0' && match(value, /^[012]$/) != null) write(path, value + '\n');
+	}
+	fs.unlink(RPF_BACKUP);
 }
 
 function add_routes() {
-	run(["ip", "rule", "add", "fwmark", MARK, "table", "999", "priority", "999"], true);
-	run(["ip", "route", "add", "local", "0.0.0.0/0", "dev", "lo", "table", "999"], true);
-	if (e("PROXY_IPV6") == "1") {
-		run(["ip", "-6", "rule", "add", "fwmark", MARK, "table", "999", "priority", "999"], true);
-		run(["ip", "-6", "route", "add", "local", "::/0", "dev", "lo", "table", "999"], true);
+	for (let family in (e('PROXY_IPV6') == '1' ? [4, 6] : [4])) {
+		let prefix = family == 6 ? ['ip', '-6'] : ['ip'];
+		if (trim(output([...prefix, 'rule', 'show', 'fwmark', ROUTE_MARK, 'lookup', '999'])) == '' &&
+		    run([...prefix, 'rule', 'add', 'fwmark', ROUTE_MARK, 'table', '999', 'priority', '999'], true) != 0)
+			die('Cannot install Passwall policy rule');
+		if (run([...prefix, 'route', 'replace', 'local', family == 6 ? '::/0' : '0.0.0.0/0', 'dev', 'lo', 'table', '999'], true) != 0)
+			die('Cannot install Passwall local route');
 	}
 }
 
 function delete_routes() {
-	quiet_status(["ip", "rule", "del", "fwmark", MARK]);
+	// Remove the pre-bitmask rule when upgrading an already running service.
+	quiet_status(['ip', 'rule', 'del', 'fwmark', '0x50535731']);
+	quiet_status(['ip', '-6', 'rule', 'del', 'fwmark', '0x50535731']);
+	quiet_status(["ip", "rule", "del", "fwmark", ROUTE_MARK]);
 	quiet_status(["ip", "route", "del", "local", "0.0.0.0/0", "dev", "lo", "table", "999"]);
-	quiet_status(["ip", "-6", "rule", "del", "fwmark", MARK]);
+	quiet_status(["ip", "-6", "rule", "del", "fwmark", ROUTE_MARK]);
 	quiet_status(["ip", "-6", "route", "del", "local", "::/0", "dev", "lo", "table", "999"]);
 }
 
@@ -1064,10 +1132,11 @@ function filter_node(node, stream, tproxy) {
 }
 
 function filter_direct_node_list() {
+	load_env();
 	if (!exists(TMP + "/direct_node_list") || !table_exists())
 		return 0;
 	let seen = {};
-	let tproxy = cfg("@global_forwarding[0]", "tcp_proxy_way", "redirect") == "tproxy";
+	let tproxy = e("TCP_PROXY_WAY", cfg("@global_forwarding[0]", "tcp_proxy_way", "redirect")) == "tproxy";
 	for (let node in lines(read(TMP + "/direct_node_list"))) {
 		if (seen[node])
 			continue;
@@ -1094,7 +1163,7 @@ function mwan3_start() {
 	if (quiet_status(["nft", "list", "chain", "ip", "mangle", "mwan3_hook"]) != 0)
 		return 0;
 	mwan3_stop();
-	let rc = run(["nft", "insert", "rule", "ip", "mangle", "mwan3_hook", "ct", "mark", MARK, "counter", "return", "comment", "passwall"], true);
+	let rc = run(["nft", "insert", "rule", "ip", "mangle", "mwan3_hook", "ct", "mark", "&", MARK, "==", MARK, "counter", "return", "comment", "passwall"], true);
 	if (rc != 0)
 		run(["logger", "-t", "passwall", "mwan3: failed to add " + MARK + " exemption rule to mangle/mwan3_hook"], true);
 	return rc;
@@ -1183,6 +1252,7 @@ function start() {
 	set_sysctl();
 	populate_sets();
 	update_wan_sets("log");
+	add_routes();
 	let tproxy = e("TCP_PROXY_WAY", "redirect") == "tproxy";
 	base_rules(tproxy);
 	load_acls(tproxy);
@@ -1194,7 +1264,6 @@ function start() {
 	let rc = nft_flush(false);
 	if (rc != 0)
 		return rc;
-	add_routes();
 	update_mwan3(true);
 	mwan3_start();
 	filter_direct_node_list();
@@ -1217,6 +1286,7 @@ function stop() {
 				run(["rm", "-rf", "/tmp/etc/passwall_tmp/" + name], true);
 	}
 	flush_include();
+	restore_sysctl();
 	log("删除 nftables 规则完成。");
 	return 0;
 }

@@ -2,6 +2,8 @@
 
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
+import * as fs from 'fs';
+import { bounded_integer } from 'passwall.reliability';
 import { apply_config } from 'passwall.xray_config';
 // Lua truthiness: only null and false are falsy. 0 and "" stay truthy.
 import { truth as truthy, quoted_option_blob } from 'passwall.text';
@@ -554,18 +556,27 @@ client_stream_settings = function(node, dialer_proxy_tag, fragment, noise) {
 	if (node.transport == "xdrive" && (node.protocol != "vless" || !nonempty(node.encryption) || node.encryption == "none" || nonempty(vless_flow(node))))
 		die("XDRIVE requires VLESS encryption and no flow");
 
+	let congestion = node.tcp_congestion;
+	if (nonempty(congestion)) {
+		let available = split(trim(fs.readfile('/proc/sys/net/ipv4/tcp_available_congestion_control') ?? ''), /[[:space:]]+/);
+		if (index(available, congestion) < 0) die('Requested TCP congestion algorithm is unavailable');
+	}
 	let raw_ok = (node.transport == "raw" || node.transport == "tcp") && node.protocol != "socks" && truthy(node.tcp_guise) && node.tcp_guise !== "none";
 	return {
 		sockopt: {
 			mark: 255,
-			domainStrategy: lua_or(node.domain_strategy, "UseIP"),
+			domainStrategy: node.happy_eyeballs == "1" ? "UseIP" : lua_or(node.domain_strategy, "UseIP"),
 			tcpFastOpen: node.tcp_fast_open == "1" ? true : null,
+			tcpcongestion: congestion,
+			tcpKeepAliveIdle: bounded_integer(node.tcp_keepalive_idle, 1, 7200, null),
+			tcpKeepAliveInterval: bounded_integer(node.tcp_keepalive_interval, 1, 600, null),
+			tcpUserTimeout: bounded_integer(node.tcp_user_timeout, 1000, 600000, null),
 			tcpMptcp: node.tcpMptcp == "1" ? true : null,
-			happyEyeballs: node.happy_eyeballs == "1" ? {
-				TryDelayMs: 250,
-				PrioritizeIPv6: false,
-				Interleave: 1,
-				MaxConcurrentTry: 4
+			happyEyeballs: node.happy_eyeballs == "1" && !nonempty(dialer_proxy_tag) ? {
+				tryDelayMs: bounded_integer(node.happy_delay_ms, 10, 2000, 250),
+				prioritizeIPv6: node.happy_prefer_ipv6 == "1",
+				interleave: 1,
+				maxConcurrentTry: bounded_integer(node.happy_concurrency, 1, 8, 4)
 			} : null,
 			dialerProxy: dialer_proxy_tag
 		},
@@ -681,19 +692,12 @@ register_domain_resolver = function(node) {
 		}
 	}
 	else {
-		let server_address = node.domain_resolver_dns;
-		config_port = 53;
-		let parts = api.split(server_address, ":");
-		if (length(parts) > 1) {
-			server_address = parts[0];
-			config_port = to_number(parts[length(parts) - 1]);
-		}
+		let parsed = utils.get_ip_port_from(node.domain_resolver_dns);
+		let server_address = parsed.host;
+		config_port = bounded_integer(parsed.port, 1, 65535, 53);
 		config_address = server_address;
-		if (dns_proto == "tcp") {
-			if (server_address == null || config_port == null)
-				die("attempt to concatenate a nil value");
-			config_address = dns_proto + "://" + server_address + ":" + config_port;
-		}
+		if (dns_proto == "tcp")
+			config_address = 'tcp://' + (api.is_ipv6(server_address) ? '[' + server_address + ']' : server_address) + ':' + config_port;
 	}
 	if (config_address == null)
 		die("attempt to concatenate a nil value");
@@ -705,7 +709,7 @@ register_domain_resolver = function(node) {
 			port: config_port,
 			finalQuery: true,
 			disableCache: false,
-			serveStale: true,
+			serveStale: false,
 			domains: []
 		};
 	}

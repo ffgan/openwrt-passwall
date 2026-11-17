@@ -45,6 +45,8 @@ const invokes = (text, bin) => text.includes("['" + bin + "'") || text.includes(
 const utilsSrc = readUc('utils.uc');
 const apiSrc = readUc('api.uc');
 const nftSrc = readUc('nftables.uc');
+if (/flush\s+ruleset/.test(nftSrc))
+	fail('Passwall must never flush the global nftables ruleset');
 if (invokes(utilsSrc, 'netstat') || invokes(apiSrc, 'netstat'))
 	fail('port checks still call netstat');
 if (invokes(utilsSrc, 'route') || invokes(apiSrc, 'route'))

@@ -56,18 +56,18 @@
 }
 
 .pw-state,
-.green,
-.red,
-.yellow {
+.pw-dashboard .green,
+.pw-dashboard .red,
+.pw-dashboard .yellow {
 	font-size: .95rem;
 	font-weight: 650;
 	letter-spacing: 0;
 	text-transform: none;
 }
 
-.green, .pw-ok { color: #1f9d62; }
-.red, .pw-warn, a.pw-warn { color: #e0544a; }
-.yellow { color: #d4880f; }
+.pw-dashboard .green, .pw-ok { color: #1f9d62; }
+.pw-dashboard .red, .pw-warn, a.pw-warn { color: #e0544a; }
+.pw-dashboard .yellow { color: #d4880f; }
 
 .pw-modal {
 	background: var(--background-color-high, var(--background-color, #fff));
@@ -174,4 +174,122 @@
 
 @media (max-width: 520px) {
 	.pw-board { grid-template-columns: 1fr; }
+}
+
+/* Local, lightweight presentation shared by all PassWall LuCI views. */
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) {
+	--pw-accent: var(--primary, #2563eb);
+	--pw-line: var(--border-color-medium, rgba(128, 139, 158, .24));
+	--pw-surface: var(--background-color-high, var(--background-color, #fff));
+	line-height: 1.55;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-section {
+	border: 1px solid var(--pw-line);
+	border-radius: 14px;
+	padding: 1.1rem;
+	margin-bottom: 1rem;
+	background: var(--pw-surface);
+	box-shadow: 0 3px 14px rgba(20, 35, 60, .035);
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) h3 {
+	font-weight: 650;
+	letter-spacing: -.015em;
+	margin-bottom: 1rem;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-value {
+	padding-top: .65rem;
+	padding-bottom: .65rem;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-value-description {
+	font-size: .85rem;
+	line-height: 1.6;
+	opacity: .8;
+	margin-top: .4rem;
+	overflow-wrap: anywhere;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) input:not([type="checkbox"]):not([type="radio"]),
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) select,
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-dropdown {
+	min-height: 38px;
+	border-radius: 8px;
+	max-width: 100%;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) textarea {
+	border-radius: 8px;
+	max-width: 100%;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-button {
+	min-height: 36px;
+	border-radius: 8px;
+	font-weight: 600;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) :is(input, select, textarea, button, a):focus-visible,
+.pw-status-card:focus-visible {
+	outline: 2px solid var(--primary, #2563eb);
+	outline-offset: 3px;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-section-table {
+	border-spacing: 0;
+	width: 100%;
+}
+
+:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-section-table .td {
+	padding-top: .65rem;
+	padding-bottom: .65rem;
+	vertical-align: middle;
+}
+
+.pw-status-card {
+	border-radius: 14px;
+	min-width: 0;
+	min-height: 5.4rem;
+	border-top: 3px solid var(--primary, #2563eb);
+}
+
+.pw-status-icon {
+	background: rgba(80, 120, 210, .12);
+	background: color-mix(in srgb, var(--primary, #2563eb) 12%, transparent);
+}
+
+.pw-status-card h4 { overflow-wrap: anywhere; }
+.pw-status-title { line-height: 1.5; letter-spacing: .025em; }
+.pw-log { box-sizing: border-box; line-height: 1.6; tab-size: 4; }
+.pw-modal, .up-modal { max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
+
+@media (max-width: 600px) {
+	:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-section { padding: .75rem; border-radius: 10px; }
+	:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-value-title { float: none; width: auto; text-align: left; padding-bottom: .35rem; }
+	:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-value-field { margin-left: 0; min-width: 0; }
+	:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) .cbi-button,
+	:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) select,
+	:is(.cbi-map[id^="cbi-passwall"], .pw-dashboard) input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+	.pw-board { gap: .6rem; }
+	.pw-status-card { padding: .85rem; min-height: 4.5rem; }
+	.pw-log { min-height: 18rem; font-size: 12px; }
+}
+
+/* Keep wide lists within the view, including on small LuCI layouts. */
+.cbi-map[id^="cbi-passwall"] { min-width: 0; }
+.cbi-map[id^="cbi-passwall"] .cbi-section { min-width: 0; overflow-x: auto; }
+.cbi-map[id^="cbi-passwall"] .td { overflow-wrap: anywhere; }
+.pw-dashboard > .cbi-section { border: 1px solid var(--border-color-medium, #dce1e8); border-radius: 14px; padding: 1rem; }
+.pw-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.pw-actions button { min-height: 44px; }
+.pw-now { overflow-wrap: anywhere; background: rgba(80, 120, 210, .1); }
+.pw-advanced { margin: .75rem 0; border: 1px solid var(--border-color-medium, #dce1e8); border-radius: 8px; padding: .6rem; }
+.pw-advanced summary { cursor: pointer; font-weight: 600; padding: .4rem; }
+.pw-status-card[aria-busy="true"] { opacity: .7; cursor: progress; }
+.pw-dashboard .cbi-section .cbi-section { box-shadow: none; border: 0; }
+@media (max-width: 600px) {
+ .cbi-map[id^="cbi-passwall"] .cbi-section-table { min-width: 38rem; }
+ .pw-dashboard > .cbi-section { padding: .75rem; }
 }

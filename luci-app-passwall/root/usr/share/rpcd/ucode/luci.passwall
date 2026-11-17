@@ -9,6 +9,7 @@ import { main as subscribe_main } from 'passwall.subscribe';
 import { url_test_node } from 'passwall.urltest';
 import { main } from 'passwall.rule_update';
 import * as fs from 'fs';
+import { inspect_firewall } from 'passwall.firewall_health';
 let app_name, cfg_name, tmp_path, s_tmp_path, form_raw, trim_s, join, split_csv, split_lines, exists, read_text, write_text, write_bytes, rm_rf, move_file, rm_dir, copy_file, mkdir_p, b64encode, b64decode, log_msg, json_ok, json_err, as_json, text_out, log_alert, num, as_list, uci_value, random_id, cache_get, cache_set, found_com, found_bin, app_version, config_set, config_del, config_get, config_commit, del_c, save_c, revert_config, add_named, section_obj, sections_of, com_order, com_info, safe_task_id, is_ip, tail_file, mark_ipv6, list_grouped, apply_data, set_c, set_s, parse_timing, apply_timing, cmp_ge, short_version, page_url, geo_base, get_rules, show_menu, hide_menu, capabilities, link_add_node, socks_change, gen_client_config, get_now_use_node, get_redir_log, get_socks_log, get_chinadns_log, get_smartdns_log, get_log, clear_log, index_status, haproxy_status, socks_status, connect_status, ping_node, urltest_node, update_config, add_node, set_node, copy_node, clear_all_nodes, delete_select_nodes, get_node, reassign_group, save_node_list_opt, update_rules, rollback_rules, server_update_config, server_status, server_log, server_get_log, server_clear_log, do_app_check, do_app_update, do_com_check, do_com_update, do_com_version, read_rulelist, create_backup, restore_backup, reset_config, geo_view, subscribe_del_node, subscribe_del_all, subscribe_manual, subscribe_manual_all, flush_set, fetch_certsha256, get_shunt_rules, add_shunt_rule, delete_select_shunt_rules, gen_wireguard_keypair, make_check, make_update, make_version, com_update_args, app_update_args;
 
 const BACKUP_FILES = [
@@ -707,6 +708,11 @@ hide_menu = function() {
 
 capabilities = function() {
 	let e = {};
+	e.tcp_congestion = split(trim_s(read_text('/proc/sys/net/ipv4/tcp_available_congestion_control')), /[[:space:]]+/);
+	e.mptcp_enabled = trim_s(read_text('/proc/sys/net/mptcp/enabled')) == '1';
+	e.flow_offloading = api.uci_get('firewall', '@defaults[0]', 'flow_offloading') == '1';
+	e.flow_offloading_hw = api.uci_get('firewall', '@defaults[0]', 'flow_offloading_hw') == '1';
+	e.sqm_available = exists('/etc/init.d/sqm');
 	let singbox = found_com('sing-box');
 	let xray = found_com('xray');
 	e.singbox = singbox;
@@ -911,6 +917,18 @@ clear_log = function() {
 
 index_status = function() {
 	let e = {};
+	let nat_zones = [];
+	api.uci.foreach('firewall', 'zone', function(zone) {
+		if (zone.masq == '1' && type(zone.name) == 'string') push(nat_zones, zone.name);
+	});
+	let snapshot = null;
+	let response = argv_output(['nft', '-j', 'list', 'table', 'inet', 'fw4']);
+	if (response.status == 0) {
+		try { snapshot = json(response.output); } catch (err) {}
+	}
+	let health = inspect_firewall(snapshot, nat_zones, trim_s(read_text('/proc/sys/net/ipv4/ip_forward')) == '1');
+	e.forwarding_status = health.ok;
+	e.firewall_error = health.reason;
 	let dns_shunt = api.uci_get_c('@global[0]', 'dns_shunt') || 'dnsmasq';
 	let tmp = tmp_path();
 	let processes = process_snapshot();

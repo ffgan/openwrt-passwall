@@ -29,6 +29,7 @@ CHECKS = [
     ("node-domain-ip-direct", "198.51.100.10", 443, None, False),
     ("remote-dns-tcp-redirected", "1.1.1.1", 53, None, True),
     ("marked-foreign-direct", "8.8.8.8", 443, 255, False),
+    ("unrelated-mark-proxied", "8.8.8.8", 443, 0x10000, True),
 ]
 
 

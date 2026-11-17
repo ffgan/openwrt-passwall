@@ -64,7 +64,7 @@ git clone https://github.com/ffgan/openwrt-passwall package/passwall-luci
 
 “预览并校验”使用设备安装的 Xray 核心执行 `run -test`。客户端预览基于最近一次生成的主实例骨架，服务端基于已保存的表单；修改其他设置后应先保存并重新生成，再检查 JSON。预览含凭据，请勿公开。配置临时文件使用私有目录和 0600 权限；普通日志和 RPC 不返回核心原始诊断，避免泄露凭据。
 
-启动时先校验配置，再原子替换配置文件；重启前会基于上次骨架预检 JSON，失败则取消重启。**这不是整个服务的事务回滚**：更改其他 UCI 参数、运行时占用端口或进程启动失败，仍可能导致原有“停止后启动”流程中断，尚不具备完整的防火墙、DNS 和进程自动恢复。
+启动时先校验配置，再原子替换配置文件；重启前会基于上次骨架预检 JSON，失败则取消重启。成功启动后，以 0600 权限保存 `/etc/passwall/last-good.conf`；后续启动失败会停止残留组件、恢复这份 UCI 配置并重新生成服务。被拒绝的候选配置保存在 `/tmp/passwall-failed.conf`，同样含凭据且权限为 0600。恢复后仍返回失败，让调用方知道本次配置未应用。这是停止后重建的补偿回滚，不是跨进程原子事务，也不能迁移已建立的连接。首次安装没有成功快照时无法恢复；外部规则文件、核心二进制和其他软件的配置不在快照内。
 
 XDRIVE 在客户端和服务端传输列表中提供 JSON 设置。它仅适用于 VLESS，必须配置匹配的 encryption/decryption，不能设置 flow；客户端自动启用 Mux，concurrency 和 xudpConcurrency 必须非负。分享链接不能完整表达当前 XDRIVE 配置，导出会提示改用完整 JSON，订阅遇到此类链接会跳过。Google Drive、S3、Yandex 等后端需要各自凭据和网络条件；本地后端已做实际往返测试，外部后端尚未验证。
 
@@ -87,3 +87,64 @@ UCODE=/path/to/ucode UCODE_LIB=/path/to/ucode/build XRAY=/tmp/xray/xray python3 
 ```
 
 测试覆盖 JSON 合并保护、发布选择、客户端与服务端常见协议和传输的配置生成，以及 VLESS 各传输（含本地 XDRIVE）、VMess、Trojan、Shadowsocks 经 SOCKS 到 HTTP 的 TCP 往返。测试移除透明代理和 SO_MARK，只在本机临时端口运行。OpenWrt 上的 UDP、IPv6、TLS/REALITY/ECH、DNS、ACL、链式代理和外部服务仍需设备集成验证，不能据此宣称所有上游功能都已验证可用。
+
+## 界面更新与 SSH 安装
+
+界面资源随 `luci-app-passwall` 包一起安装，无需 CDN、外部字体或额外 Web 服务。首页提供状态总览、节点配置定位和代理日志入口；监听端口等高级设置默认折叠。手机与电脑共用同一套页面，宽列表在配置区域内部滚动。
+
+在与设备版本、架构匹配的 OpenWrt SDK 或源码树中，按上文配置 feeds 后构建：
+
+```sh
+make package/luci-app-passwall/compile V=s
+```
+
+将生成的 `luci-app-passwall` APK 上传到设备 `/tmp/`，通过 SSH 安装（将文件名替换成实际上传的包名）：
+
+```sh
+apk add --allow-untrusted /tmp/luci-app-passwall-实际版本.apk
+```
+
+仅对自己构建且来源可信的本地包使用 `--allow-untrusted`。本仓库面向 OpenWrt 25.12 及更新版本；不要把 APK 安装到使用 opkg 的旧系统。更新前建议在 LuCI「系统 → 备份/升级」导出备份。安装后重新打开 PassWall 页面，必要时强制刷新浏览器缓存。界面更新不要求重启路由器。
+
+本地可运行 `node tests/check.mjs` 和 `node tests/parse-runtime.test.mjs`。真实设备验收应覆盖 360px、768px、桌面宽度及所用 LuCI 明暗主题，检查无节点、停止运行、连通性检测失败、保存应用和折叠区校验。源码环境的检查不能替代这些设备验收。
+
+
+## OpenWrt 可靠性与链路调优
+
+- nftables 每个批次先 `nft -c` 校验，再原子提交；错误会中止，不再逐条安装部分规则。地址集合入口过滤不合法的 IPv4/IPv6 CIDR，避免订阅中的无效数据破坏整个批次。不同批次、策略路由和进程启动之间仍依赖服务恢复流程。
+- 透明代理独占 `0x40000000` 标记位，策略路由使用同位掩码，分类时仅同步此位并保留其他软件的 mark 位；升级会清理旧版完整标记规则。最低 8 位的 255 仍保留为现有出站绕过约定。与其他软件同时使用前仍需检查它们是否占用此位。策略路由先于透明代理规则准备，失败会向上传递；重复启动使用幂等路由操作。停用时恢复本服务记录的 `rp_filter`，不会覆盖运行中已被其他管理者改为非零的值。首次改造无法推断旧版本已经修改前的值。
+- `passwall_monitor` 由 procd 托管。工作进程每 5 秒扫描所记录的代理进程，失败重试按 5、10、20 秒递增，上限 300 秒；连续存活 60 秒后清除失败计数。不会因为十次失败停止恢复一整天。主 Xray 已作为 `passwall_core/global` 直接注册到 procd，不再创建轮询恢复记录；辅助核心和其他后端仍使用记录管理器。主实例启动确认会轮询实际运行状态、PID 和重启策略，不能以 `service set` 的空结果判失败。ubus 输入的 respawn 使用字符串数组，list 输出则为对象。
+- WAN ifup 事件在同一接口锁内等待 3 秒合并关联事件；ifupdate 继续仅更新 WAN 集合。进程清理排除当前进程及其祖先进程，避免 SSH/LuCI 调用参数包含 Passwall 路径时误杀管理通道。
+- Xray 节点提供内核实际可用的拥塞算法、keepalive、TCP user timeout、Happy Eyeballs 延迟与并发参数。Happy Eyeballs 使用双栈 `UseIP`，代理链的 `dialerProxy` 出站不生成无效的竞速设置。未填写的 socket 参数保留核心默认值；不可用的拥塞算法拒绝生成。
+- 节点 bootstrap DNS 支持 IPv6 地址及端口，不再错误拆分 IPv6 冒号；节点解析关闭过期答案复用。Passwall 独立 dnsmasq 实例启动前执行配置检查。DNS 数据面仍沿用现有 dnsmasq/chinadns 分工；nft 动态集合超时仍为 2 天，尚未实现逐答案 TTL 同步，不能将其称为完整 DNS 一致性重构。
+- SOCKS 自动切换支持最多四个探测目标；任一成功即保持健康。默认连续三次失败才切换，恢复主节点需连续三次成功，并有 60 秒冷却。WAN 失联会清除判定计数。Xray 原生 Observatory/BurstObservatory 仍按现有均衡配置使用，尚未增加应用层滞回控制。
+
+设备链路调优在安装对应内核版本的 `kmod-tcp-bbr`、`kmod-sched-cake`、`sqm-scripts` 后运行：
+
+```sh
+# 在路由器执行，参数为 Mbps；以 95% 带宽配置双向 CAKE。
+sh /tmp/tune-openwrt.sh 200 40
+```
+
+脚本位于 `scripts/tune-openwrt.sh`，默认 WAN 为 netifd 的 `wan` 接口；200/40 对应 190000/38000 Kbps。启用按主机公平排队，并关闭与 SQM 冲突的软件/硬件 forwarding offload。默认 Ethernet/PPPoE overhead 为保守的 44 字节，特殊接入应实测调整。对当前普通 TCP 代理节点开启已可用的 BBR、Happy Eyeballs 和保守的存活检测参数。复合分流节点应在各成员节点配置参数。调优失败会恢复脚本修改前的配置，备份位于私有 `/tmp/passwall-tuning.*` 目录。
+
+SQM 会牺牲部分峰值吞吐，实际能力受路由器 CPU 影响；BBR 只控制本机发出的 TCP 数据，不能替远端服务器选择下载拥塞算法。MPTCP、TFO、Vision、REALITY、XHTTP 和 UDP 传输依赖对端及网络条件，不随本脚本强制开启。AX3000T 上已验证失败配置回滚后代理返回 HTTP 204；监控进程被终止后由 procd 在 5 秒恢复，Xray 被终止后在 6 秒恢复。未做生产网络的断 WAN、重启设备、IPv6 UDP 全矩阵或满载 P95/P99 性能验收。
+
+新增检查：
+
+```sh
+UCODE=/path/to/ucode-wrapper python3 tests/service-recovery.py
+ucode -L /absolute/path/to/luci-app-passwall/root/usr/share/ucode tests/reliability.uc
+sudo env UCODE=/path/to/ucode-wrapper bash tests/routing.sh
+sudo env ROUTING_TCP_WAY=tproxy UCODE=/path/to/ucode-wrapper bash tests/routing.sh
+```
+
+
+防火墙验收区分代理进程与 LAN 转发：首页在 fw4 表、forward 链、IPv4 forwarding 或已配置 NAT 区域的 MASQUERADE 缺失时单独显示警告。检查只读取系统规则，不自动重建或清空防火墙。`tests/firewall-health.uc` 覆盖这些状态。
+
+`tests/routing.sh` 强制检查当前网络命名空间与宿主不同；它预置模拟 fw4 的 forward/NAT 表，验证 Passwall 启动、重载、停止后规则不变。生产设备排查禁止使用全局 `nft flush ruleset`；Passwall 的清理限定在自己管理的表、策略规则和有明确归属的兼容 hook 中。宿主内核的 nft 通过不代表设备内核也接受所有 mark 表达式，部署前还需设备的只读校验。
+
+主核心托管回归：`UCODE=/path/to/ucode-wrapper python3 tests/core-service-ubus.py`。覆盖空成功响应、异步注册、空服务、缺少重启策略、停止状态及查询失败，失败实例会先注销。
+
+
+DNS TTL 上限：`global_rules.dns_max_ttl` 可配置 60–86400 秒，未配置时为 3600 秒。生成的 Passwall dnsmasq 配置为未设置的上限提供默认值；保留通过 conf-file 引用的管理员上限以避免重复关键字，不覆盖这些引用文件中的值；保留配置中已有的更低上限，不抬高短 TTL 或零 TTL。可在“其他设置 → DNS cache policy”调整。此项不改变 nft 集合的 2 天超时，不等于逐答案 TTL 同步，也不覆盖绕开路由器 DNS 的客户端。SmartDNS 自身缓存仍由其配置管理。检查：`ucode -L /absolute/path/to/luci-app-passwall/root/usr/share/ucode tests/dns-policy.uc`。

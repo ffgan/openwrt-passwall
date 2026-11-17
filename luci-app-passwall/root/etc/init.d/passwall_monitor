@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+# The worker recovers individual processes; procd recovers the worker itself.
+USE_PROCD=1
+START=99
+STOP=14
+
+start_service() {
+	[ -d /tmp/etc/passwall/script_func ] || return 0
+	procd_open_instance
+	procd_set_param command /usr/bin/ucode /usr/libexec/passwall/monitor.uc --locked
+	procd_set_param respawn 3600 5 0
+	procd_set_param term_timeout 5
+	procd_close_instance
+}

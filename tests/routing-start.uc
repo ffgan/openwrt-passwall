@@ -2,4 +2,4 @@
 
 import { main } from 'passwall.nftables';
 
-exit(main(['start']) ?? 0);
+exit(main([ARGV[0] ?? 'start']) ?? 0);
