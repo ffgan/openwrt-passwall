@@ -1,5 +1,8 @@
 'use strict';
 
+// Node selection and the temporary SOCKS frontend stay in ucode because they
+// read UCI and start app.uc. The timed HTTP HEAD goes through passwall-tools.
+
 import * as api from 'passwall.api';
 import { readfile, unlink, lsdir } from 'fs';
 import { read_cmd } from 'passwall.proc';
@@ -38,14 +41,15 @@ bracket_host = function(host) {
 };
 
 curl_probe = function(proxy, extra, url) {
+	if (api.fs.access("/usr/bin/passwall-tools", "x") != true)
+		return "0";
 	let argv = [
-		"/usr/bin/curl", "--connect-timeout", "3", "--max-time", "5",
-		"-o", "/dev/null", "-I", "-sk",
-		"-w", "%{http_code}:%{time_pretransfer}:%{time_starttransfer}"
+		"/usr/bin/passwall-tools", "urltest",
+		"--connect-timeout", "3", "--max-time", "5",
+		"--proxy", proxy, "--url", url
 	];
 	if (extra != null)
-		push(argv, extra[0], extra[1]);
-	push(argv, "-x", proxy, url);
+		push(argv, "--proxy-user", extra[1]);
 	let got = read_cmd(argv);
 	if (got == null || got.rc != 0)
 		return "0";

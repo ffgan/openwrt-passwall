@@ -1,0 +1,15 @@
+[package]
+name = "passwall-tools"
+version = "0.1.0"
+edition = "2021"
+description = "Clash subscription converter and SOCKS URL probe used by PassWall"
+license = "GPL-3.0-only"
+
+[[bin]]
+name = "passwall-tools"
+path = "src/main.rs"
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+indexmap = "2"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
