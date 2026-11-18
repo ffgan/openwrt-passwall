@@ -52,6 +52,7 @@ function coreTypes(caps) {
 	var vless = [];
 	var hy2 = [];
 	caps = caps || {};
+	if (present(caps.reality)) vless.push('reality');
 	if (present(caps.sslocal))
 		ss.push('shadowsocks-rust');
 	if (present(caps.singbox)) {

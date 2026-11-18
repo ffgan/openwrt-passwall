@@ -148,3 +148,31 @@ sudo env ROUTING_TCP_WAY=tproxy UCODE=/path/to/ucode-wrapper bash tests/routing.
 
 
 DNS TTL 上限：`global_rules.dns_max_ttl` 可配置 60–86400 秒，未配置时为 3600 秒。生成的 Passwall dnsmasq 配置为未设置的上限提供默认值；保留通过 conf-file 引用的管理员上限以避免重复关键字，不覆盖这些引用文件中的值；保留配置中已有的更低上限，不抬高短 TTL 或零 TTL。可在“其他设置 → DNS cache policy”调整。此项不改变 nft 集合的 2 天超时，不等于逐答案 TTL 同步，也不覆盖绕开路由器 DNS 的客户端。SmartDNS 自身缓存仍由其配置管理。检查：`ucode -L /absolute/path/to/luci-app-passwall/root/usr/share/ucode tests/dns-policy.uc`。
+
+## 独立 REALITY 客户端
+
+安装本地 Rust `reality` 客户端到 `/usr/bin/reality` 后，节点类型列表会显示
+`Reality (Rust)`。支持 VLESS REALITY、raw TCP、Vision 和 Chrome 指纹；
+TCP REDIRECT/TProxy、UDP TProxy 及本地 TCP SOCKS5 都由该客户端处理。
+Xray 不是这些节点的运行依赖。SS 节点继续由 shadowsocks-rust 处理。
+
+订阅设置的 VLESS 使用类型可选择 `reality`，手动导入和订阅都会验证支持范围，
+不支持的传输、额外加密、ECH、ML-DSA、finalmask 或代理链会被拒绝。
+本后端不实现 Xray 的其他协议、高级内部路由及 HTTP 代理入口。
+域名/IP 分流、国内直连、远端 DNS 和 UDP 端口策略仍由 Passwall、
+nftables、dnsmasq 与 ChinaDNS 配合完成；不会清除用户已有的 UDP/443 阻断规则。
+
+ChinaDNS 启动前会创建并填充它启动时读取的静态国家地址集合；
+监听就绪后才切换 DNS。原生核心同主 Xray 核心一样受 procd 托管，
+进程退出后重启。节点 URL 检测所用的随机数 API 也作为公共接口导出。
+
+新增设备检查：
+
+```sh
+ucode tests/reality-config.uc
+ucode tests/urltest-contract.uc
+```
+
+这两个测试需要本仓库的 ucode 模块可被加载。实际设备验收还应覆盖：
+切换节点后立即解析和访问、REDIRECT/TProxy、透明 UDP 的出口地址、
+订阅更新保持 Reality 类型、核心进程退出后的恢复，以及移除 Xray 后的运行状态。

@@ -10,6 +10,7 @@
 'require view.passwall.types.socks as socksType';
 'require view.passwall.types.singbox as singboxType';
 'require view.passwall.types.xray as xrayType';
+'require view.passwall.types.reality as realityType';
 'require view.passwall.types.ssrust as ssrustType';
 'require view.passwall.types.ssr as ssrType';
 'require view.passwall.types.hysteria2 as hysteria2Type';
@@ -295,7 +296,7 @@ function parseLink(link, caps) {
 	var ssType = corePref('ss_type', [ [ !!caps.sslocal, 'shadowsocks-rust' ], [ hasSingbox, 'sing-box' ], [ hasXray, 'xray' ] ]);
 	var trojanType = corePref('trojan_type', [ [ hasSingbox, 'sing-box' ], [ hasXray, 'xray' ] ]);
 	var vmessType = corePref('vmess_type', [ [ hasXray, 'xray' ], [ hasSingbox, 'sing-box' ] ]);
-	var vlessType = corePref('vless_type', [ [ hasXray, 'xray' ], [ hasSingbox, 'sing-box' ] ]);
+	var vlessType = corePref('vless_type', [ [ !!caps.reality, 'reality' ], [ hasXray, 'xray' ], [ hasSingbox, 'sing-box' ] ]);
 	var hysteria2Type = corePref('hysteria2_type', [ [ hasHysteria2, 'hysteria2' ], [ hasSingbox, 'sing-box' ], [ hasXray, 'xray' ] ]);
 
 	function chooseCore(preferSing, preferXray) {
@@ -636,7 +637,8 @@ function parseLink(link, caps) {
 		values.finalmask = info.fm || '';
 	}
 	else if (linkType === 'vless') {
-		if (vlessType === 'sing-box' && hasSingbox)
+		if (vlessType === 'reality' && caps.reality) typeName = 'Reality';
+		else if (vlessType === 'sing-box' && hasSingbox)
 			chooseCore(true, false);
 		else if (hasXray)
 			chooseCore(false, true);
@@ -655,6 +657,11 @@ function parseLink(link, caps) {
 		vq.security = (!vq.security && vq.flow) ? 'tls' : vq.security;
 		applySecurity(values, vq);
 		mapTransport(typeName, vq, values);
+		if (typeName === 'Reality' && (vq.security !== 'reality' ||
+		    ['raw', 'tcp'].indexOf(vq.type) < 0 || vq.flow !== 'xtls-rprx-vision' ||
+		    (vq.fp && vq.fp !== 'chrome') || (vq.encryption && vq.encryption !== 'none') || vq.ech || vq.pqv))
+			return { error: _('This REALITY client requires VLESS REALITY raw TCP, Vision and Chrome fingerprint.') };
+
 		if (vq.tfo != null)
 			values.tcp_fast_open = vq.tfo;
 		values.use_finalmask = !!vq.fm;
@@ -1129,6 +1136,7 @@ return view.extend({
 		var typeChoices = [
 			{ id: 'Socks', label: 'Socks', ok: (caps && Object.prototype.hasOwnProperty.call(caps, 'ipt2socks')) ? !!caps.ipt2socks : true, mod: socksType },
 			{ id: 'sing-box', label: 'Sing-Box', ok: !!caps.singbox, mod: singboxType },
+			{ id: 'Reality', label: 'REALITY (Rust)', ok: !!caps.reality, mod: realityType },
 			{ id: 'Xray', label: 'Xray', ok: !!caps.xray, mod: xrayType },
 			{ id: 'SS-Rust', label: 'Shadowsocks Rust', ok: !!caps.sslocal, mod: ssrustType },
 			{ id: 'SSR', label: 'ShadowsocksR Libev', ok: !!caps.ssr, mod: ssrType },
@@ -1139,6 +1147,8 @@ return view.extend({
 		if (!currentType) {
 			if (caps.singbox)
 				currentType = 'sing-box';
+			else if (caps.reality)
+				currentType = 'Reality';
 			else if (caps.xray)
 				currentType = 'Xray';
 		}
@@ -1424,6 +1434,16 @@ return view.extend({
 						info.fm = encodeURI(info.fm);
 				}
 				url = b64EncodeUnicode(JSON.stringify(info));
+			}
+			else if (vType === 'Reality') {
+				protocol = 'vless';
+				url = encodeURIComponent((field('uuid') || {}).value || node.uuid || '') + '@' +
+					address + ':' + ((field('port') || {}).value || node.port || '443') +
+					'/?type=tcp&security=reality&flow=xtls-rprx-vision&fp=chrome' +
+					'&sni=' + encodeURIComponent((field('tls_serverName') || {}).value || '') +
+					'&pbk=' + encodeURIComponent((field('reality_publicKey') || {}).value || '') +
+					'&sid=' + encodeURIComponent((field('reality_shortId') || {}).value || '') +
+					'#' + encodeURIComponent(alias);
 			}
 			else if ((vType === 'sing-box' || vType === 'Xray') && protoVal === 'vless') {
 				protocol = 'vless';

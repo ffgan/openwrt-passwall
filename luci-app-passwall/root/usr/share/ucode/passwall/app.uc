@@ -6,6 +6,7 @@ import * as utils from 'passwall.utils';
 import * as core_service from 'passwall.core_service';
 import { apply_config } from 'passwall.xray_config';
 import { check_config, install_config } from 'passwall.xray_runtime';
+import { node_config as reality_config } from 'passwall.reality_config';
 import { render_nft_state } from 'passwall.state';
 
 const TMP = utils.TMP_PATH;
@@ -321,7 +322,12 @@ export function run_chinadns_ng(raw) {
 	for (let key, val in map)
 		push(args, '-' + substr(key, 1), val ?? '');
 	helper_output('helper_chinadns_add.uc', args, conf);
-	return launch_core(utils.first_type('chinadns-ng'), 'chinadns-ng', logfile, ['-C', conf]);
+	if (launch_core(utils.first_type('chinadns-ng'), 'chinadns-ng', logfile, ['-C', conf]) != 0 ||
+	    !wait_listen(o._listen_port, 'tcp,udp')) {
+		api.log('ChinaDNS 未就绪，不切换系统 DNS。');
+		return 1;
+	}
+	return 0;
 };
 
 function normalize_file(path) {
@@ -329,6 +335,29 @@ function normalize_file(path) {
 		return path;
 	return substr(path, 0, length(TMP)) == TMP ? path : TMP + '/' + path;
 }
+
+export function run_reality(o) {
+	try {
+		let executable = utils.first_type('/usr/bin/reality');
+		if (!executable) die('reality client is not installed');
+		let config = reality_config(api.uci_get_c(o.node), o);
+		if (!install_config(config, o.config_file)) die('Cannot write reality configuration');
+		if (command([executable, '--config', o.config_file, '--check'], true) != 0)
+			die('Invalid reality configuration');
+		if (o.no_run) return 0;
+		let args = ['--config', o.config_file];
+		let env = { REALITY_OUTBOUND_MARK: '255' };
+		let rc = o.flag == 'global'
+			? core_service.start(executable, args, o.log_file, env, 'reality')
+			: launch_core(executable, 'reality', o.log_file, args, env);
+		if (rc != 0 || !wait_listen(o.socks_port, 'tcp')) die('reality SOCKS listener is not ready');
+		if (o.redir_port && !wait_listen(o.redir_port, 'tcp,udp')) die('reality transparent listener is not ready');
+		return 0;
+	} catch (e) {
+		api.log('REALITY 启动失败，请检查节点字段、端口和安装的客户端。');
+		return 1;
+	}
+};
 
 export function run_socks(raw) {
 	let o = type(raw) == 'object' && type(raw) != 'array' ? raw : option_args(raw);
@@ -366,6 +395,11 @@ export function run_socks(raw) {
 	if (o.bind != '127.0.0.1')
 		api.log('  - Socks节点：[' + remarks + ']' + host + ':' + port + '，启动 ' + o.bind + ':' + o.socks_port);
 	let common = { node: o.node, server_host: host, server_port: port };
+	if (type_name == 'reality') {
+		if (o.http_port != '0') { api.log('REALITY 暂不提供 HTTP 代理入口。'); return 1; }
+		return run_reality({ flag: o.flag, node: o.node, bind: o.bind, socks_port: o.socks_port,
+			server_host: host, server_port: port, config_file: o.config_file, log_file: o.log_file, no_run: o.no_run });
+	}
 	if (type_name == 'socks') {
 		let c = {
 			node: o.node, local_socks_address: o.bind, local_socks_port: o.socks_port,
@@ -700,8 +734,8 @@ export function start_global() {
 	if (state.PROXY_IPV6 == '1')
 		api.log('开启实验性IPv6透明代理(TProxy)，请确认您的节点及类型支持IPv6！');
 	let can_native = index(state.TCP_PROXY_WAY == 'tproxy'
-		? 'socks ss-rust ssr sing-box xray hysteria2'
-		: 'socks ss-rust ssr sing-box xray naiveproxy hysteria2', type_name) >= 0;
+		? 'socks ss-rust ssr sing-box xray reality hysteria2'
+		: 'socks ss-rust ssr sing-box xray reality naiveproxy hysteria2', type_name) >= 0;
 	if (!can_native) type_name = 'socks';
 	let logfile = cfg('@global[0]', 'log_node', '1') == '1' ? GLOBAL_ACL + '/global.log' : '/dev/null';
 	let config = GLOBAL_ACL + '/global.json';
@@ -751,6 +785,14 @@ export function start_global() {
 			state.NEXT_DNS_LISTEN_PORT = dns_port + 1;
 		}
 		if (run_core(type_name, o) != 0) return 1;
+		native_socks = true;
+	} else if (type_name == 'reality') {
+		if (http_port != '0') { api.log('REALITY 暂不提供 HTTP 代理入口。'); return 1; }
+		if (state.DNS_MODE == 'xray' || state.DNS_MODE == 'sing-box' || state.DNS_MODE == 'dns2socks')
+			state.DNS_MODE = 'tcp';
+		if (run_reality({ flag: 'global', node, bind: socks_bind, socks_port,
+			redir_port: state.REDIR_PORT, tcp_proxy_way: state.TCP_PROXY_WAY,
+			config_file: config, log_file: GLOBAL_ACL + '/reality.log' }) != 0) return 1;
 		native_socks = true;
 	} else if (type_name == 'socks') {
 		let direct = host, dport = port;
@@ -937,13 +979,13 @@ export function start_dns() {
 	if (state.DNS_SHUNT == 'chinadns-ng' && utils.first_type('chinadns-ng')) {
 		let port = state.NEXT_DNS_LISTEN_PORT + 1;
 		china_listen = '127.0.0.1#' + port + ',::1#' + port;
-		run_chinadns_ng({ _flag: 'default', _listen_port: port, _dns_local: china_local,
+		if (run_chinadns_ng({ _flag: 'default', _listen_port: port, _dns_local: china_local,
 			_dns_trust: state.TUN_DNS, _no_ipv6_trust: state.FILTER_PROXY_IPV6,
 			_use_direct_list: state.USE_DIRECT_LIST, _use_proxy_list: state.USE_PROXY_LIST,
 			_use_block_list: state.USE_BLOCK_LIST, _gfwlist: state.USE_GFW_LIST, _chnlist: state.CHN_LIST,
 			_default_mode: state.TCP_PROXY_MODE, _default_tag: cfg('@global[0]', 'chinadns_ng_default_tag', 'smart'),
 			_no_logic_log: '0', _node: state.NODE, _filter_https: cfg('@global[0]', 'force_https_soa', '0'),
-			_log: cfg('@global[0]', 'log_chinadns_ng', '0') });
+			_log: cfg('@global[0]', 'log_chinadns_ng', '0') }) != 0) return 1;
 		state.USE_DEFAULT_DNS = 'chinadns_ng';
 	}
 	if (state.DNS_REDIRECT == '0') {
@@ -1044,6 +1086,10 @@ function legacy_acl_app_port() {
 				o.remote_dns_query_strategy = s.filter_proxy_ipv6 == '1' ? 'UseIPv4' : 'UseIP';
 			}
 			run_core(type_name, o);
+		} else if (type_name == 'reality') {
+			if (run_reality({ flag: node, node, bind: '127.0.0.1', socks_port, redir_port,
+				tcp_proxy_way: state.TCP_PROXY_WAY, config_file: TMP + '/acl/' + node + '_' + redir_port + '.json',
+				log_file: node_log }) != 0) return;
 		} else {
 			run_socks({ flag: node, node: node, bind: '127.0.0.1', socks_port: socks_port,
 				config_file: 'acl/' + node + '_SOCKS_' + socks_port + '.json', log_file: node_log, loglevel: s.loglevel ?? 'warn' });
@@ -1200,6 +1246,10 @@ export function acl_app() {
 					o.remote_fakedns = fake; o.remote_dns_client_ip = client_ip; o.remote_rewrite_ttl = ttl;
 				}
 				run_core(type_name, o);
+			} else if (type_name == 'reality') {
+				if (run_reality({ flag: node, node, bind: '127.0.0.1', socks_port, redir_port,
+					tcp_proxy_way: state.TCP_PROXY_WAY, config_file: TMP + '/acl/' + node + '_' + redir_port + '.json',
+					log_file: logfile }) != 0) return;
 			} else {
 				run_socks({ flag: node, node: node, bind: '127.0.0.1', socks_port: socks_port,
 					config_file: 'acl/' + node + '_SOCKS_' + socks_port + '.json',
@@ -1494,6 +1544,14 @@ export function start(mode) {
 	start_haproxy();
 	start_socks();
 	check_run_environment();
+	if (state.USE_TABLES == 'nftables' && (state.ENABLED_DEFAULT_ACL == '1' || state.ENABLED_ACLS == '1')) {
+		write_nft_env();
+		if (command([LIBEXEC + '/nftables.uc', 'prepare_dns'], false) != 0) {
+			api.log('DNS 地址集合初始化失败，停止服务。');
+			stop('');
+			return 1;
+		}
+	}
 	if (state.ENABLED_DEFAULT_ACL == '1' || state.ENABLED_ACLS == '1') {
 		if (api.uci_get('dhcp', '@dnsmasq[0]', 'dns_redirect') == '1') {
 			api.uci_set_c('@global[0]', 'dnsmasq_dns_redirect', '1');

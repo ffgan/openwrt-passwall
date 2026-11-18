@@ -717,6 +717,7 @@ capabilities = function() {
 	let xray = found_com('xray');
 	e.singbox = singbox;
 	e.xray = xray;
+	e.reality = found_bin('reality');
 	e.hysteria = found_com('hysteria');
 	e.geoview = found_com('geoview');
 	e.sslocal = found_bin('sslocal');

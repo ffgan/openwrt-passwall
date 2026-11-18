@@ -23,8 +23,10 @@ export function instance_spec(file, args, output, env) {
 	};
 };
 
-export function start(file, args, output, env) {
-	let link = '/tmp/etc/passwall/bin/xray';
+export function start(file, args, output, env, name) {
+	name = name || 'xray';
+	if (name != 'xray' && name != 'reality') die('Unsupported managed core');
+	let link = '/tmp/etc/passwall/bin/' + name;
 	if (run(['ln', '-sfn', file, link], true) != 0) die('Cannot prepare managed Xray executable');
 	// service.set succeeds with an empty ubus payload. ubus_call maps that to
 	// null, so verify the instance through service.list instead of the set result.
@@ -47,7 +49,7 @@ export function start(file, args, output, env) {
 		ubus_call('service', 'delete', { name: 'passwall_core' });
 		die('procd Xray instance did not become ready with the requested respawn policy');
 	}
-	api.log('主 Xray 实例已交由 procd 托管。');
+	api.log('主 ' + (name == 'reality' ? 'REALITY' : 'Xray') + ' 实例已交由 procd 托管。');
 	return 0;
 };
 

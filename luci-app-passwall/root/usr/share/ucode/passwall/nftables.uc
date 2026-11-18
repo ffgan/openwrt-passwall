@@ -1243,6 +1243,19 @@ function gen_include() {
 	fs.chmod(path, 0o755);
 }
 
+// The DNS resolver snapshots these sets at boot. Populate them before any
+// resolver starts; forwarding rules are still installed only after readiness.
+function prepare_dns() {
+	load_env();
+	ensure_table();
+	ensure_set("psw_chn_static", "ipv4_addr", "0");
+	ensure_set("psw_chn6_static", "ipv6_addr", "0");
+	nft_flush(false);
+	add_elements("psw_chn_static", file_addresses(RULES + "/chnroute", false));
+	add_elements("psw_chn6_static", file_addresses(RULES + "/chnroute6", true));
+	return nft_flush(false);
+}
+
 function start() {
 	load_env();
 	if (e("ENABLED_DEFAULT_ACL") == "0" && e("ENABLED_ACLS") == "0")
@@ -1294,7 +1307,9 @@ function stop() {
 function main(argv) {
 	let action = argv[0] ?? "";
 	let rc = 1;
-	if (action == "start")
+	if (action == "prepare_dns")
+		rc = prepare_dns();
+	else if (action == "start")
 		rc = start();
 	else if (action == "stop")
 		rc = stop();

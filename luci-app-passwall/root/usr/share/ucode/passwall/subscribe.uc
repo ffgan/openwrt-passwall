@@ -1,4 +1,5 @@
 'use strict';
+import { node_config as reality_node_config } from 'passwall.reality_config';
 
 import * as fs from 'fs';
 import * as api from 'passwall.api';
@@ -12,6 +13,7 @@ let has_ss_rust = false;
 let has_ssr = false;
 let has_singbox = false;
 let has_xray = false;
+let has_reality = false;
 let has_hysteria2 = false;
 let DEFAULT_ALLOWINSECURE = true;
 let DEFAULT_FILTER_KEYWORD = { mode: "0", discard_list: [], keep_list: [] };
@@ -1318,7 +1320,9 @@ processData = function(szType, content, add_mode, group, sub_cfg) {
 		parsed.group = content.airport;
 		parsed.remarks = content.remarks;
 	} else if (szType == "vless") {
-		if (subVless == "sing-box" && has_singbox)
+		if (subVless == "reality" && has_reality)
+			result.type = "Reality";
+		else if (subVless == "sing-box" && has_singbox)
 			result.type = "sing-box";
 		else if (subVless == "xray" && has_xray)
 			result.type = "Xray";
@@ -1327,6 +1331,14 @@ processData = function(szType, content, add_mode, group, sub_cfg) {
 			return null;
 		}
 		parsed = parseVless(content, result, subAllow);
+		if (parsed?.type == "Reality") {
+			try {
+				reality_node_config(parsed, { socks_port: '10808' });
+			} catch (e) {
+				log("跳过 REALITY 客户端不支持的 VLESS 节点，请检查传输、Vision 和指纹。");
+				return null;
+			}
+		}
 	} else if (szType == "hysteria") {
 		if (has_singbox) {
 			result.type = "sing-box";
@@ -2205,10 +2217,12 @@ init_state = function() {
 	has_ssr = (api.is_finded("ssr-local") && api.is_finded("ssr-redir")) ? true : false;
 	has_singbox = present(api.finded_com("sing-box"));
 	has_xray = present(api.finded_com("xray"));
+	has_reality = api.is_finded("reality") ? true : false;
 	has_hysteria2 = present(api.finded_com("hysteria"));
 	DEFAULT_ALLOWINSECURE = true;
 	core_has = {
 		"xray": has_xray,
+		"reality": has_reality,
 		"sing-box": has_singbox,
 		"shadowsocks-rust": has_ss_rust,
 		"hysteria2": has_hysteria2
@@ -2221,7 +2235,7 @@ init_state = function() {
 	DEFAULT_SS_TYPE = api.get_core("ss_type", [[has_ss_rust, "shadowsocks-rust"], [has_singbox, "sing-box"], [has_xray, "xray"]]);
 	DEFAULT_TROJAN_TYPE = api.get_core("trojan_type", [[has_singbox, "sing-box"], [has_xray, "xray"]]);
 	DEFAULT_VMESS_TYPE = api.get_core("vmess_type", [[has_xray, "xray"], [has_singbox, "sing-box"]]);
-	DEFAULT_VLESS_TYPE = api.get_core("vless_type", [[has_xray, "xray"], [has_singbox, "sing-box"]]);
+	DEFAULT_VLESS_TYPE = api.get_core("vless_type", [[has_reality, "reality"], [has_xray, "xray"], [has_singbox, "sing-box"]]);
 	DEFAULT_HYSTERIA2_TYPE = api.get_core("hysteria2_type", [[has_hysteria2, "hysteria2"], [has_singbox, "sing-box"], [has_xray, "xray"]]);
 
 	nodes_table = [];
