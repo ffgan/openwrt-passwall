@@ -176,3 +176,27 @@ ucode tests/urltest-contract.uc
 这两个测试需要本仓库的 ucode 模块可被加载。实际设备验收还应覆盖：
 切换节点后立即解析和访问、REDIRECT/TProxy、透明 UDP 的出口地址、
 订阅更新保持 Reality 类型、核心进程退出后的恢复，以及移除 Xray 后的运行状态。
+
+### REALITY 故障回退
+
+原生核心使用 4096 个文件描述符预算；诊断由 logd 接收，执行
+`logread -e reality` 可以查看核心退出或节点切换前的错误。
+
+可选择启用 `passwall_reality_guard`：在 Passwall 已就绪、当前选择 Reality
+且 `@global[0].reality_auto_fallback=1` 时检测实际 HTTPS 出口。
+Google 和 Cloudflare 两个地址必须连续三轮都失败，才切换到
+`@global[0].reality_fallback_node` 指定的 SS-Rust 节点并重启服务。
+如果订阅更新导致该 ID 失效，会选择当前第一个 SS-Rust 节点。
+任一检测成功即清零失败计数；手动选择 SS、关闭总开关或关闭此选项时不回退。
+
+启用服务后通过 procd 维护并开机启动：
+
+```sh
+uci set passwall.@global[0].reality_auto_fallback=1
+uci commit passwall
+/etc/init.d/passwall_reality_guard enable
+/etc/init.d/passwall_reality_guard start
+```
+
+`python3 tests/reality-guard.py` 验证故障、部分检测成功、禁用和订阅 ID
+变化等场景，全程使用独立的模拟配置。

@@ -19,6 +19,7 @@ export function instance_spec(file, args, output, env) {
 		command: ['/bin/sh', '-c', script],
 		env: clean_env,
 		respawn: ['3600', '5', '0'],
+		limits: { nofile: '4096 4096' },
 		term_timeout: 5
 	};
 };
@@ -30,9 +31,17 @@ export function start(file, args, output, env, name) {
 	if (run(['ln', '-sfn', file, link], true) != 0) die('Cannot prepare managed Xray executable');
 	// service.set succeeds with an empty ubus payload. ubus_call maps that to
 	// null, so verify the instance through service.list instead of the set result.
+	let spec = instance_spec(link, args, output, env);
+	if (name == 'reality') {
+		// logd keeps stderr across core respawns and node switches. The old
+		// per-instance file was deleted by stop(), erasing failure evidence.
+		spec.command = [link, ...(args ?? [])];
+		spec.stdout = true;
+		spec.stderr = true;
+	}
 	ubus_call('service', 'set', {
 		name: 'passwall_core',
-		instances: { global: instance_spec(link, args, output, env) }
+		instances: { global: spec }
 	});
 	let ready = false;
 	for (let attempt = 0; attempt < 10; attempt++) {
