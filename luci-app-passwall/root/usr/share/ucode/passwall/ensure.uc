@@ -13,6 +13,8 @@ function proxy_up() {
 		text = '';
 	let lines = split(text, '\n');
 	for (let line in lines) {
+		if (match(line, /\/tmp\/etc\/passwall\/bin\/reality([[:space:]]|$)/) != null)
+			return true;
 		if (index(line, 'xray') >= 0)
 			return true;
 		if (index(line, 'sing-box') >= 0)

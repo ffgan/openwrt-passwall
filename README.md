@@ -200,3 +200,7 @@ uci commit passwall
 
 `python3 tests/reality-guard.py` 验证故障、部分检测成功、禁用和订阅 ID
 变化等场景，全程使用独立的模拟配置。
+
+自愈检查会识别 `/tmp/etc/passwall/bin/reality`，不会把运行中的原生核心误判为
+缺失。可用 `ucode -L tests/ensure-stubs tests/ensure-core.uc`（配置好本仓库
+模块加载路径后）验证六种核心都不触发恢复流程；旧版对 Reality 会误触发。
