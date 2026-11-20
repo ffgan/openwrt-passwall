@@ -1272,13 +1272,22 @@ export function acl_app() {
 function install_ensure_cron() {
 	let path = '/etc/crontabs/root';
 	let text = fs.readfile(path) ?? '';
-	if (index(text, 'passwall/ensure.uc') >= 0)
-		return;
+	let changed = false;
 	api.fs.mkdirr('/etc/crontabs');
-	let line = '*/5 * * * * /usr/bin/ucode /usr/libexec/passwall/ensure.uc >/dev/null 2>&1';
 	if (text != '' && substr(text, -1) != '\n')
 		text += '\n';
-	fs.writefile(path, text + line + '\n');
+	if (index(text, 'passwall/ensure.uc') < 0) {
+		text += '*/5 * * * * /usr/bin/ucode /usr/libexec/passwall/ensure.uc >/dev/null 2>&1\n';
+		changed = true;
+	}
+	// Direct DNS refresh. clean_crontab keeps this line; this puts it back
+	// if the crontab was emptied.
+	if (index(text, 'refresh_node_addresses.sh') < 0) {
+		text += '*/5 * * * * /usr/libexec/passwall/refresh_node_addresses.sh >/dev/null 2>&1\n';
+		changed = true;
+	}
+	if (changed)
+		fs.writefile(path, text);
 }
 
 function clean_cron_lines() {

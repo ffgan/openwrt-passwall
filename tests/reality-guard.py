@@ -45,6 +45,8 @@ exit 1
 """)
     for name in ['sleep', 'logger']:
         (bins / name).write_text('#!/bin/sh\nexit 0\n')
+    (bins / 'timeout').write_text('#!/bin/sh\nshift\nexec "$@"\n')
+    (bins / 'nc').write_text('#!/bin/sh\n[ "$1" = "198.51.100.8" ] && exit 0\nexit 1\n')
     for path in bins.iterdir():
         path.chmod(0o755)
     base = {
@@ -59,6 +61,9 @@ exit 1
         ('failed', {}, 'ss'),
         ('one_good', {}, 'native'),
         ('failed', {'passwall.@global[0].node':'ss'}, 'ss'),
+        ('failed', {'passwall.@global[0].node':'ss',
+                    'passwall.native.address':'198.51.100.8',
+                    'passwall.native.port':'443'}, 'native'),
         ('failed', {'passwall.@global[0].enabled':'0'}, 'native'),
         ('failed', {'passwall.@global[0].reality_auto_fallback':'0'}, 'native'),
     ]:
@@ -72,4 +77,4 @@ exit 1
         assert result['passwall.@global[0].node']==expect, (mode,result)
         switched = config['passwall.@global[0].node']!=expect
         assert (work/'restarts').exists()==switched
-    print('5 REALITY fallback scenarios passed (including regenerated subscription IDs)')
+    print('6 fallback scenarios passed (REALITY to SS, and dead SS to an open REALITY port)')
