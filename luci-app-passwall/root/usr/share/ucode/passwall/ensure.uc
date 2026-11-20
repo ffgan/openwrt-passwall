@@ -88,6 +88,26 @@ function budget_ok() {
 	return true;
 }
 
+function passwall_root() {
+	if (global.ensure_tmp != null && global.ensure_tmp != '')
+		return global.ensure_tmp;
+	if (type(global.getenv) == 'function') {
+		let env = global.getenv('PASSWALL_TMP');
+		if (env != null && env != '')
+			return env;
+	}
+	return '/tmp/etc/passwall';
+}
+
+function file_ready(path) {
+	let st = fs.stat(path);
+	return type(st) == 'object' && st != null;
+}
+
+function balancing_on() {
+	return api.uci_get_c('@global_haproxy[0]', 'balancing_enable') == '1';
+}
+
 function node_ok(id) {
 	if (id == null || id == '')
 		return false;
@@ -110,7 +130,15 @@ function run() {
 		api.log('总开关开着，但节点不存在，不自动拉起。');
 		return 0;
 	}
-	if (proxy_up())
+	// A live Reality backend does not mean HAProxy, ipt2socks, or DNS is up.
+	// Respawn those from the existing config and do not spend a full restart.
+	if (balancing_on()) {
+		if (file_ready(passwall_root() + '/haproxy/config.cfg')) {
+			api.exec_call('/usr/bin/ucode /usr/libexec/passwall/reload_backend.uc heal');
+			return 0;
+		}
+	}
+	else if (proxy_up())
 		return 0;
 	let stamp = owner();
 	let busy = restart_busy();

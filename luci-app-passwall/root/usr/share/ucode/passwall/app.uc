@@ -173,7 +173,7 @@ export function run_ipt2socks(raw) {
 	let o = type(raw) == 'object' && type(raw) != 'array' ? raw : option_args(raw);
 	let host = utils.get_host_ip('ipv4', o.socks_address);
 	let args = ['-l', o.local_port, '-b', '0.0.0.0', '-B', '::', '-s', host, '-p', o.socks_port, '-o', '60', '-n', '65535', '-v'];
-	if (o.socks_username != null && o.socks_password != null)
+	if (o.socks_username != null && o.socks_username != '' && o.socks_password != null)
 		push(args, '-a', o.socks_username, '-k', o.socks_password);
 	if (o.tcp_tproxy == null || o.tcp_tproxy == '')
 		push(args, '-R');
@@ -401,20 +401,26 @@ export function run_socks(raw) {
 			server_host: host, server_port: port, config_file: o.config_file, log_file: o.log_file, no_run: o.no_run });
 	}
 	if (type_name == 'socks') {
-		let c = {
-			node: o.node, local_socks_address: o.bind, local_socks_port: o.socks_port,
-			server_proto: 'socks', server_address: host, server_port: port,
-			server_username: cfg(o.node, 'username'), server_password: cfg(o.node, 'password')
-		};
-		if (o.http_port != '0') {
-			c.local_http_address = o.bind; c.local_http_port = o.http_port;
-			o.config_file = replace(o.config_file, /(\.[^.]*)$/, '+http$1');
+		let chain = '/usr/bin/socks-chain';
+		if (fs.access(chain, 'x') && (o.http_port == '0' || o.http_port == 0) && !cfg(o.node, 'username')) {
+			if (!o.no_run)
+				launch_core(chain, 'socks-chain', o.log_file, ['--listen', o.bind + ':' + o.socks_port, '--upstream', host + ':' + port]);
+		} else {
+			let c = {
+				node: o.node, local_socks_address: o.bind, local_socks_port: o.socks_port,
+				server_proto: 'socks', server_address: host, server_port: port,
+				server_username: cfg(o.node, 'username'), server_password: cfg(o.node, 'password')
+			};
+			if (o.http_port != '0') {
+				c.local_http_address = o.bind; c.local_http_port = o.http_port;
+				o.config_file = replace(o.config_file, /(\.[^.]*)$/, '+http$1');
+			}
+			let engine = bin('sing_box', 'sing-box') != '' ? 'sing-box' : 'xray';
+			let executable = engine == 'sing-box' ? bin('sing_box', 'sing-box') : bin('xray', 'xray');
+			generate(UTIL[engine], 'gen_proto_config', c, o.config_file);
+			if (!o.no_run) launch_core(executable, engine, o.log_file, ['run', '-c', o.config_file]);
+			type_name = engine;
 		}
-		let engine = bin('sing_box', 'sing-box') != '' ? 'sing-box' : 'xray';
-		let executable = engine == 'sing-box' ? bin('sing_box', 'sing-box') : bin('xray', 'xray');
-		generate(UTIL[engine], 'gen_proto_config', c, o.config_file);
-		if (!o.no_run) launch_core(executable, engine, o.log_file, ['run', '-c', o.config_file]);
-		type_name = engine;
 	} else if (type_name == 'sing-box' || type_name == 'xray') {
 		let core = {
 			flag: o.flag, node: o.node, socks_address: o.bind, socks_port: o.socks_port,
@@ -1023,7 +1029,7 @@ export function start_dns() {
 export function start_haproxy() {
 	if (cfg('@global_haproxy[0]', 'balancing_enable', '0') != '1') return;
 	let executable = utils.first_type('haproxy');
-	let ver = match(command_output([executable, '-v']), /^[^\n]*?([0-9]+\.[0-9.]+)/)?.[1] ?? '';
+	let ver = match(command_output([executable, '-v']), /version ([0-9]+\.[0-9.]+)/)?.[1] ?? '';
 	if (utils.check_ver(ver, '3.0.0') == 1) {
 		api.log('* 注意：haproxy(' + ver + ') 程序版本低，HAPROXY 负载均衡启动失败，请更新到 3.0 以上版本。');
 		return;

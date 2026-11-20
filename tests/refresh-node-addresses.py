@@ -27,6 +27,7 @@ def run(case):
             'passwall.other.address': '1.2.3.4',
             'passwall.other.port': '443',
         }
+        state.update(case.get('extra', {}))
         (work / 'state.json').write_text(json.dumps(state))
         (work / 'dns').write_text(case['dns'] + '\n')
         (work / 'open').write_text('\n'.join(case['open']) + '\n')
@@ -71,6 +72,9 @@ exit 1
         restart = work / 'restart'
         restart.write_text('#!/bin/sh\necho restarted >> "$REFRESH_TEST_DIR/restarts"\n')
         restart.chmod(0o755)
+        reload = work / 'reload'
+        reload.write_text('#!/bin/sh\necho "$@" >> "$REFRESH_TEST_DIR/reloads"\n')
+        reload.chmod(0o755)
         for path in bins.iterdir():
             path.chmod(0o755)
         env = os.environ | {
@@ -78,39 +82,52 @@ exit 1
             'REFRESH_TEST_DIR': str(work),
             'NODE_REFRESH_LOCKED': '1',
             'PASSWALL_RESTART': str(restart),
+            'PASSWALL_RELOAD': str(reload),
         }
         result = subprocess.run(
             ['sh', str(script)], env=env, check=False, timeout=5,
             capture_output=True, text=True)
         saved = json.loads((work / 'state.json').read_text())
-        return result.returncode, saved, (work / 'restarts').exists(), (work / 'committed').exists()
+        reloaded = (work / 'reloads').exists()
+        return result.returncode, saved, (work / 'restarts').exists(), (work / 'committed').exists(), reloaded
 
 
 cases = [
     ('same address', dict(enabled='1', active='ss', address='198.51.100.10',
                           dns='198.51.100.10', open=['198.51.100.10:32579']),
-     '198.51.100.10', 0, False),
+     '198.51.100.10', 0, False, False),
     ('old port still open', dict(enabled='1', active='ss', address='198.51.100.10',
                                  dns='198.51.100.20', open=['198.51.100.10:32579', '198.51.100.20:32579']),
-     '198.51.100.10', 0, False),
+     '198.51.100.10', 0, False, False),
     ('replace closed active node', dict(enabled='1', active='ss', address='198.51.100.10',
                                         dns='198.51.100.20', open=['198.51.100.20:32579']),
-     '198.51.100.20', 2, True),
+     '198.51.100.20', 2, True, False),
     ('replace closed inactive node', dict(enabled='1', active='other', address='198.51.100.10',
                                           dns='198.51.100.20', open=['198.51.100.20:32579']),
-     '198.51.100.20', 0, False),
+     '198.51.100.20', 0, False, False),
     ('both ports closed', dict(enabled='1', active='ss', address='198.51.100.10',
                                dns='198.51.100.20', open=[]),
-     '198.51.100.10', 0, False),
+     '198.51.100.10', 0, False, False),
     ('disabled does not restart', dict(enabled='0', active='ss', address='198.51.100.10',
                                        dns='198.51.100.20', open=['198.51.100.20:32579']),
-     '198.51.100.20', 0, False),
+     '198.51.100.20', 0, False, False),
+    ('haproxy backend reloads without restart', dict(
+        enabled='1', active='lb', address='198.51.100.10',
+        dns='198.51.100.20', open=['198.51.100.20:32579'],
+        extra={
+            'passwall.lb': 'nodes',
+            'passwall.lb.type': 'Socks',
+            'passwall.lb.address': '127.0.0.1',
+            'passwall.lb.port': '1181',
+        }),
+     '198.51.100.20', 0, False, True),
 ]
-for name, case, address, code, restarted in cases:
-    got_code, saved, did_restart, committed = run(case)
+for name, case, address, code, restarted, reloaded in cases:
+    got_code, saved, did_restart, committed, did_reload = run(case)
     assert saved['passwall.ss.address'] == address, (name, saved)
     assert saved['passwall.other.address'] == '1.2.3.4', name
     assert got_code == code, (name, got_code)
     assert did_restart == restarted, name
+    assert did_reload == reloaded, name
     assert committed == (address != case['address']), name
 print(f'{len(cases)} node address refresh scenarios passed')

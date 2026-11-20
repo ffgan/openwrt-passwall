@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as api from 'passwall.api';
 import { parseClashNode, parse_clash_sub_info } from 'passwall.clash_subconverter';
 import { lua_or as luaOr, truth as present } from 'passwall.text';
+import { hot_reload_pool } from 'passwall.reload_backend';
 let nonempty, luaNot, uci_get, uci_set, uci_del, uci_foreach, uci_save, str, log, flush_log_buffer, splitLit, at, last, parseQuery, slashQ, headTail, hostPort, cutHash, tlsAllow, asList, setFinalmask, normNet, setXhttpExtra, finishRemarks, singboxTransportBlocked, split_filter_keywords, prepare_keyword_filter, match_filter_keywords, is_filter_keyword, formatDate, get_subscribe_info, set_ss_implementation, applyWsHttp, fillCommonTransport, applySecurity, parseSSR, parseVmess, isURLEncodedPassword, parseShadowTLSParams, parseSS, parseTrojan, parseVless, parseHysteria, parseHysteria2, parseTuic, parseAnytls, parseNaive, parseSnell, processData, invokeCurl, splitCurlResult, passwallUaVersion, curl, groupAll, sameGroup, truncate_nodes, select_node, update_subscribe_info, listOf, new_node_id, update_node, blankLine, parse_link, nodeOrSocks, is_ip_port, build_config, init_state, execute, log_traceback, acquire_lock, release_lock, main;
 
 let cli = [];
@@ -2338,6 +2339,10 @@ execute = function() {
 	if (nodes_changed || length(info_changed) > 0) {
 		uci_save(true);
 		restart_required = nodes_changed;
+		if (nodes_changed && hot_reload_pool() == 0) {
+			restart_required = false;
+			log("HAProxy 后端已热更新，未重启服务。");
+		}
 		for (let value in subscribe_list) {
 			if (info_changed[value[".name"]])
 				log(sprintf("刷新订阅【%s】账户用量与到期时间信息。", luaOr(value.remark, "")));

@@ -36,8 +36,27 @@ port_open() {
 
 active=$(uci -q get passwall.@global[0].node)
 enabled=$(uci -q get passwall.@global[0].enabled)
+gtype=$(uci -q get "passwall.$active.type")
+gaddr=$(uci -q get "passwall.$active.address")
+# The global node is the local HAProxy listener. A backend address change
+# reloads that one SOCKS process; restarting PassWall would drop every flow.
+pool=0
+if [ "$gtype" = Socks ] && [ "$gaddr" = 127.0.0.1 ]; then
+	pool=1
+fi
 changed=
 restart=0
+
+reload_one() {
+	id=$1
+	old=$2
+	new=$3
+	if [ -n "$PASSWALL_RELOAD" ]; then
+		$PASSWALL_RELOAD "$id" "$old" "$new"
+		return $?
+	fi
+	/usr/bin/ucode /usr/libexec/passwall/reload_backend.uc address "$id" "$old" "$new"
+}
 
 for id in $(uci show passwall | sed -n 's/^passwall\.\([A-Za-z0-9_]*\)=nodes$/\1/p'); do
 	remarks=$(uci -q get "passwall.$id.remarks")
@@ -61,7 +80,12 @@ for id in $(uci show passwall | sed -n 's/^passwall\.\([A-Za-z0-9_]*\)=nodes$/\1
 	uci set "passwall.$id.address=$new"
 	logger -t node-address "$id address $address -> $new"
 	changed=1
-	if [ "$id" = "$active" ]; then
+	if [ "$pool" = 1 ]; then
+		uci commit passwall
+		if ! reload_one "$id" "$address" "$new"; then
+			logger -t node-address "backend reload failed for $id"
+		fi
+	elif [ "$id" = "$active" ]; then
 		restart=1
 	fi
 done

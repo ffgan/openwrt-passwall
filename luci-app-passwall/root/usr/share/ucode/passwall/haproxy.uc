@@ -210,7 +210,8 @@ resolvers mydns
 				count_B = count_B + 1;
 			}
 			let server = server_endpoint(o);
-			let check_arg = "check " + inter_arg + " rise 2 fall 2";
+			let down_sessions = "on-marked-down shutdown-sessions";
+			let check_arg = "check " + inter_arg + " rise 2 fall 2 " + down_sessions;
 			if ((check_counts[server] ?? 0) > 1) {
 				let name = shared_check_names[server];
 				if (name == null) {
@@ -218,7 +219,7 @@ resolvers mydns
 					shared_check_names[server] = name;
 					push(shared_checks, { name: name, server: server });
 				}
-				check_arg = "track " + appname + "_health_checks/" + name;
+				check_arg = "track " + appname + "_health_checks/" + name + " " + down_sessions;
 			}
 			let resolvers = "resolvers mydns";
 			if (api.is_ip(o.server_address))
@@ -237,7 +238,7 @@ resolvers mydns
 	if (length(shared_checks) > 0) {
 		body += sprintf("\nbackend %s_health_checks\n\tmode tcp\n\toption external-check\n\texternal-check command \"/usr/libexec/%s/haproxy_check.uc\"\n", appname, appname);
 		for (let check in shared_checks)
-			body += sprintf("\tserver %s %s check %s rise 2 fall 2\n", check.name, check.server, inter_arg);
+			body += sprintf("\tserver %s %s check %s rise 2 fall 2 on-marked-down shutdown-sessions\n", check.name, check.server, inter_arg);
 	}
 
 	let console_user = api.uci_get_c("@global_haproxy[0]", "console_user");
