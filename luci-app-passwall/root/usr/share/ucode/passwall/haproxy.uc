@@ -64,11 +64,19 @@ defaults
 	retries 2
 	timeout http-request 10s
 	timeout queue 1m
-	timeout connect 10s
+	timeout connect 5s
 	timeout client 24h
 	timeout server 24h
 	timeout http-keep-alive 10s
-	timeout check 10s
+	timeout check 20s
+	option clitcpka
+	clitcpka-cnt 3
+	clitcpka-idle 30s
+	clitcpka-intvl 10s
+	option srvtcpka
+	srvtcpka-cnt 3
+	srvtcpka-idle 30s
+	srvtcpka-intvl 10s
 	maxconn 3000
 
 resolvers mydns
@@ -210,8 +218,10 @@ resolvers mydns
 				count_B = count_B + 1;
 			}
 			let server = server_endpoint(o);
-			let down_sessions = "on-marked-down shutdown-sessions";
-			let check_arg = "check " + inter_arg + " rise 2 fall 2 " + down_sessions;
+			// A failed probe only stops new connections. Killing the sessions
+			// aborts a download that is still moving, and a shared probe
+			// timeout would reset every connection at once.
+			let check_arg = "check " + inter_arg + " rise 2 fall 3";
 			if ((check_counts[server] ?? 0) > 1) {
 				let name = shared_check_names[server];
 				if (name == null) {
@@ -238,7 +248,7 @@ resolvers mydns
 	if (length(shared_checks) > 0) {
 		body += sprintf("\nbackend %s_health_checks\n\tmode tcp\n\toption external-check\n\texternal-check command \"/usr/libexec/%s/haproxy_check.uc\"\n", appname, appname);
 		for (let check in shared_checks)
-			body += sprintf("\tserver %s %s check %s rise 2 fall 2 on-marked-down shutdown-sessions\n", check.name, check.server, inter_arg);
+			body += sprintf("\tserver %s %s check %s rise 2 fall 3\n", check.name, check.server, inter_arg);
 	}
 
 	let console_user = api.uci_get_c("@global_haproxy[0]", "console_user");

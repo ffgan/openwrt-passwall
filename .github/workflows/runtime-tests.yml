@@ -34,6 +34,7 @@ jobs:
           S="${GITHUB_WORKSPACE}/tests/stubs"
           "$U" -L "$L" tests/runtime_state.uc
           "$U" -L "$L" tests/runtime_text.uc
+          "$U" -L "$L" tests/haproxy-pool.uc
           "$U" -L "$S" -L "$L" -L /tmp/ucode/build tests/rpc-plugin.uc
 
       - name: Install nftables
