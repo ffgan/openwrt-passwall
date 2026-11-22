@@ -229,7 +229,7 @@ resolvers mydns
 					shared_check_names[server] = name;
 					push(shared_checks, { name: name, server: server });
 				}
-				check_arg = "track " + appname + "_health_checks/" + name + " " + down_sessions;
+				check_arg = "track " + appname + "_health_checks/" + name;
 			}
 			let resolvers = "resolvers mydns";
 			if (api.is_ip(o.server_address))

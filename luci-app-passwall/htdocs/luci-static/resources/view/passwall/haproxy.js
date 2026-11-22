@@ -268,6 +268,11 @@ return view.extend({
 		o.description = _('The URL used to detect the connection status.');
 		o.depends('health_check_type', 'script_logic');
 
+		o = s.option(form.Value, 'health_media_url', _('Media Probe URL'));
+		o.depends('health_check_type', 'script_logic');
+		o.rmempty = true;
+		o.description = _('Optional HTTPS URL that supports byte ranges. Each exit downloads 512 KiB about every five minutes to detect slow or stalled transfers.');
+
 		o = s.option(form.Value, 'health_check_inter', _('Health Check Inter'));
 		o.datatype = 'min(20)';
 		o.default = '60';

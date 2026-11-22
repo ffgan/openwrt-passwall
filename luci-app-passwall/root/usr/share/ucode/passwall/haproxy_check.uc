@@ -6,6 +6,9 @@ import { read_cmd } from 'passwall.proc';
 import { peer_recent } from 'passwall.haproxy_pool';
 
 const ALIVE_DIR = '/tmp/etc/passwall/haproxy/alive';
+const MEDIA_DIR = '/tmp/etc/passwall/haproxy/media';
+const MEDIA_INTERVAL = 300;
+const MEDIA_SIZE = '524288';
 
 let bracket_host, probe_window, load_stamps, mark_alive, probe, main;
 
@@ -65,7 +68,7 @@ probe = function(server, port) {
 		let args = [
 			"/usr/bin/curl", "-q", "-o", "/dev/null", "-sk", "--noproxy", "",
 			"-x", "socks5h://" + server + ":" + port,
-			"--connect-timeout", "4", "--max-time", "8",
+			"--connect-timeout", "4", "--max-time", "7",
 			"-w", "%{http_code}"
 		];
 		if (item[1])
@@ -81,6 +84,51 @@ probe = function(server, port) {
 	return false;
 };
 
+// Sample the data path infrequently. Retry a failed sample on each health
+// check and require positive evidence from a peer since our first failure.
+function media_healthy(server, port, url) {
+	if (match(url, /^https:\/\/\S+$/) == null || match(port, /^[0-9]+$/) == null)
+		return true;
+
+	let path = MEDIA_DIR + '/' + port;
+	let now = time();
+	let raw = fs.readfile(path) ?? "";
+	let state = split(trim(raw), ' ');
+	let stamp = int(state[1] ?? 0);
+	let failed_since = state[0] == 'fail' && state[2] == url ? stamp : 0;
+	if (state[0] == 'ok' && state[2] == url && now >= stamp && now - stamp < MEDIA_INTERVAL)
+		return true;
+
+	let got = read_cmd([
+		"/usr/bin/curl", "-q", "-sS", "--noproxy", "",
+		"-x", "socks5h://" + server + ":" + port,
+		"--connect-timeout", "4", "--max-time", "5", "--max-filesize", MEDIA_SIZE,
+		"--range", "0-524287", "-o", "/dev/null", "-w", "%{http_code} %{size_download}", url
+	]);
+	now = time();
+	api.fs.mkdirr(MEDIA_DIR);
+	if (got != null && got.rc == 0 && trim(got.out) == "206 " + MEDIA_SIZE) {
+		api.fs.writefile(path, sprintf("ok %d %s\n", now, url));
+		return true;
+	}
+
+	if (failed_since <= 0 || failed_since > now) {
+		api.fs.writefile(path, sprintf("fail %d %s\n", now, url));
+		return true;
+	}
+
+	for (let name in (fs.lsdir(MEDIA_DIR) ?? [])) {
+		if (name == port || match(name, /^[0-9]+$/) == null)
+			continue;
+		let peer = split(trim(fs.readfile(MEDIA_DIR + '/' + name) ?? ""), ' ');
+		let success = int(peer[1] ?? 0);
+		if (peer[0] == 'ok' && peer[2] == url && success > failed_since &&
+		    success <= now && now - success < MEDIA_INTERVAL)
+			return false;
+	}
+	return true;
+}
+
 // HAProxy external-check appends proxy address, proxy port, server address, server port.
 main = function(argv) {
 	let busy = api.proc_lines("passwall/");
@@ -91,7 +139,8 @@ main = function(argv) {
 	let port = "" + (argv[3] ?? "");
 	if (probe(server, port)) {
 		mark_alive(port);
-		exit(0);
+		let media_url = trim(api.uci_get_c("@global_haproxy[0]", "health_media_url") ?? "");
+		exit(media_healthy(server, port, media_url) ? 0 : 1);
 	}
 	// Another exit worked moments ago, so this one can leave the pool.
 	// If none did, keep it: a shared timeout must not take the whole network down.
