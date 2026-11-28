@@ -251,7 +251,7 @@ export function heal() {
 		let bin = utils.first_type('haproxy');
 		launch_named(bin, 'haproxy', ['-f', cfg]);
 	}
-	if (!proc_has('/tmp/etc/passwall/bin/ipt2socks'))
+	if (!proc_has('ipt2socks') || (stick_enabled() && !proc_has('redir-socks')))
 		relaunch_ipt2socks();
 	if (!proc_has('/tmp/etc/passwall/bin/chinadns-ng'))
 		relaunch_chinadns();
@@ -267,15 +267,35 @@ export function heal() {
 	return 0;
 };
 
+function stick_enabled() {
+	return api.uci_get_c('@global_haproxy[0]', 'client_stick') == '1' && fs.access('/usr/bin/redir-socks', 'x') == true;
+};
+
 function relaunch_ipt2socks() {
 	let node = api.uci_get_c(api.uci_get_c('@global[0]', 'node'));
 	if (type(node) != 'object' || node == null || node.address == null || node.port == null)
 		return 1;
 	let redir = api.get_cache_var('ACL_GLOBAL_redir_port') ?? '1041';
-	let args = ['-l', '' + redir, '-b', '0.0.0.0', '-B', '::', '-s', node.address, '-p', '' + node.port, '-o', '60', '-n', '65535', '-v'];
+	let port = '' + node.port;
+	let redirect = api.uci_get_c('@global_forwarding[0]', 'tcp_proxy_way') != 'tproxy';
+	let stick = stick_enabled() && node.address == '127.0.0.1' && lower(node.type ?? '') == 'socks';
+	if (stick && !proc_has('redir-socks')) {
+		let front = ['--port', '' + redir, '--upstream', node.address + ':' + port];
+		if (!redirect)
+			push(front, '--tproxy');
+		launch_named('/usr/bin/redir-socks', 'redir-socks_default', front);
+		port = '' + (int(port) + 1);
+	} else if (stick) {
+		port = '' + (int(port) + 1);
+	}
+	if (proc_has('ipt2socks'))
+		return 0;
+	let args = ['-l', '' + redir, '-b', '0.0.0.0', '-B', '::', '-s', node.address, '-p', port, '-o', '60', '-n', '65535', '-v'];
+	if (stick)
+		push(args, '-U');
 	if (node.username != null && node.username != '' && node.password != null)
 		push(args, '-a', node.username, '-k', node.password);
-	if (api.uci_get_c('@global_forwarding[0]', 'tcp_proxy_way') != 'tproxy')
+	if (redirect)
 		push(args, '-R');
 	return launch_named(utils.first_type('ipt2socks'), 'ipt2socks_default_TCP_UDP', args);
 };
@@ -299,7 +319,10 @@ function relaunch_chain() {
 		let bind = api.uci_get_c('@global[0]', 'node_socks_bind_local') == '0' ? '0.0.0.0' : '127.0.0.1';
 		listen = bind + ':' + port;
 	}
-	return launch_named('/usr/bin/socks-chain', 'socks-chain', ['--listen', listen, '--upstream', node.address + ':' + node.port]);
+	let args = ['--listen', listen, '--upstream', node.address + ':' + node.port];
+	if (stick_enabled() && node.address == '127.0.0.1')
+		push(args, '--proxy-protocol');
+	return launch_named('/usr/bin/socks-chain', 'socks-chain', args);
 };
 
 export function main(argv) {

@@ -36,6 +36,11 @@ main = function(argv) {
 	let bind_address = "0.0.0.0";
 	if (bind_local == "1")
 		bind_address = "127.0.0.1";
+	// One LAN client stays on one exit. YouTube signs the media URL with the
+	// IP that fetched the player; leastconn was sending the video out another.
+	let client_stick = api.uci_get_c("@global_haproxy[0]", "client_stick") == "1" && fs.access("/usr/bin/redir-socks", "x");
+	if (client_stick)
+		log("  * 按来源固定出口，播放和下载不再拆到不同节点");
 
 	log("HAPROXY 负载均衡：");
 	log(sprintf("  * 控制台端口：%s", console_port));
@@ -200,7 +205,10 @@ resolvers mydns
 
 	for (let port in sortTable) {
 		log(sprintf("  +  入口 %s:%s", bind_address, port));
-		body += "\n" + sprintf("listen %s\n\tbind %s:%s\n\tmode tcp\n\tbalance %s\n", port, bind_address, port, balancingStrategy);
+		let accept = client_stick ? " accept-proxy" : "";
+		body += "\n" + sprintf("listen %s\n\tbind %s:%s%s\n\tmode tcp\n\tbalance %s\n", port, bind_address, port, accept, balancingStrategy);
+		if (client_stick)
+			body += "	stick-table type ip size 10k expire 30m\n	stick on src\n";
 
 		if (health_check_type == "script_logic") {
 			body += sprintf("	option external-check\n	external-check command \"/usr/libexec/%s/haproxy_check.uc\"\n", appname);
@@ -208,6 +216,7 @@ resolvers mydns
 
 		let count_M = 1;
 		let count_B = 1;
+		let udp_servers = "";
 		for (let o in listens[port]) {
 			let remark = replace(o.server_remark ?? "", /[\[\]]/g, "");
 			if (("" + o.backup) != "1") {
@@ -237,11 +246,21 @@ resolvers mydns
 			let backup = (("" + o.backup) == "1") ? "backup" : "";
 			let server_conf = "server " + remark + " " + server + " weight " + o.lbweight + " " + resolvers + " " + check_arg + " " + backup;
 			body += "	" + api.trim(server_conf) + "\n";
+			if (client_stick) {
+				let tracked = "server " + remark + " " + server + " weight " + o.lbweight + " " + resolvers + " track " + port + "/" + remark + " " + backup;
+				udp_servers += "	" + api.trim(tracked) + "\n";
+			}
 
 			if (o.export != "0")
 				utils.add_ip2route(o.origin_address, o.export);
 
 			log(sprintf("  | - 出口节点：%s:%s，权重：%s", o.origin_address, o.origin_port, o.lbweight));
+		}
+		if (client_stick && udp_servers != "") {
+			let udp_port = int(port) + 1;
+			log(sprintf("  +  UDP 入口 127.0.0.1:%s", udp_port));
+			body += sprintf("\nlisten %s_udp\n\tbind 127.0.0.1:%s\n\tmode tcp\n\tbalance %s\n", port, udp_port, balancingStrategy);
+			body += udp_servers;
 		}
 	}
 

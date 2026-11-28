@@ -250,6 +250,11 @@ return view.extend({
 		o.default = 'roundrobin';
 		o.depends('balancing_enable', '1');
 
+		o = flag(s, 'client_stick', _('Stick clients to one exit'), _('Keep each LAN device on one node so YouTube and downloads are not split across egress IPs. A failed node is left and that device moves.'));
+		o.default = '1';
+		o.rmempty = false;
+		o.depends('balancing_enable', '1');
+
 		o = s.option(form.ListValue, 'health_check_type', _('Health Check Type'));
 		o.default = 'script_logic';
 		o.value('tcp', 'TCP');

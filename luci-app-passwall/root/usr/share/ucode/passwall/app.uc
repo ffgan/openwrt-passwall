@@ -169,10 +169,37 @@ export function check_run_environment() {
 	return 'nftables';
 };
 
+function sticks_to_haproxy(host, port) {
+	if (cfg('@global_haproxy[0]', 'balancing_enable', '0') != '1')
+		return false;
+	if (cfg('@global_haproxy[0]', 'client_stick') != '1')
+		return false;
+	if (fs.access('/usr/bin/redir-socks', 'x') != true)
+		return false;
+	if (trim(host ?? '') != '127.0.0.1')
+		return false;
+	let hit = false;
+	api.uci_foreach_c('haproxy_config', (t) => {
+		if (t.enabled == '1' && ('' + t.haproxy_port) == ('' + port))
+			hit = true;
+	});
+	return hit;
+};
+
 export function run_ipt2socks(raw) {
 	let o = type(raw) == 'object' && type(raw) != 'array' ? raw : option_args(raw);
 	let host = utils.get_host_ip('ipv4', o.socks_address);
-	let args = ['-l', o.local_port, '-b', '0.0.0.0', '-B', '::', '-s', host, '-p', o.socks_port, '-o', '60', '-n', '65535', '-v'];
+	let socks_port = '' + o.socks_port;
+	if (o.client_stick == '1') {
+		let front = ['--port', '' + o.local_port, '--upstream', host + ':' + socks_port];
+		if (o.tcp_tproxy == '1')
+			push(front, '--tproxy');
+		launch_core('/usr/bin/redir-socks', 'redir-socks_' + (o.flag ?? ''), o.log_file || '/dev/null', front);
+		socks_port = '' + (int(socks_port) + 1);
+	}
+	let args = ['-l', o.local_port, '-b', '0.0.0.0', '-B', '::', '-s', host, '-p', socks_port, '-o', '60', '-n', '65535', '-v'];
+	if (o.client_stick == '1')
+		push(args, '-U');
 	if (o.socks_username != null && o.socks_username != '' && o.socks_password != null)
 		push(args, '-a', o.socks_username, '-k', o.socks_password);
 	if (o.tcp_tproxy == null || o.tcp_tproxy == '')
@@ -403,8 +430,12 @@ export function run_socks(raw) {
 	if (type_name == 'socks') {
 		let chain = '/usr/bin/socks-chain';
 		if (fs.access(chain, 'x') && (o.http_port == '0' || o.http_port == 0) && !cfg(o.node, 'username')) {
-			if (!o.no_run)
-				launch_core(chain, 'socks-chain', o.log_file, ['--listen', o.bind + ':' + o.socks_port, '--upstream', host + ':' + port]);
+			if (!o.no_run) {
+				let chain_args = ['--listen', o.bind + ':' + o.socks_port, '--upstream', host + ':' + port];
+				if (sticks_to_haproxy(host, port))
+					push(chain_args, '--proxy-protocol');
+				launch_core(chain, 'socks-chain', o.log_file, chain_args);
+			}
 		} else {
 			let c = {
 				node: o.node, local_socks_address: o.bind, local_socks_port: o.socks_port,
@@ -807,9 +838,12 @@ export function start_global() {
 				config_file: 'global_' + node + '_socks.json', http_port: http_port });
 			direct = '127.0.0.1'; dport = socks_port; native_socks = true;
 		}
-		run_ipt2socks({ flag: 'default', tcp_tproxy: state.TCP_PROXY_WAY == 'tproxy' ? '1' : '',
+		let front = { flag: 'default', tcp_tproxy: state.TCP_PROXY_WAY == 'tproxy' ? '1' : '',
 			local_port: state.REDIR_PORT, socks_address: direct, socks_port: dport,
-			socks_username: cfg(node, 'username'), socks_password: cfg(node, 'password'), log_file: logfile });
+			socks_username: cfg(node, 'username'), socks_password: cfg(node, 'password'), log_file: logfile };
+		if (sticks_to_haproxy(direct, dport))
+			front.client_stick = '1';
+		run_ipt2socks(front);
 	} else {
 		let c = { node: node, server_host: host, server_port: port };
 		if (type_name == 'naiveproxy') {
