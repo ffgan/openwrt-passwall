@@ -8,7 +8,7 @@ let spec = instance_spec('/usr/bin/printf', ['%s', payload], dir + '/log with sp
 if (system(spec.command) != 0) die('Launch command failed');
 if (fs.readfile(dir + '/log with spaces') != payload || fs.stat(dir + '/injected') != null) die('Argument or output quoting failed');
 if (spec.respawn[1] != 5 || spec.respawn[2] != 0 || spec.env.TEST != 'value' || spec.term_timeout != 5) die('Supervisor policy lost');
-if (spec.limits.nofile != '4096 4096') die('Managed core descriptor budget lost');
+if (spec.limits.nofile != '8192 8192') die('Managed core descriptor budget lost');
 let rejected = false;
 try { instance_spec('relative-xray', [], '', {}); } catch (e) { rejected = true; }
 if (!rejected) die('Relative executable accepted');

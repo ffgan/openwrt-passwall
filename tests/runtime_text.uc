@@ -2,7 +2,7 @@
 
 import {
 	truth, lua_or, to_number, leading_int, lua_quote, gmatch, lines_of,
-	awk_field, host_port, processor_count, df_available_kb, du_kb, 	quoted_option_blob, proc_net_ports
+	awk_field, host_port, processor_count, df_available_kb, du_kb, meminfo_kb, quoted_option_blob, proc_net_ports
 } from 'passwall.text';
 
 let failed = 0;
@@ -42,6 +42,9 @@ eq("host v6", host_port("[::1]:443"), ["[::1]", "443"]);
 eq("host bare", host_port("example.com"), ["example.com", ""]);
 eq("host colon", host_port("example.com:"), ["example.com:", ""]);
 eq("cpu", processor_count("processor\t: 0\nvendor_id\t: x\nprocessor\t: 1\n"), 2);
+eq("meminfo", meminfo_kb("MemTotal:       239024 kB\nMemAvailable:   37468 kB\n", "MemAvailable"), 37468);
+eq("meminfo miss", meminfo_kb("MemTotal: 1 kB\n", "MemFree"), null);
+eq("meminfo bad key", meminfo_kb("MemTotal: 1 kB\n", "MemTotal;rm"), null);
 eq("df", df_available_kb("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/root 10 2 7 20% /\n"), 7);
 eq("du", du_kb("12\t/tmp/a\n"), 12);
 eq("awk colon", awk_field("Private key: aaa\nPublic key: bbb\n", ": "), ["aaa", "bbb"]);

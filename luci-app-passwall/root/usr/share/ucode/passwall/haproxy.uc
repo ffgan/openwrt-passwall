@@ -3,7 +3,8 @@
 import * as api from 'passwall.api';
 import * as fs from 'fs';
 import * as utils from 'passwall.utils';
-import { truth as ltruth, to_number as tonumber, gmatch, leading_int, host_port, processor_count } from 'passwall.text';
+import { truth as ltruth, to_number as tonumber, gmatch, leading_int, host_port, processor_count, meminfo_kb } from 'passwall.text';
+import { haproxy_limits } from 'passwall.reliability';
 let get_ip_port_from, server_endpoint, main;
 
 get_ip_port_from = function(str) {
@@ -27,7 +28,9 @@ main = function(argv) {
 	let haproxy_dns = "127.0.0.1";
 
 	let cpu_info = fs.readfile("/proc/cpuinfo");
-	let cpu_thread = "" + processor_count(type(cpu_info) == "string" ? cpu_info : "");
+	let cpu_thread = processor_count(type(cpu_info) == "string" ? cpu_info : "");
+	let meminfo = fs.readfile("/proc/meminfo");
+	let limits = haproxy_limits(meminfo_kb(type(meminfo) == "string" ? meminfo : "", "MemTotal"), cpu_thread);
 	let health_check_type = api.uci_get_c("@global_haproxy[0]", "health_check_type") ?? "tcp";
 	let health_check_inter = api.uci_get_c("@global_haproxy[0]", "health_check_inter") ?? "60";
 	let balancingStrategy = api.uci_get_c("@global_haproxy[0]", "balancingStrategy") ?? "roundrobin";
@@ -43,6 +46,7 @@ main = function(argv) {
 		log("  * 按来源固定出口，播放和下载不再拆到不同节点");
 
 	log("HAPROXY 负载均衡：");
+	log(sprintf("  * 连接上限 %s，粘滞表 %s，线程 %s", limits.maxconn, limits.stick_size, limits.nbthread));
 	log(sprintf("  * 控制台端口：%s", console_port));
 	fs.mkdir(haproxy_path);
 	let haproxy_file = haproxy_path + "/" + haproxy_conf;
@@ -50,7 +54,7 @@ main = function(argv) {
 	let haproxy_config = `global
 	daemon
 	log 127.0.0.1 local2
-	maxconn 60000
+	maxconn {{maxconn}}
 	stats socket {{path}}/haproxy.sock
 	nbthread {{nbthread}}
 	external-check
@@ -82,7 +86,7 @@ defaults
 	srvtcpka-cnt 3
 	srvtcpka-idle 30s
 	srvtcpka-intvl 10s
-	maxconn 3000
+	maxconn {{server_maxconn}}
 
 resolvers mydns
 	resolve_retries 1
@@ -92,7 +96,9 @@ resolvers mydns
 `;
 
 	haproxy_config = replace(haproxy_config, "{{path}}", haproxy_path);
-	haproxy_config = replace(haproxy_config, "{{nbthread}}", cpu_thread);
+	haproxy_config = replace(haproxy_config, "{{nbthread}}", "" + limits.nbthread);
+	haproxy_config = replace(haproxy_config, "{{maxconn}}", "" + limits.maxconn);
+	haproxy_config = replace(haproxy_config, "{{server_maxconn}}", "" + limits.server_maxconn);
 
 	let mydns = "";
 	let dns_index = 0;
@@ -208,7 +214,7 @@ resolvers mydns
 		let accept = client_stick ? " accept-proxy" : "";
 		body += "\n" + sprintf("listen %s\n\tbind %s:%s%s\n\tmode tcp\n\tbalance %s\n", port, bind_address, port, accept, balancingStrategy);
 		if (client_stick)
-			body += "	stick-table type ip size 10k expire 30m\n	stick on src\n";
+			body += "	stick-table type ip size " + limits.stick_size + " expire 30m\n	stick on src\n";
 
 		if (health_check_type == "script_logic") {
 			body += sprintf("	option external-check\n	external-check command \"/usr/libexec/%s/haproxy_check.uc\"\n", appname);

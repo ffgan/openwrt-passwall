@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as api from 'passwall.api';
 import * as utils from 'passwall.utils';
 import { kill_matching } from 'passwall.proc';
+import { chinadns_bind_port, chinadns_needs_start } from 'passwall.reliability';
 
 const TMP = '/tmp/etc/passwall';
 const LIBEXEC = '/usr/libexec/passwall';
@@ -243,18 +244,50 @@ function relaunch_file(name) {
 	}
 };
 
+function port_open(port) {
+	if (port == null || ('' + port) == '')
+		return false;
+	return api.occupied_ports('tcp,udp')['' + port] == true;
+};
+
+function global_node() {
+	let node = api.uci_get_c(api.uci_get_c('@global[0]', 'node'));
+	if (type(node) != 'object' || node == null)
+		return null;
+	return node;
+};
+
+function heal_chinadns() {
+	let conf = TMP + '/acl/default/chinadns_ng.conf';
+	let text = fs.readfile(conf) ?? '';
+	let port = chinadns_bind_port(text);
+	let running = proc_has('/tmp/etc/passwall/bin/chinadns-ng( |$)');
+	if (!chinadns_needs_start(running, port, port != '' && port_open(port)))
+		return 0;
+	if (text == '') {
+		api.log('ChinaDNS 配置不在，无法单独拉起。');
+		return 1;
+	}
+	if (running)
+		kill_matching('/tmp/etc/passwall/bin/chinadns-ng');
+	return relaunch_chinadns();
+};
+
 export function heal() {
 	let cfg = TMP + '/haproxy/config.cfg';
 	if (fs.stat(cfg) == null)
 		return 1;
+	// DNS first. Launching HAProxy allocates its tables, and that is what
+	// ran the box out of memory last time; a failure there must not skip DNS.
+	heal_chinadns();
 	if (!proc_has('/tmp/etc/passwall/bin/haproxy( |$)')) {
 		let bin = utils.first_type('haproxy');
 		launch_named(bin, 'haproxy', ['-f', cfg]);
 	}
-	if (!proc_has('ipt2socks') || (stick_enabled() && !proc_has('redir-socks')))
+	let node = global_node();
+	let socks = node != null && lower(node.type ?? '') == 'socks';
+	if (socks && (!proc_has('ipt2socks') || (stick_enabled() && !proc_has('redir-socks'))))
 		relaunch_ipt2socks();
-	if (!proc_has('/tmp/etc/passwall/bin/chinadns-ng'))
-		relaunch_chinadns();
 	if (!proc_has('/tmp/etc/passwall/bin/socks-chain'))
 		relaunch_chain();
 	let names = fs.lsdir(TMP);
@@ -302,9 +335,16 @@ function relaunch_ipt2socks() {
 
 function relaunch_chinadns() {
 	let conf = TMP + '/acl/default/chinadns_ng.conf';
-	if (fs.stat(conf) == null)
+	if (fs.stat(conf) == null) {
+		api.log('ChinaDNS 配置不在，无法单独拉起。');
 		return 1;
-	return launch_named(utils.first_type('chinadns-ng'), 'chinadns-ng', ['-C', conf]);
+	}
+	let bin = utils.first_type('chinadns-ng');
+	if (bin == null || bin == '') {
+		api.log('找不到 chinadns-ng，无法拉起 DNS。');
+		return 1;
+	}
+	return launch_named(bin, 'chinadns-ng', ['-C', conf]);
 };
 
 function relaunch_chain() {

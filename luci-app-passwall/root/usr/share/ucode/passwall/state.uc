@@ -171,7 +171,7 @@ export function shell_quote(s) {
 };
 
 export function launch_script(file, args, output, env) {
-	let parts = [ "ulimit -n 65535 2>/dev/null" ];
+	let parts = [ "ulimit -n 8192 2>/dev/null" ];
 	if (type(env) == "object" && env != null) {
 		for (let key, value in env) {
 			if (!ident(key) || key == "NO_REC_PROCESS")

@@ -1027,6 +1027,7 @@ export function start_dns() {
 			_no_logic_log: '0', _node: state.NODE, _filter_https: cfg('@global[0]', 'force_https_soa', '0'),
 			_log: cfg('@global[0]', 'log_chinadns_ng', '0') }) != 0) return 1;
 		state.USE_DEFAULT_DNS = 'chinadns_ng';
+		utils.set_cache_var('ACL_default_dns_port', '' + port);
 	}
 	if (state.DNS_REDIRECT == '0') {
 		command(['/usr/bin/ucode', LIBEXEC + '/helper_dnsmasq.uc', 'stretch'], true);
@@ -1569,7 +1570,16 @@ export function stop(mode, internal) {
 	return 0;
 };
 
+function raise_socket_limits() {
+	// 256MB OpenWrt defaults both of these to 1024. A proxy restart then
+	// orphans every flow at once, and the kernel resets new connections.
+	write_sysctl('fs.file-max', '131072');
+	write_sysctl('net.ipv4.tcp_max_orphans', '8192');
+	write_sysctl('net.ipv4.tcp_max_tw_buckets', '8192');
+}
+
 export function start(mode) {
+	raise_socket_limits();
 	api.log('开始启动，总开关：' + cfg('@global[0]', 'enabled', '0') + '，节点：' + (cfg('@global[0]', 'node') ?? ''));
 	if (restore_system_dns())
 		restart_system_dnsmasq();

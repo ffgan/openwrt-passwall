@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import * as api from 'passwall.api';
 import { read_cmd } from 'passwall.proc';
 import { peer_recent } from 'passwall.haproxy_pool';
+import { meminfo_kb } from 'passwall.text';
+import { skip_external_check, skip_media_probe } from 'passwall.reliability';
 
 const ALIVE_DIR = '/tmp/etc/passwall/haproxy/alive';
 const MEDIA_DIR = '/tmp/etc/passwall/haproxy/media';
@@ -130,7 +132,17 @@ function media_healthy(server, port, url) {
 }
 
 // HAProxy external-check appends proxy address, proxy port, server address, server port.
+function mem_available() {
+	let text = fs.readfile("/proc/meminfo");
+	return meminfo_kb(type(text) == "string" ? text : "", "MemAvailable");
+};
+
 main = function(argv) {
+	let avail = mem_available();
+	// Forking curl here is what pushed the 256MB router into OOM.
+	if (skip_external_check(avail))
+		exit(0);
+
 	let busy = api.proc_lines("passwall/");
 	if (match(busy, /(app|service)\.uc.*(start|stop|restart)|nftables\.uc/) != null)
 		exit(0);
@@ -139,6 +151,8 @@ main = function(argv) {
 	let port = "" + (argv[3] ?? "");
 	if (probe(server, port)) {
 		mark_alive(port);
+		if (skip_media_probe(avail))
+			exit(0);
 		let media_url = trim(api.uci_get_c("@global_haproxy[0]", "health_media_url") ?? "");
 		exit(media_healthy(server, port, media_url) ? 0 : 1);
 	}

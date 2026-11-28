@@ -157,6 +157,15 @@ export function host_port(value) {
 	return [substr(str, 0, i - 1), port];
 };
 
+export function meminfo_kb(text, key) {
+	if (type(text) != "string" || text == "" || match(key, /^[A-Za-z0-9_()]+$/) == null)
+		return null;
+	let found = match(text, regexp("(^|\\n)" + key + ":[ \\t]*([0-9]+)"));
+	if (found == null)
+		return null;
+	return int(found[2]);
+};
+
 export function processor_count(text) {
 	if (type(text) != "string" || text == "")
 		return 0;

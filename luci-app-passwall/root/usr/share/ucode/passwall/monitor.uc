@@ -3,7 +3,7 @@
 import * as api from 'passwall.api';
 import { readfile, writefile, stat, unlink, lsdir } from 'fs';
 import { background, spawn, start_time_of, cmdline_of, write_record, command_rc } from 'passwall.proc';
-import { retry_delay } from 'passwall.reliability';
+import { retry_delay, chinadns_bind_port, chinadns_needs_start } from 'passwall.reliability';
 import { parse_proc_record } from 'passwall.state';
 
 let ymd, run;
@@ -28,6 +28,7 @@ run = function() {
 	let proc_dir = api.TMP_PATH + "/script_func";
 	let last_day = ymd();
 	let retries = {};
+	let dns_blind = {};
 	command_rc([ "sleep", "5s" ]);
 
 	while (true) {
@@ -63,6 +64,30 @@ run = function() {
 					alive = true;
 				else if (rec.file == "" && current != "" && current == rec.starttime)
 					alive = true;
+				if (alive && index(rec.file, "chinadns-ng") >= 0) {
+					let conf = "";
+					let args = rec.args ?? [];
+					for (let i = 0; i < length(args); i++) {
+						if (args[i] == "-C" && i + 1 < length(args))
+							conf = args[i + 1];
+					}
+					let port = conf == "" ? "" : chinadns_bind_port(readfile(conf) ?? "");
+					let open = port != "" && api.occupied_ports("tcp,udp")[port] == true;
+					if (chinadns_needs_start(true, port, open)) {
+						let since = dns_blind[name];
+						if (since == null || time() - since < 20) {
+							if (since == null)
+								dns_blind[name] = time();
+							continue;
+						}
+						api.log("ChinaDNS 进程在但端口未监听，重新启动。");
+						command_rc([ "kill", "-9", rec.pid ]);
+						delete dns_blind[name];
+						alive = false;
+					} else {
+						delete dns_blind[name];
+					}
+				}
 				if (alive) {
 					if (current != "" && current != rec.starttime) {
 						rec.starttime = current;

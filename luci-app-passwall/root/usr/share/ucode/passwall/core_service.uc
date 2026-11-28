@@ -19,7 +19,7 @@ export function instance_spec(file, args, output, env) {
 		command: ['/bin/sh', '-c', script],
 		env: clean_env,
 		respawn: ['3600', '5', '0'],
-		limits: { nofile: '4096 4096' },
+		limits: { nofile: '8192 8192' },
 		term_timeout: 5
 	};
 };

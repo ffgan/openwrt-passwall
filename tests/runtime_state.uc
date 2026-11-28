@@ -73,7 +73,7 @@ let script = launch_script("/bin/xray", [ "run", "-c", "/tmp/a'b" ], "/tmp/log",
 eq("launch has exec", index(script, "exec '/bin/xray' 'run' '-c' '/tmp/a'\\''b' >'/tmp/log' 2>&1") >= 0, true);
 eq("launch exports asset", index(script, "export XRAY_LOCATION_ASSET='/usr/share/v2ray'") >= 0, true);
 eq("launch skips norec", index(script, "NO_REC_PROCESS") < 0, true);
-eq("launch ulimit", index(script, "ulimit -n 65535 2>/dev/null; ") == 0, true);
+eq("launch ulimit", index(script, "ulimit -n 8192 2>/dev/null; ") == 0, true);
 
 if (failed != 0) {
 	print(failed + " failed\n");
